@@ -25,6 +25,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.zh-CN.md",
     "docs/mcp-api.md",
     "LICENSE",
     "CHANGELOG.md",

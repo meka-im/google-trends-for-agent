@@ -1,3 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="300" viewBox="0 0 800 300" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="14">
-<rect width="800" height="300" rx="14" fill="#0b1220"/><circle cx="24" cy="22" r="6" fill="#f87171"/><circle cx="44" cy="22" r="6" fill="#fbbf24"/><circle cx="64" cy="22" r="6" fill="#34d399"/>
-<text x="400" y="27" text-anchor="middle" fill="#64748b" font-size="12">agent shell</text><text x="24" y="70" fill="#a78bfa" opacity="0">$ npx google-trends-for-agent --query pizza --geo US --time &quot;today 3-m&quot; --pretty<animate attributeName="opacity" from="0" to="1" begin="0.40s" dur="0.2s" fill="freeze"/></text><text x="24" y="96" fill="#e2e8f0" opacity="0">{<animate attributeName="opacity" from="0" to="1" begin="0.95s" dur="0.2s" fill="freeze"/></text><text x="24" y="122" fill="#e2e8f0" opacity="0">  &quot;status&quot;: &quot;ok&quot;,<animate attributeName="opacity" from="0" to="1" begin="1.50s" dur="0.2s" fill="freeze"/></text><text x="24" y="148" fill="#e2e8f0" opacity="0">  &quot;data&quot;: { &quot;interestOverTime&quot;: { &quot;timeline&quot;: [ …93 points… ] } },<animate attributeName="opacity" from="0" to="1" begin="2.05s" dur="0.2s" fill="freeze"/></text><text x="24" y="174" fill="#e2e8f0" opacity="0">  &quot;meta&quot;: { &quot;upstreamRequests&quot;: 3, &quot;durationMs&quot;: 2192, &quot;warnings&quot;: [] }<animate attributeName="opacity" from="0" to="1" begin="2.60s" dur="0.2s" fill="freeze"/></text><text x="24" y="200" fill="#e2e8f0" opacity="0">}<animate attributeName="opacity" from="0" to="1" begin="3.15s" dur="0.2s" fill="freeze"/></text><text x="24" y="226" fill="#94a3b8" opacity="0">$ echo $?   # 0 ok · 2 partial · 3 BLOCKED/RATE_LIMITED · 4 bad input<animate attributeName="opacity" from="0" to="1" begin="3.70s" dur="0.2s" fill="freeze"/></text><text x="24" y="252" fill="#22d3ee" opacity="0">0<animate attributeName="opacity" from="0" to="1" begin="4.25s" dur="0.2s" fill="freeze"/></text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="700" viewBox="0 0 820 700" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="12.5" xml:space="preserve">
+<rect width="820" height="700" rx="14" fill="#0b1220"/>
+<circle cx="24" cy="22" r="6" fill="#f87171"/><circle cx="44" cy="22" r="6" fill="#fbbf24"/><circle cx="64" cy="22" r="6" fill="#34d399"/>
+<text x="410" y="27" text-anchor="middle" fill="#64748b" font-size="12">gtfa snapshot · real output · 2026-11-02 UTC</text>
+<text x="24" y="64" fill="#34d399">$ <tspan fill="#22d3ee">npx gtfa snapshot Sora --geo US --pretty --json</tspan></text>
+<text x="24" y="98" fill="#94a3b8">{</text>
+<text x="24" y="117" fill="#e2e8f0">  "ok": true,</text>
+<text x="24" y="136" fill="#e2e8f0">  "status": "ok",</text>
+<text x="24" y="155" fill="#e2e8f0">  "term": "Sora",</text>
+<text x="24" y="174" fill="#e2e8f0">  "summary": "Sora no calibrated traffic (US·24h); rising",</text>
+<text x="24" y="193" fill="#e2e8f0">  "anchor": {</text>
+<text x="24" y="212" fill="#e2e8f0">    "term": "gpts",</text>
+<text x="24" y="231" fill="#e2e8f0">    "dailySearches": 550,</text>
+<text x="24" y="250" fill="#e2e8f0">    "source": "baseline",</text>
+<text x="24" y="269" fill="#e2e8f0" font-size="10.5">    "note": "anchor too sparse/weak for calibration; traffic omitted (27/180 non-gap anchor points nonzero, level 2.72)"</text>
+<text x="24" y="288" fill="#e2e8f0">  },</text>
+<text x="24" y="307" fill="#e2e8f0">  "traffic7d": {</text>
+<text x="24" y="326" fill="#e2e8f0">    "average": 5782,</text>
+<text x="24" y="345" fill="#e2e8f0">    "latest": 6166,</text>
+<text x="24" y="364" fill="#e2e8f0">    "peak": 8684</text>
+<text x="24" y="383" fill="#e2e8f0">  },</text>
+<text x="24" y="402" fill="#e2e8f0">  "verdict": { "label": "rising", "confidence": "high" },</text>
+<text x="24" y="421" fill="#e2e8f0">  "tables": {</text>
+<text x="24" y="440" fill="#e2e8f0">    "popular": [</text>
+<text x="24" y="459" fill="#e2e8f0">      { "query": "sora ai", "formattedValue": "100" },</text>
+<text x="24" y="478" fill="#e2e8f0">      { "query": "kingdom hearts", "formattedValue": "45" }</text>
+<text x="24" y="497" fill="#e2e8f0">    ],</text>
+<text x="24" y="516" fill="#e2e8f0">    "rising": [</text>
+<text x="24" y="535" fill="#e2e8f0">      { "query": "sora niwa terrace kyoto", "formattedValue": "+500%" },</text>
+<text x="24" y="554" fill="#e2e8f0">      { "query": "red sora dora", "formattedValue": "+300%" }</text>
+<text x="24" y="573" fill="#e2e8f0">    ]</text>
+<text x="24" y="592" fill="#e2e8f0">  },</text>
+<text x="24" y="611" fill="#e2e8f0">  "chart7d": {</text>
+<text x="24" y="630" fill="#e2e8f0">    "path": ".gtfa/charts/52918b59-006e-4382-837a-627c92019f0d-utc-bdfd4d8d.svg"</text>
+<text x="24" y="649" fill="#e2e8f0">  }</text>
+<text x="24" y="668" fill="#94a3b8">}</text>
+<text x="24" y="690" fill="#64748b" font-size="11"># snapshot saved under .gtfa/; chart path is relative to the working directory</text>
+</svg>
