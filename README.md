@@ -98,7 +98,7 @@ Full flags and examples: [reference](docs/reference.md#cli-surface).
 
 - `snapshot` puts the term and anchor on one shared 0–100 scale, then calibrates with `traffic = round(score ÷ anchorLevel × dailySearches)`. The built-in US anchor is `gpts` at **550/day** (about 16.5k/month, ±50%).
 - Numeric traffic stays `null` unless the anchor has a non-gap point, `anchorLevel ≥ 1`, and at least 25% of non-gap points are nonzero. Sparse 24-hour windows can fail that gate; 7-day windows are denser.
-- These are anchor-based **estimates**, not measured Google search volume. `traffic7d` / `chart7d` always use a separate `now 7-d` fetch, so they are a second check unless the request itself is 7 days.
+- These are anchor-based **estimates**, not measured Google search volume. When the request is not `now 7-d`, `traffic7d` / `chart7d` come from a separate 7-day fetch; for `now 7-d` they reuse the primary snapshot and chart.
 - Failures stay explicit: `ok`, `status`, and `error.code` replace invented numbers, and partial results are reported rather than hidden.
 
 ## Docs

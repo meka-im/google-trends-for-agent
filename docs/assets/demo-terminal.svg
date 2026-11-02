@@ -11,14 +11,14 @@
 <text x="39" y="117" fill="#e2e8f0" opacity="0">"ok": true, "status": "ok", "term": "Sora",<animate attributeName="opacity" from="0" to="1" begin="2.90s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="136" fill="#e2e8f0" opacity="0">"summary": "Sora no calibrated traffic (US·24h); rising",<animate attributeName="opacity" from="0" to="1" begin="3.15s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="155" fill="#e2e8f0" opacity="0">"anchor": { "term": "gpts", "dailySearches": 550, "source": "baseline",<animate attributeName="opacity" from="0" to="1" begin="3.40s" dur="0.2s" fill="freeze"/></text>
-<text x="54" y="174" fill="#e2e8f0" opacity="0">"note": "too sparse to calibrate (27/180 nonzero, level 2.72)" },<animate attributeName="opacity" from="0" to="1" begin="3.65s" dur="0.2s" fill="freeze"/></text>
+<text x="54" y="174" fill="#e2e8f0" opacity="0">"note": "anchor too sparse/weak for calibration; traffic omitted (27/180 non-gap anchor…" },<animate attributeName="opacity" from="0" to="1" begin="3.65s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="193" fill="#e2e8f0" opacity="0">"traffic7d": { "average": 5782, "latest": 6166, "peak": 8684 },<animate attributeName="opacity" from="0" to="1" begin="3.90s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="212" fill="#e2e8f0" opacity="0">"verdict": { "label": "rising", "confidence": "high" },<animate attributeName="opacity" from="0" to="1" begin="4.15s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="231" fill="#e2e8f0" opacity="0">"tables": {<animate attributeName="opacity" from="0" to="1" begin="4.40s" dur="0.2s" fill="freeze"/></text>
 <text x="54" y="250" fill="#e2e8f0" opacity="0">"popular": [{ "query": "sora ai", "formattedValue": "100" }],<animate attributeName="opacity" from="0" to="1" begin="4.65s" dur="0.2s" fill="freeze"/></text>
 <text x="54" y="269" fill="#e2e8f0" opacity="0">"rising": [{ "query": "sora niwa terrace kyoto", "formattedValue": "+500%" }]<animate attributeName="opacity" from="0" to="1" begin="4.90s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="288" fill="#e2e8f0" opacity="0">},<animate attributeName="opacity" from="0" to="1" begin="5.15s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="307" fill="#e2e8f0" opacity="0">"chart7d": { "path": ".gtfa/charts/52918b59-...-utc-bdfd4d8d.svg" }<animate attributeName="opacity" from="0" to="1" begin="5.40s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="307" fill="#e2e8f0" opacity="0">"chart7d": { "path": ".gtfa/charts/52918b59-006e-4382-837a-627c92019f0d-utc-bdfd4d8d.svg" }<animate attributeName="opacity" from="0" to="1" begin="5.40s" dur="0.2s" fill="freeze"/></text>
 <text x="24" y="326" fill="#94a3b8" opacity="0">}<animate attributeName="opacity" from="0" to="1" begin="5.65s" dur="0.2s" fill="freeze"/></text>
-<text x="24" y="355" fill="#64748b" font-size="11" opacity="0"># trimmed envelope; full output adds series, anchor points, per-query estimates, warnings and meta<animate attributeName="opacity" from="0" to="1" begin="5.95s" dur="0.2s" fill="freeze"/></text>
+<text x="24" y="355" fill="#64748b" font-size="11" opacity="0"># trimmed; long strings shortened with … · full output adds series, anchor points, estimates, warnings, meta<animate attributeName="opacity" from="0" to="1" begin="5.95s" dur="0.2s" fill="freeze"/></text>
 </svg>

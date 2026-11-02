@@ -98,7 +98,7 @@ npx gtfa snapshot Sora --geo US --json --pretty
 
 - `snapshot` 将词与锚点放在同一个 0–100 尺度上比较，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 校准。内置美国锚点为 `gpts`，**550/天**（约 16.5k/月，±50%）。
 - 只有满足以下条件才会输出数值流量：至少一个非缺口锚点、`anchorLevel ≥ 1`、非缺口锚点中至少 25% 非零。稀疏的 24 小时窗口可能不达标；7 天窗口更密集。
-- 这些是**基于锚点的估算**，不是 Google 实测搜索量。`traffic7d` / `chart7d` 始终来自另一次 `now 7-d` 抓取，因此除非请求本身就是 7 天，否则可作为第二重检查。
+- 这些是**基于锚点的估算**，不是 Google 实测搜索量。当请求不是 `now 7-d` 时，`traffic7d` / `chart7d` 来自另一次 7 天抓取；请求本身是 `now 7-d` 时，它们复用主快照和主图表。
 - 失败保持显式：用 `ok`、`status` 和 `error.code` 代替编造数字，partial 结果会如实报告，而不是隐藏。
 
 ## 文档
