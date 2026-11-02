@@ -19,12 +19,15 @@ interface ChartLabel {
   width: number;
   x: number;
   textAnchor: 'start' | 'end';
-  yCandidates: number[];
+  textY: number;
+  fontSize: number;
+  cost: number;
 }
 interface LabelBox { left: number; right: number; top: number; bottom: number }
 
 const WIDTH = 720, HEIGHT = 300, LEFT = 58, RIGHT = 20, TOP = 32, BOTTOM = 58;
 const LABEL_FONT_SIZE = 11, LABEL_CHAR_WIDTH = LABEL_FONT_SIZE * 0.6, LABEL_ASCENT = 10, LABEL_DESCENT = 3, LABEL_GAP = 2;
+const LABEL_FONT_SIZES = [LABEL_FONT_SIZE, 10, 9, 8, 7, 6] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TICK_TARGET = 6;
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -125,9 +128,9 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
   const latest = visible.at(-1);
   const plotLeft = LEFT, plotRight = width - RIGHT, minLabelY = TOP + LABEL_ASCENT, maxLabelY = axisY - 4;
   const clampLabelY = (v: number) => Math.min(maxLabelY, Math.max(minLabelY, v));
-  const labelBox = (label: ChartLabel, textY: number): LabelBox => {
+  const labelBox = (label: ChartLabel): LabelBox => {
     const left = label.textAnchor === 'end' ? label.x - label.width : label.x;
-    return { left, right: left + label.width, top: textY - LABEL_ASCENT, bottom: textY + LABEL_DESCENT };
+    return { left, right: left + label.width, top: label.textY - LABEL_ASCENT, bottom: label.textY + LABEL_DESCENT };
   };
   const overlaps = (a: LabelBox, b: LabelBox) =>
     a.left < b.right + LABEL_GAP && b.left < a.right + LABEL_GAP &&
@@ -139,7 +142,19 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     if (leftEnd - labelWidth >= plotLeft) return { x: leftEnd, textAnchor: 'end' };
     return pointX <= plotLeft + plotW / 2 ? { x: plotLeft, textAnchor: 'start' } : { x: plotRight, textAnchor: 'end' };
   };
+  const labelXVariants = (pointX: number, labelWidth: number): { x: number; textAnchor: 'start' | 'end' }[] => {
+    const out: { x: number; textAnchor: 'start' | 'end' }[] = [];
+    const add = (x: number, textAnchor: 'start' | 'end') => {
+      if (!out.some(v => v.x === x && v.textAnchor === textAnchor)) out.push({ x, textAnchor });
+    };
+    const preferred = labelX(pointX, labelWidth);
+    add(preferred.x, preferred.textAnchor);
+    add(Math.min(plotRight - labelWidth, Math.max(plotLeft, pointX + 7)), 'start');
+    add(Math.min(plotRight, Math.max(plotLeft + labelWidth, pointX - 7)), 'end');
+    return out;
+  };
   const labelYCandidates = (pointY: number, prefer: 'above' | 'below'): number[] => {
+    if (maxLabelY < minLabelY) return [];
     const offsets = prefer === 'above'
       ? [-8, 16, -24, 32, -40, 48, -56, 64, -72, 80]
       : [16, -8, 32, -24, 48, -40, 64, -56, 80, -72];
@@ -152,40 +167,61 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     }
     return out;
   };
-  const makeLabel = (p: typeof peak, color: string, prefix: string, prefer: 'above' | 'below'): ChartLabel | null => {
-    if (!p) return null;
-    const parts = zonedParts(p.t, timeFormat);
-    const text = `${prefix} ${fmt(p.traffic)}${parts ? ` · ${formatCallout(parts, mode)}` : ''}`;
-    const pointX = x(p.i), pointY = y(p.traffic), labelWidth = text.length * LABEL_CHAR_WIDTH;
-    const { x: textX, textAnchor } = labelX(pointX, labelWidth);
-    return { text, color, pointX, pointY, width: labelWidth, x: textX, textAnchor, yCandidates: labelYCandidates(pointY, prefer) };
+  const labelVariants = (p: typeof peak, prefix: string): { text: string; fontSize: number }[] => {
+    if (!p) return [];
+    const value = fmt(p.traffic), parts = zonedParts(p.t, timeFormat);
+    const full = `${prefix} ${value}${parts ? ` · ${formatCallout(parts, mode)}` : ''}`;
+    const compact = `${prefix} ${value}`;
+    const out: { text: string; fontSize: number }[] = [];
+    const add = (text: string, fontSize: number) => {
+      if (text.length * fontSize * 0.6 <= plotW && !out.some(v => v.text === text && v.fontSize === fontSize)) out.push({ text, fontSize });
+    };
+    add(full, LABEL_FONT_SIZE);
+    for (const fontSize of LABEL_FONT_SIZES) add(compact, fontSize);
+    for (const fontSize of LABEL_FONT_SIZES) add(value, fontSize);
+    if (!out.length) {
+      const maxChars = Math.floor(plotW / LABEL_CHAR_WIDTH);
+      if (maxChars > 0) add(maxChars > 1 ? `${value.slice(0, maxChars - 1)}…` : '…', LABEL_FONT_SIZE);
+    }
+    return out;
   };
-  const chooseLabelYs = (a: ChartLabel, b: ChartLabel): [number, number] => {
-    let best: { ay: number; by: number; score: number } | undefined;
-    for (let ai = 0; ai < a.yCandidates.length; ai++) {
-      for (let bi = 0; bi < b.yCandidates.length; bi++) {
-        const ay = a.yCandidates[ai]!, by = b.yCandidates[bi]!;
-        if (!overlaps(labelBox(a, ay), labelBox(b, by))) {
-          const score = ai + bi;
-          if (!best || score < best.score) best = { ay, by, score };
-        }
+  const makeLabels = (p: typeof peak, color: string, prefix: string, prefer: 'above' | 'below'): ChartLabel[] => {
+    if (!p) return [];
+    const pointX = x(p.i), pointY = y(p.traffic), yCandidates = labelYCandidates(pointY, prefer);
+    const out: ChartLabel[] = [];
+    labelVariants(p, prefix).forEach((variant, variantIndex) => {
+      const labelWidth = variant.text.length * variant.fontSize * 0.6;
+      labelXVariants(pointX, labelWidth).forEach((placement, xIndex) => {
+        yCandidates.forEach((textY, yIndex) => {
+          out.push({
+            text: variant.text, color, pointX, pointY, width: labelWidth,
+            x: placement.x, textAnchor: placement.textAnchor, textY, fontSize: variant.fontSize,
+            cost: variantIndex * 1000 + xIndex * 10 + yIndex,
+          });
+        });
+      });
+    });
+    return out;
+  };
+  const chooseLabels = (a: ChartLabel[], b: ChartLabel[]): { peak?: ChartLabel; latest?: ChartLabel } => {
+    let best: { peak: ChartLabel; latest: ChartLabel; cost: number } | undefined;
+    for (const peakLabel of a) {
+      for (const latestLabel of b) {
+        if (overlaps(labelBox(peakLabel), labelBox(latestLabel))) continue;
+        const cost = peakLabel.cost + latestLabel.cost;
+        if (!best || cost < best.cost) best = { peak: peakLabel, latest: latestLabel, cost };
       }
     }
-    if (best) return [best.ay, best.by];
-    const ay = a.yCandidates[0]!, aBox = labelBox(a, ay);
-    const below = clampLabelY(aBox.bottom + LABEL_GAP + LABEL_ASCENT);
-    const above = clampLabelY(aBox.top - LABEL_GAP - LABEL_DESCENT);
-    const preferred = b.yCandidates[0]!;
-    return [ay, Math.abs(below - preferred) <= Math.abs(above - preferred) ? below : above];
+    if (best) return { peak: best.peak, latest: best.latest };
+    return { peak: a[0], latest: undefined };
   };
-  const peakLabel = makeLabel(peak, '#dc2626', 'peak', 'above');
-  const latestLabel = makeLabel(latest, '#059669', 'latest', 'below');
-  let peakTextY = peakLabel?.yCandidates[0], latestTextY = latestLabel?.yCandidates[0];
-  if (peakLabel && latestLabel) [peakTextY, latestTextY] = chooseLabelYs(peakLabel, latestLabel);
-  const mark = (label: ChartLabel | null, textY: number | undefined) => {
-    if (!label || textY === undefined) return '';
+  const peakLabels = makeLabels(peak, '#dc2626', 'peak', 'above');
+  const latestLabels = makeLabels(latest, '#059669', 'latest', 'below');
+  const chosen = chooseLabels(peakLabels, latestLabels);
+  const mark = (label: ChartLabel | undefined) => {
+    if (!label) return '';
     return `<circle cx="${label.pointX.toFixed(1)}" cy="${label.pointY.toFixed(1)}" r="4" fill="${label.color}"/>` +
-      `<text x="${label.x.toFixed(1)}" y="${textY.toFixed(1)}"${label.textAnchor === 'end' ? ' text-anchor="end"' : ''} font-family="system-ui,sans-serif" font-size="${LABEL_FONT_SIZE}" fill="${label.color}">${esc(label.text)}</text>`;
+      `<text x="${label.x.toFixed(1)}" y="${label.textY.toFixed(1)}"${label.textAnchor === 'end' ? ' text-anchor="end"' : ''} font-family="system-ui,sans-serif" font-size="${label.fontSize}" fill="${label.color}">${esc(label.text)}</text>`;
   };
   const empty = !values.length ? `<text x="${width / 2}" y="${TOP + plotH / 2}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">No calibrated traffic</text>` : '';
   const legend = `<g font-family="system-ui,sans-serif" font-size="11" fill="#374151">` +
@@ -200,6 +236,6 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     `<line x1="${LEFT}" y1="${TOP}" x2="${LEFT}" y2="${axisY}" stroke="#d1d5db" stroke-width="1"/>` +
     `<line x1="${LEFT}" y1="${axisY}" x2="${width - RIGHT}" y2="${axisY}" stroke="#d1d5db" stroke-width="1"/>` +
     line(anchorSegments, '#9ca3af', true, 'anchor-line') + line(termSegments, '#2563eb', false, 'term-line') +
-    mark(peakLabel, peakTextY) + mark(latestLabel, latestTextY) +
+    mark(chosen.peak) + mark(chosen.latest) +
     empty + legend + `</svg>`;
 }

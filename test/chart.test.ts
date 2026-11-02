@@ -4,14 +4,15 @@ import { renderTrafficChart, type TrafficChartPoint } from '../src/chart.js';
 const at = (iso: string, traffic: number): TrafficChartPoint => ({ t: iso, traffic });
 const CHART_LEFT = 58, CHART_RIGHT = 20, CHART_TOP = 32, CHART_AXIS_Y = 242;
 const labelOf = (svg: string, kind: 'peak' | 'latest') => {
-  const match = svg.match(new RegExp(`<text x="([\\d.]+)" y="([\\d.]+)"(?: text-anchor="(start|end)")?[^>]*>${kind} ([^<]*)</text>`));
+  const match = svg.match(new RegExp(`<text x="([\\d.]+)" y="([\\d.]+)"(?: text-anchor="(start|end)")?[^>]*font-size="([\\d.]+)"[^>]*>${kind} ([^<]*)</text>`));
   expect(match).not.toBeNull();
-  const [, rawX, rawY, rawAnchor, callout] = match!;
+  const [, rawX, rawY, rawAnchor, rawFontSize, callout] = match!;
   const text = `${kind} ${callout}`;
   const x = Number(rawX), y = Number(rawY), anchor = (rawAnchor as 'start' | 'end' | undefined) ?? 'start';
-  const width = text.length * 11 * 0.6;
+  const fontSize = Number(rawFontSize);
+  const width = text.length * fontSize * 0.6;
   const left = anchor === 'end' ? x - width : x;
-  return { x, y, anchor, text, left, right: left + width, top: y - 10, bottom: y + 3 };
+  return { x, y, anchor, text, fontSize, width, left, right: left + width, top: y - 10, bottom: y + 3 };
 };
 const intersects = (a: ReturnType<typeof labelOf>, b: ReturnType<typeof labelOf>) =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -131,5 +132,41 @@ describe('renderTrafficChart label placement', () => {
     expect(latest.y).toBeCloseTo(latestPointY + 16);
     expect(peak.y).toBeLessThan(peakPointY);
     expect(latest.y).toBeGreaterThan(latestPointY);
+  });
+
+  it('fits both labels inside a narrow plot and drops the date when needed', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([100]), width: 180, height: 110 });
+    const peak = labelOf(svg, 'peak'), latest = labelOf(svg, 'latest');
+    for (const label of [peak, latest]) {
+      expect(label.text).not.toContain('·');
+      expect(label.fontSize).toBeLessThanOrEqual(11);
+      expect(label.left).toBeGreaterThanOrEqual(CHART_LEFT);
+      expect(label.right).toBeLessThanOrEqual(180 - CHART_RIGHT);
+      expect(label.top).toBeGreaterThanOrEqual(CHART_TOP);
+      expect(label.bottom).toBeLessThanOrEqual(110 - 58);
+    }
+    expect(intersects(peak, latest)).toBe(false);
+  });
+
+  it('compacts long labels instead of overflowing the plot', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([1_250_000]), width: 300, height: 110 });
+    const peak = labelOf(svg, 'peak'), latest = labelOf(svg, 'latest');
+    expect(peak.text).toContain('1.3M');
+    expect(latest.text).toContain('1.3M');
+    expect(peak.text).not.toContain('·');
+    expect(latest.text).not.toContain('·');
+    expect(peak.right).toBeLessThanOrEqual(300 - CHART_RIGHT);
+    expect(latest.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    expect(Math.max(peak.bottom, latest.bottom)).toBeLessThanOrEqual(110 - 58);
+    expect(intersects(peak, latest)).toBe(false);
+  });
+
+  it('places coincident labels side-by-side when vertical space is insufficient', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([100]), height: 110 });
+    const peak = labelOf(svg, 'peak'), latest = labelOf(svg, 'latest');
+    expect(peak.y).toBeCloseTo(latest.y);
+    expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
+    expect(Math.max(peak.bottom, latest.bottom)).toBeLessThanOrEqual(110 - 58);
+    expect(intersects(peak, latest)).toBe(false);
   });
 });
