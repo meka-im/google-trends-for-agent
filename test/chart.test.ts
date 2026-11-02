@@ -192,6 +192,19 @@ describe('renderTrafficChart label placement', () => {
     expect(svg).not.toMatch(/fill="#059669">/);
   });
 
+  it('carries the ellipsis budget into two-label collision checks', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([100_100_000]), width: 94, height: 110 });
+    expect(svg.match(/fill="#(?:dc2626|059669)">[^<]*<\/text>/g) ?? []).toHaveLength(1);
+    const peak = conservativeCallout(svg, '#dc2626');
+    expect(peak.text).toBe('…');
+    expect(peak.width).toBeLessThanOrEqual(94 - CHART_LEFT - CHART_RIGHT);
+    expect(peak.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    expect(peak.right).toBeLessThanOrEqual(94 - CHART_RIGHT);
+    expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
+    expect(peak.bottom).toBeLessThanOrEqual(110 - 58);
+    expect(svg).not.toMatch(/fill="#059669">/);
+  });
+
   it('omits callouts when even the ellipsis cannot fit', () => {
     const svg = renderTrafficChart({ term: 'Claude Code', points: series([100]), width: 85, height: 110 });
     expect(svg).not.toMatch(/fill="#dc2626">/);

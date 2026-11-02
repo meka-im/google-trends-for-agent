@@ -168,14 +168,15 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     }
     return out;
   };
-  const labelVariants = (p: typeof peak, prefix: string): { text: string; fontSize: number }[] => {
+  const labelVariants = (p: typeof peak, prefix: string): { text: string; fontSize: number; width: number }[] => {
     if (!p) return [];
     const value = fmt(p.traffic), parts = zonedParts(p.t, timeFormat);
     const full = `${prefix} ${value}${parts ? ` · ${formatCallout(parts, mode)}` : ''}`;
     const compact = `${prefix} ${value}`;
-    const out: { text: string; fontSize: number }[] = [];
+    const out: { text: string; fontSize: number; width: number }[] = [];
     const add = (text: string, fontSize: number) => {
-      if (text.length * fontSize * 0.6 <= plotW && !out.some(v => v.text === text && v.fontSize === fontSize)) out.push({ text, fontSize });
+      const width = text.length * fontSize * 0.6;
+      if (width <= plotW && !out.some(v => v.text === text && v.fontSize === fontSize)) out.push({ text, fontSize, width });
     };
     add(full, LABEL_FONT_SIZE);
     for (const fontSize of LABEL_FONT_SIZES) add(compact, fontSize);
@@ -184,7 +185,11 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
       // The ellipsis advances a full em in common sans fonts, unlike the average
       // character estimate used above, so budget its rendered width explicitly.
       const keep = Math.min(value.length, Math.max(0, Math.floor((plotW - LABEL_ELLIPSIS_WIDTH) / LABEL_CHAR_WIDTH)));
-      out.push({ text: keep > 0 ? `${value.slice(0, keep)}…` : '…', fontSize: LABEL_FONT_SIZE });
+      out.push({
+        text: keep > 0 ? `${value.slice(0, keep)}…` : '…',
+        fontSize: LABEL_FONT_SIZE,
+        width: LABEL_ELLIPSIS_WIDTH + keep * LABEL_CHAR_WIDTH,
+      });
     }
     return out;
   };
@@ -193,7 +198,7 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     const pointX = x(p.i), pointY = y(p.traffic), yCandidates = labelYCandidates(pointY, prefer);
     const out: ChartLabel[] = [];
     labelVariants(p, prefix).forEach((variant, variantIndex) => {
-      const labelWidth = variant.text.length * variant.fontSize * 0.6;
+      const labelWidth = variant.width;
       labelXVariants(pointX, labelWidth).forEach((placement, xIndex) => {
         yCandidates.forEach((textY, yIndex) => {
           out.push({
