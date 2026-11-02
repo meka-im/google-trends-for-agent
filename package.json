@@ -27,6 +27,7 @@
     "README.md",
     "README.zh-CN.md",
     "docs/mcp-api.md",
+    "docs/reference.md",
     "LICENSE",
     "CHANGELOG.md",
     "examples/baselines.json",
