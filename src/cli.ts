@@ -15,7 +15,7 @@ const help = `google-trends-for-agent — Search-interest signals for AI agents 
 
 Usage:
   google-trends-for-agent ask <term> [--validate] [--diff] [--fresh] [--points]   One term: interest, Popular + Rising, regions (ask --help)
-  google-trends-for-agent snapshot <term> [--json] [--svg]                     Calibrated searches/day + chart path (snapshot --help)
+  google-trends-for-agent snapshot <term> [--json] [--svg] [--tz IANA]        Calibrated searches/day + chart path (snapshot --help)
   google-trends-for-agent compare <kw> <kw> [...] [options]            Relative interest for 2-5 keywords
   google-trends-for-agent --query coffee [--query tea] [options]       Same as compare (default mode)
   google-trends-for-agent now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168

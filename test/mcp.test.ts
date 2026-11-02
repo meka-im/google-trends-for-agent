@@ -27,7 +27,7 @@ describe('MCP offline', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const props = Object.fromEntries(tools.map(t => [t.name, Object.keys((t.inputSchema as { properties: object }).properties).sort()]));
-    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'validate'], trends_compare: ['geo', 'keywords', 'time'], trends_now: ['geos', 'hours', 'limit'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time'] });
+    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'validate'], trends_compare: ['geo', 'keywords', 'time'], trends_now: ['geos', 'hours', 'limit'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'tz'] });
     for (const t of tools) expect(t.description).toMatch(/Output: ok, schemaVersion/);
     expect(tools.find(t => t.name === 'trends_now')!.description).toMatch(/Supported geos: .*SG/);
   });

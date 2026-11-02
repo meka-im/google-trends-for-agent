@@ -1,3 +1,5 @@
+import { resolveTimeZone } from './timezone.js';
+
 export interface TrafficChartPoint { t: string; traffic: number | null; gap?: boolean }
 export interface TrafficChartOptions {
   term: string;
@@ -5,42 +7,46 @@ export interface TrafficChartOptions {
   anchorPoints?: readonly TrafficChartPoint[];
   width?: number;
   height?: number;
+  /** IANA time zone for axis labels and callouts; defaults to GTFA_TZ, then UTC. */
+  timeZone?: string;
 }
 
 const WIDTH = 720, HEIGHT = 300, LEFT = 58, RIGHT = 20, TOP = 32, BOTTOM = 58;
-const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TICK_TARGET = 6;
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n % 1000 ? 1 : 0)}k` : String(Math.round(n));
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-interface ShanghaiTime { year: number; month: number; day: number; hour: number; minute: number }
+interface ZonedTime { year: number; month: number; day: number; hour: number; minute: number }
 type TimeLabelMode = 'datetime' | 'date' | 'month';
 
-// Chart times are displayed in Asia/Shanghai (UTC+8). We apply the fixed offset to the
-// ISO timestamp and read UTC fields so labels are deterministic in every host timezone.
-function shanghaiParts(t: string): ShanghaiTime | null {
+// Chart times are displayed in the configured IANA time zone (default UTC). We read the
+// zone-local calendar fields via Intl.DateTimeFormat so DST transitions are handled.
+function zonedParts(t: string, format: Intl.DateTimeFormat): ZonedTime | null {
   const ms = Date.parse(t);
   if (!Number.isFinite(ms)) return null;
-  const d = new Date(ms + SHANGHAI_OFFSET_MS);
+  const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return null;
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+  const fields = Object.fromEntries(format.formatToParts(d).map(p => [p.type, p.value]));
+  const year = Number(fields.year), month = Number(fields.month), day = Number(fields.day), hour = Number(fields.hour), minute = Number(fields.minute);
+  if (![year, month, day, hour, minute].every(Number.isFinite)) return null;
+  return { year, month, day, hour, minute };
 }
-function labelMode(first: ShanghaiTime, last: ShanghaiTime): TimeLabelMode {
-  const stamp = (p: ShanghaiTime) => Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+function labelMode(first: ZonedTime, last: ZonedTime): TimeLabelMode {
+  const stamp = (p: ZonedTime) => Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
   const span = Math.abs(stamp(last) - stamp(first));
   if (span <= 36 * 60 * 60 * 1000) return 'datetime';
   if (span <= 120 * DAY_MS) return 'date';
   return 'month';
 }
-function formatTick(p: ShanghaiTime, previous: ShanghaiTime | undefined, mode: TimeLabelMode) {
+function formatTick(p: ZonedTime, previous: ZonedTime | undefined, mode: TimeLabelMode) {
   if (mode === 'month') return `${p.year}-${pad2(p.month)}`;
   if (mode === 'date') return `${p.month}/${p.day}`;
   const sameDay = previous && previous.year === p.year && previous.month === p.month && previous.day === p.day;
   return sameDay ? `${pad2(p.hour)}:${pad2(p.minute)}` : `${p.month}/${p.day} ${pad2(p.hour)}:${pad2(p.minute)}`;
 }
-function formatCallout(p: ShanghaiTime, mode: TimeLabelMode) {
+function formatCallout(p: ZonedTime, mode: TimeLabelMode) {
   const date = mode === 'month' ? `${p.year}-${pad2(p.month)}-${pad2(p.day)}` : `${p.month}/${p.day}`;
   return `${date} ${pad2(p.hour)}:${pad2(p.minute)}`;
 }
@@ -51,10 +57,15 @@ function tickIndices(n: number): number[] {
 }
 
 /** Inline SVG line chart (traffic over time). Gap points are omitted and the line breaks
- * across them; the anchor curve is dashed. X-axis times and callouts use Asia/Shanghai.
- * Pure and deterministic for tests. */
+ * across them; the anchor curve is dashed. X-axis times and callouts use the configured
+ * IANA time zone (default UTC, override with timeZone or GTFA_TZ). Pure and deterministic
+ * for tests. */
 export function renderTrafficChart(opts: TrafficChartOptions): string {
   const width = opts.width ?? WIDTH, height = opts.height ?? HEIGHT;
+  const timeZone = resolveTimeZone(opts.timeZone);
+  const timeFormat = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
   const points = opts.points, anchor = opts.anchorPoints ?? [];
   const values = [...points, ...anchor].filter(p => !p.gap && p.traffic !== null).map(p => p.traffic as number);
   const yMax = Math.max(1, ...values);
@@ -75,17 +86,17 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
   const termSegments = segments(points);
   const anchorSegments = segments(anchor);
   const carrier = points.length ? points : anchor;
-  const firstParts = carrier.length ? shanghaiParts(carrier[0].t) : null;
-  const lastParts = carrier.length ? shanghaiParts(carrier[carrier.length - 1].t) : null;
+  const firstParts = carrier.length ? zonedParts(carrier[0].t, timeFormat) : null;
+  const lastParts = carrier.length ? zonedParts(carrier[carrier.length - 1].t, timeFormat) : null;
   const mode: TimeLabelMode = firstParts && lastParts ? labelMode(firstParts, lastParts) : 'datetime';
   const grid = [0, .25, .5, .75, 1].map(f => {
     const gy = TOP + plotH * (1 - f), value = yMax * f;
     return `<line x1="${LEFT}" y1="${gy.toFixed(1)}" x2="${width - RIGHT}" y2="${gy.toFixed(1)}" stroke="#e5e7eb" stroke-width="1"/>` +
       `<text x="${LEFT - 8}" y="${(gy + 4).toFixed(1)}" text-anchor="end" font-family="system-ui,sans-serif" font-size="11" fill="#6b7280">${esc(fmt(value))}</text>`;
   }).join('');
-  let previousTick: ShanghaiTime | undefined;
+  let previousTick: ZonedTime | undefined;
   const xTicks = tickIndices(n).map((i, order, all) => {
-    const parts = shanghaiParts((points[i] ?? anchor[i])?.t ?? '');
+    const parts = zonedParts((points[i] ?? anchor[i])?.t ?? '', timeFormat);
     if (!parts) return '';
     const label = formatTick(parts, previousTick, mode);
     previousTick = parts;
@@ -103,7 +114,7 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
   const latestOffsetY = peak && latest && peak.i === latest.i && y(latest.traffic) + 16 > axisY - 4 ? -24 : 16;
   const mark = (p: typeof peak, color: string, offsetY: number, prefix: string) => {
     if (!p) return '';
-    const parts = shanghaiParts(p.t);
+    const parts = zonedParts(p.t, timeFormat);
     const text = `${prefix} ${fmt(p.traffic)}${parts ? ` · ${formatCallout(parts, mode)}` : ''}`;
     const pointX = x(p.i), estimatedTextWidth = text.length * 6.2, placeLeft = pointX + 7 + estimatedTextWidth > width - RIGHT;
     const textX = placeLeft ? pointX - 7 : pointX + 7;
@@ -116,10 +127,10 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     `<line x1="${LEFT}" y1="${height - 16}" x2="${LEFT + 24}" y2="${height - 16}" stroke="#2563eb" stroke-width="2"/><text x="${LEFT + 30}" y="${height - 9}">${esc(opts.term)}</text>` +
     (anchor.length ? `<line x1="${LEFT + 170}" y1="${height - 16}" x2="${LEFT + 194}" y2="${height - 16}" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/><text x="${LEFT + 200}" y="${height - 9}">anchor</text>` : '') +
     `</g>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(opts.term)} traffic chart (Asia/Shanghai)">` +
-    `<title>${esc(opts.term)} searches/day (Asia/Shanghai)</title>` +
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(opts.term)} traffic chart (${esc(timeZone)})">` +
+    `<title>${esc(opts.term)} searches/day (${esc(timeZone)})</title>` +
     `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
-    `<text x="${LEFT}" y="20" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#111827">${esc(opts.term)} — searches/day (Asia/Shanghai)</text>` +
+    `<text x="${LEFT}" y="20" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#111827">${esc(opts.term)} — searches/day (${esc(timeZone)})</text>` +
     grid + xTicks +
     `<line x1="${LEFT}" y1="${TOP}" x2="${LEFT}" y2="${axisY}" stroke="#d1d5db" stroke-width="1"/>` +
     `<line x1="${LEFT}" y1="${axisY}" x2="${width - RIGHT}" y2="${axisY}" stroke="#d1d5db" stroke-width="1"/>` +

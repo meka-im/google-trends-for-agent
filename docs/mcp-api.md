@@ -1,6 +1,6 @@
 # google-trends-for-agent · Agent API
 
-面向 Agent 的公开表面只有 **四个 MCP 工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点（默认 `gpts`）把 0–100 兴趣换算成每日搜索量估计，并始终附带一条 **`now 7-d`** 曲线（`chart7d` / `traffic7d`）。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述当前 HEAD 的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
+面向 Agent 的公开表面只有 **四个 MCP 工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点（默认 `gpts`）把 0–100 兴趣换算成每日搜索量估计，并始终附带一条 **`now 7-d`** 曲线（`chart7d` / `traffic7d`）。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述当前 HEAD 的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
 
 ---
 
@@ -14,6 +14,7 @@
 | 错误对象 | `error: { code, message, retryAfterSec? }` |
 | Schema 拒收 | 参数未过 Zod 时同样返回上述信封，`error.code` 为 `INVALID_INPUT` |
 | Explore `time` 枚举 | `now 1-H` · `now 4-H` · `now 1-d` · `now 7-d` · `today 1-m` · `today 3-m` · `today 12-m` · `today 5-y` · `all` |
+| 图表时区 | 默认 `UTC`；显式 `tz` / `--tz` / `timeZone` > `GTFA_TZ` > `UTC`；用 `Intl.DateTimeFormat` 校验，非法 IANA 名称返回 `INVALID_INPUT` |
 | Web / 分类 | MCP 固定 Web、`category=0`（不可从这四个工具改） |
 
 **CLI 对照**
@@ -21,7 +22,7 @@
 | CLI | MCP |
 | --- | --- |
 | `gtfa ask <term> [--fresh] [--validate] [--diff …] [--points]` | `trends_ask`（`--diff` 强制 JSON 输出） |
-| `gtfa snapshot <term> [--json] [--svg]` | `trends_snapshot` |
+| `gtfa snapshot <term> [--json] [--svg] [--tz IANA]` | `trends_snapshot` |
 | `gtfa compare a b …` 或 `--query a --query b` | `trends_compare` |
 | `gtfa now --geo SG [--hours 24] [--limit 10]` | `trends_now` |
 
@@ -218,6 +219,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `anchor` | string（1–100，trim） | 否 | `gpts` | 共享尺度锚点词；默认锚点仅对 `US` 有内建标定 |
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的同类快照；`true`：强制现拉 |
 | `svg` | boolean | 否 | `false` | `true`：内联 `chart.svg` / `chart7d.svg` 文本；默认 `svg: ""`，但 `path` 仍会写入 |
+| `tz` | IANA string | 否 | `GTFA_TZ`，再退回 `UTC` | 图表时间轴时区（如 `Asia/Shanghai`）；非法名称返回 `INVALID_INPUT` |
 
 ### 请求示例
 
@@ -229,7 +231,8 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
     "geo": "US",
     "time": "now 1-d",
     "anchor": "gpts",
-    "fresh": false
+    "fresh": false,
+    "tz": "Asia/Shanghai"
   }
 }
 ```
@@ -328,7 +331,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `traffic` | `unit: "searches/day"`；`average` / `latest` / `settledLatest` / `peak` 排除 gap；`low` / `high` 由 `average × (1±tolerance)` 取整；`gapCount` |
 | `series.points` | 原始 0–100 `score` 与逐点 `traffic`；gap 点带 `gap: true`（原始 `score` 仍为 0） |
 | `series.anchorPoints` | 锚点原始 `{t, score}`；同一次对比、同一标尺 |
-| `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回约 720×280 的内联 SVG（Asia/Shanghai 时间轴，gap 点不连线，峰值 / latest 带时间标记，锚点虚线） |
+| `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回约 720×280 的内联 SVG（时间轴使用所选 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
 | `chart.path` | 写入 `.gtfa/charts/<snapshotId>.svg` 的路径；`null` 表示文件写入被禁用/失败 |
 | `chart7d` | 始终存在的 `now 7-d` 曲线，形状与 `chart` 相同（`{ svg, path }`）；`svg` 默认 `""`，`path` 仍写入。7d 拉取失败时为 `{ "svg": "", "path": null }` 并写入 warning |
 | `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用同一 `gpts` 基线（550 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
@@ -362,6 +365,7 @@ published.est = round(popular.value / 100 × average)
 - 请求窗口不是 `now 7-d` 时，会额外做一次 `[term, anchor]` 的 `now 7-d` Explore 对比（与主窗口并行）；Popular / Rising 表仍只来自主窗口，不会为 7d 重复拉表。主窗口本身就是 `now 7-d` 时，`chart7d` 直接复用主 `chart`，不产生第二次上游请求。
 - gap 点（见上一节规则）不参与 `anchorLevel`、流量聚合、裁决和折线连接；主窗口与 7d 窗口各自独立排除 gap。
 - `fresh: false` 只复用同 term + filter + anchor 的快照；`blocked` 快照永不复用。
+- 图表时间轴默认 `UTC`；显式 `tz`（MCP）/ `--tz`（CLI）/ `timeZone`（库）优先于 `GTFA_TZ`，都没有时为 `UTC`。时区通过 `Intl.DateTimeFormat` 的 `timeZone` 计算日历字段（正确处理 DST），而不是固定偏移；非法 IANA 名称返回 `INVALID_INPUT`。
 - 图文件写在 `.gtfa/charts/`（MCP 进程可用 `GTFA_CHART_DIR` 覆盖，快照目录可用 `GTFA_SNAPSHOT_DIR` 覆盖）；`chart` 与 `chart7d` 各自使用对应快照 ID 的 `.svg`（主窗口为 `now 7-d` 时共用同一文件）。若目录不可写，对应 `path` 为 `null`；默认不内联 SVG，需要文本时设置 `svg: true` / `--svg`。
 - 7d 拉取失败（`weekError` 或没有 7d 快照）时，`chart7d` / `traffic7d` **仍会返回**：`chart7d: { svg: "", path: null }`，`traffic7d` 数值全为 `null`、`gapCount: 0`，并在 `meta.warnings` 说明原因。
 

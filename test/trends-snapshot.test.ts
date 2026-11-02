@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { askEnvelope, createServer, SCHEMA_VERSION } from '../src/mcp.js';
@@ -47,9 +47,13 @@ const timeline = (points: { time: string; term: number; anchor: number }[]) => (
 });
 const timelineFor = (snap: TermSnapshot) => timeline(snap.interest.points.map((p, i) => ({ time: p.time, term: p.value, anchor: snap.anchor?.points[i]?.value ?? 0 })));
 const cleanups: (() => Promise<void>)[] = [];
+const originalTz = process.env.GTFA_TZ;
+beforeEach(() => { delete process.env.GTFA_TZ; });
 afterEach(async () => {
   for (const close of cleanups.splice(0)) await close();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  if (originalTz === undefined) delete process.env.GTFA_TZ;
+  else process.env.GTFA_TZ = originalTz;
 });
 async function connect(options: { snapshotDir: string; chartDir: string; transport?: Transport }) {
   const server = createServer({ transport: options.transport ?? (async () => ({ status: 500, headers: {}, body: '' })), minIntervalMs: 0, snapshotDir: options.snapshotDir, chartDir: options.chartDir });
@@ -133,14 +137,29 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart.svg).toContain('class="term-line"');
     expect(e.chart.svg).toContain('class="anchor-line"');
     expect(e.chart.svg).toContain('stroke-dasharray="6 5"');
-    expect(e.chart.svg).toContain('Asia/Shanghai');
-    expect(e.chart.svg).toContain('10/31 08:00');
-    expect(e.chart.svg).toContain('>13:00<');
-    expect(e.chart.svg).toMatch(/peak 440 · 10\/31 13:00/);
-    expect(e.chart.svg).toMatch(/latest 440 · 10\/31 13:00/);
+    expect(e.chart.svg).toContain('(UTC)');
+    expect(e.chart.svg).toContain('10/31 00:00');
+    expect(e.chart.svg).toContain('>05:00<');
+    expect(e.chart.svg).toMatch(/peak 440 · 10\/31 05:00/);
+    expect(e.chart.svg).toMatch(/latest 440 · 10\/31 05:00/);
     expect(e.chart.svg).not.toMatch(/NaN|undefined/);
     expect(e.chart.path).toBe(join(chartDir, 'traffic-fixture.svg'));
     expect(readFileSync(e.chart.path!, 'utf8')).toBe(e.chart.svg);
+  });
+
+  it('renders chart labels in an explicitly requested IANA time zone', async () => {
+    const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, svg: true, timeZone: 'Asia/Shanghai' });
+    expect(e.chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
+    expect(e.chart.svg).toContain('<title>Astra searches/day (Asia/Shanghai)</title>');
+    expect(e.chart.svg).toContain('10/31 08:00');
+    expect(e.chart.svg).toContain('>13:00<');
+  });
+
+  it('honors GTFA_TZ for chart labels when no explicit time zone is given', async () => {
+    process.env.GTFA_TZ = 'Asia/Shanghai';
+    const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, svg: true });
+    expect(e.chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
+    expect(e.chart.svg).toContain('10/31 08:00');
   });
 
   it('adds a calibrated now 7-d chart and traffic block alongside the primary window', async () => {
@@ -150,7 +169,7 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart7d.svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"[\s\S]*<\/svg>$/);
     expect(e.chart7d.svg).toContain('class="term-line"');
     expect(e.chart7d.svg).toContain('class="anchor-line"');
-    expect(e.chart7d.svg).toContain('Asia/Shanghai');
+    expect(e.chart7d.svg).toContain('(UTC)');
     expect(e.chart7d.svg).not.toBe(e.chart.svg);
     expect(e.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d.svg'));
     expect(readFileSync(e.chart7d.path!, 'utf8')).toBe(e.chart7d.svg);
@@ -231,6 +250,13 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(e.chart.path).not.toBe(e.chart7d?.path);
   });
 
+  it('rejects an invalid IANA time zone before querying upstream', async () => {
+    const store = new SnapshotStore(temp()), query = vi.fn();
+    await expect(fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never, timeZone: 'Not/AZone' }))
+      .rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('makes no duplicate upstream call when primary is already now 7-d', async () => {
     const chartDir = temp(), store = new SnapshotStore(temp());
     const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(input.timeRange === 'now 7-d' ? weekFixture() : fixture()));
@@ -248,7 +274,7 @@ describe('trends_snapshot schema and CLI', () => {
   it('rejects missing/invalid input with the shared envelope and no network', async () => {
     const transport = vi.fn<Transport>();
     const client = await connect({ snapshotDir: temp(), chartDir: temp(), transport });
-    for (const args of [{}, { term: '' }, { term: 'Astra', time: 'now 2-H' }]) {
+    for (const args of [{}, { term: '' }, { term: 'Astra', time: 'now 2-H' }, { term: 'Astra', tz: 'Not/AZone' }]) {
       const r = await client.callTool({ name: 'trends_snapshot', arguments: args });
       expect(r.isError).toBe(true);
       expect(r.structuredContent).toMatchObject({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', error: { code: 'INVALID_INPUT' }, meta: { upstreamRequests: 0 } });
@@ -296,6 +322,30 @@ describe('trends_snapshot schema and CLI', () => {
     const withSvg = await runSnapshotCli(['Astra', '--json', '--svg', '--store', storeDir, '--chart-dir', chartDir], { query: query as never });
     expect(JSON.parse(withSvg.stdout).chart.svg).toContain('<svg');
     expect(JSON.parse(withSvg.stdout).chart7d.svg).toContain('<svg');
+  });
+
+  it('CLI snapshot --tz renders the requested zone and uses GTFA_TZ when --tz is absent', async () => {
+    const storeDir = temp(), chartDir = temp();
+    const snap = fixture(), week = weekFixture(), now = new Date().toISOString();
+    snap.fetchedAt = now; week.fetchedAt = now;
+    await new SnapshotStore(storeDir).save(snap);
+    await new SnapshotStore(storeDir).save(week);
+    const query = vi.fn();
+    const shanghai = await runSnapshotCli(['Astra', '--json', '--svg', '--tz', 'Asia/Shanghai', '--store', storeDir, '--chart-dir', chartDir], { query: query as never });
+    expect(shanghai.code).toBe(0);
+    expect(JSON.parse(shanghai.stdout).chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
+    expect(JSON.parse(shanghai.stdout).chart.svg).toContain('10/31 08:00');
+    process.env.GTFA_TZ = 'Asia/Shanghai';
+    const fromEnv = await runSnapshotCli(['Astra', '--json', '--svg', '--store', storeDir, '--chart-dir', chartDir], { query: query as never });
+    expect(fromEnv.code).toBe(0);
+    expect(JSON.parse(fromEnv.stdout).chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('CLI snapshot --tz rejects an invalid IANA zone with INVALID_INPUT', async () => {
+    const r = await runSnapshotCli(['Astra', '--json', '--tz', 'Not/AZone']);
+    expect(r.code).toBe(4);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: false, schemaVersion: 1, status: 'error', error: { code: 'INVALID_INPUT' } });
   });
 
   it('CLI snapshot --json returns INVALID_INPUT for bad flags', async () => {

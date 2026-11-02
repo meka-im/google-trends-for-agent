@@ -12,4 +12,5 @@ export * from './filter.js';
 export * from './snapshot.js';
 export * from './trends-snapshot.js';
 export * from './chart.js';
+export * from './timezone.js';
 export * from './validate.js';

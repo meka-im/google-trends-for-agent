@@ -4,6 +4,7 @@ import { SnapshotStore } from './snapshot.js';
 import { fetchTrafficSnapshot, trafficSnapshotEnvelope, trafficSnapshotError } from './trends-snapshot.js';
 import type { queryTrends } from './api.js';
 import type { Baselines } from './traffic.js';
+import { resolveTimeZone } from './timezone.js';
 
 export const snapshotHelp = `Usage: google-trends-for-agent snapshot <term> [options]
   One term + a shared-scale anchor comparison -> calibrated searches/day estimate,
@@ -15,6 +16,7 @@ export const snapshotHelp = `Usage: google-trends-for-agent snapshot <term> [opt
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
   --chart-dir DIR                   SVG output directory (default .gtfa/charts)
+  --tz <IANA>                       Chart time zone (default GTFA_TZ, then UTC)
   --svg                             Embed inline SVG text (default: svg is "", path is kept)
   --json                            Agent envelope JSON (same as trends_snapshot)
   --pretty                          Indent JSON
@@ -26,7 +28,7 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
   try {
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       geo: { type: 'string' }, time: { type: 'string' }, anchor: { type: 'string' }, maxAge: { type: 'string' }, 'max-age': { type: 'string' },
-      store: { type: 'string' }, 'chart-dir': { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
+      store: { type: 'string' }, 'chart-dir': { type: 'string' }, tz: { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
       fresh: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean' },
     } });
     json = v.json ?? false; pretty = v.pretty ?? false;
@@ -35,17 +37,18 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
     if (!term) throw new Error('provide a term');
     const maxAgeMin = v['max-age'] ?? v.maxAge;
     const filter = resolveFilter({ geo: v.geo, time: v.time, category: 0, property: '' });
+    const timeZone = resolveTimeZone(v.tz);
     const store = new SnapshotStore(v.store);
     const maxAge = maxAgeMin === undefined ? 360 : Number(maxAgeMin);
     if (!Number.isFinite(maxAge) || maxAge < 0) throw new Error('invalid max-age');
     const result = await fetchTrafficSnapshot(term, {
-      filter, store, anchor: v.anchor, maxAgeMin: maxAge, query: options.query,
+      filter, store, anchor: v.anchor, maxAgeMin: maxAge, query: options.query, timeZone,
       refresh: v.fresh || v['no-cache'] ? 'always' : undefined,
     });
     const chartDir = v['chart-dir'] ?? options.chartDir;
     const envelope = await trafficSnapshotEnvelope(result.snapshot, {
       cached: result.source === 'cache', ageMin: result.ageMin, baselines: options.baselines,
-      week: result.week, ...(result.weekError ? { weekError: result.weekError } : {}),
+      week: result.week, timeZone, ...(result.weekError ? { weekError: result.weekError } : {}),
       ...(chartDir !== undefined ? { chartDir } : {}), svg: v.svg === true,
     });
     const code = !envelope.ok ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1) : 0;
