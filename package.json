@@ -1,0 +1,74 @@
+{
+  "name": "google-trends-for-agent",
+  "version": "0.1.0",
+  "description": "Search-interest signals for AI agents — an unofficial Google Trends client",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "google-trends-for-agent": "./dist/cli.js",
+    "gtfa": "./dist/cli.js",
+    "trends-kit": "./dist/cli.js",
+    "google-trends-for-agent-mcp": "./dist/mcp-bin.js",
+    "gtfa-mcp": "./dist/mcp-bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs/mcp-api.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "examples/baselines.json",
+    "docs/assets"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
+    "typecheck": "tsc --noEmit",
+    "trends": "tsx src/cli.ts",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "tough-cookie": "^6.0.2",
+    "undici": "^6.21.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.12"
+  },
+  "keywords": [
+    "agents",
+    "ai-agents",
+    "llm-tools",
+    "tool-calling",
+    "structured-output",
+    "google-trends",
+    "trends",
+    "search-interest",
+    "cli",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meka-im/google-trends-for-agent.git"
+  },
+  "homepage": "https://github.com/meka-im/google-trends-for-agent",
+  "bugs": {
+    "url": "https://github.com/meka-im/google-trends-for-agent/issues"
+  },
+  "author": "MEKA <im@meka.im>"
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260" font-family="Inter,Arial,sans-serif">
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+<rect width="900" height="260" rx="16" fill="#0b1220"/>
+<rect x="20" y="40" width="170" height="80" rx="12" fill="#111a2e" stroke="#a78bfa" stroke-width="2"/><text x="105.0" y="76.0" text-anchor="middle" fill="#f1f5f9" font-size="16" font-weight="700">Your agent</text><text x="105.0" y="98.0" text-anchor="middle" fill="#94a3b8" font-size="12">CLI · library · (MCP soon)</text>
+<rect x="240" y="40" width="190" height="80" rx="12" fill="#111a2e" stroke="#22d3ee" stroke-width="2"/><text x="335.0" y="76.0" text-anchor="middle" fill="#f1f5f9" font-size="16" font-weight="700">queryTrends()</text><text x="335.0" y="98.0" text-anchor="middle" fill="#94a3b8" font-size="12">validate · plan · JSON contract</text>
+<rect x="480" y="40" width="190" height="80" rx="12" fill="#111a2e" stroke="#22d3ee" stroke-width="2"/><text x="575.0" y="76.0" text-anchor="middle" fill="#f1f5f9" font-size="16" font-weight="700">Session + limiter</text><text x="575.0" y="98.0" text-anchor="middle" fill="#94a3b8" font-size="12">cookies · ≥1s spacing · backoff</text>
+<rect x="720" y="40" width="160" height="80" rx="12" fill="#111a2e" stroke="#34d399" stroke-width="2"/><text x="800.0" y="76.0" text-anchor="middle" fill="#f1f5f9" font-size="16" font-weight="700">Transport</text><text x="800.0" y="98.0" text-anchor="middle" fill="#94a3b8" font-size="12">fetch · HTTPS_PROXY · custom</text>
+<line x1="190" y1="80" x2="240" y2="80" stroke="#475569" stroke-width="2" marker-end="url(#a)"/><line x1="430" y1="80" x2="480" y2="80" stroke="#475569" stroke-width="2" marker-end="url(#a)"/><line x1="670" y1="80" x2="720" y2="80" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+<text x="800" y="160" text-anchor="middle" fill="#94a3b8" font-size="13">→ public Trends web endpoints</text>
+<rect x="240" y="170" width="430" height="64" rx="12" fill="#0f172a" stroke="#334155" stroke-dasharray="5 4"/>
+<text x="455" y="196" text-anchor="middle" fill="#e2e8f0" font-size="14">{ status: ok | partial | error, data, error.code, meta }</text>
+<text x="455" y="218" text-anchor="middle" fill="#94a3b8" font-size="12">BLOCKED · RATE_LIMITED · INVALID_INPUT · TRENDS_TIMEOUT · …</text>
+<line x1="335" y1="120" x2="335" y2="170" stroke="#475569" stroke-width="2" marker-end="url(#a)"/></svg>

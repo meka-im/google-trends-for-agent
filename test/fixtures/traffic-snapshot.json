@@ -1,0 +1,41 @@
+{
+  "schema": "term-snapshot/1",
+  "id": "traffic-fixture",
+  "term": "Astra",
+  "filter": { "geo": "US", "time": "now 1-d", "category": 0, "property": "" },
+  "fetchedAt": "2026-10-31T05:00:00.000Z",
+  "status": "ok",
+  "interest": {
+    "points": [
+      { "time": "2026-10-31T00:00:00.000Z", "value": 40 },
+      { "time": "2026-10-31T01:00:00.000Z", "value": 0 },
+      { "time": "2026-10-31T02:00:00.000Z", "value": 50 },
+      { "time": "2026-10-31T03:00:00.000Z", "value": 60 },
+      { "time": "2026-10-31T04:00:00.000Z", "value": 60 },
+      { "time": "2026-10-31T05:00:00.000Z", "value": 80 }
+    ],
+    "latest": 80,
+    "peak": 80,
+    "settledLatest": 60
+  },
+  "anchor": {
+    "term": "gpts",
+    "points": [
+      { "time": "2026-10-31T00:00:00.000Z", "value": 100 },
+      { "time": "2026-10-31T01:00:00.000Z", "value": 0 },
+      { "time": "2026-10-31T02:00:00.000Z", "value": 100 },
+      { "time": "2026-10-31T03:00:00.000Z", "value": 100 },
+      { "time": "2026-10-31T04:00:00.000Z", "value": 0 },
+      { "time": "2026-10-31T05:00:00.000Z", "value": 100 }
+    ]
+  },
+  "popular": [
+    { "rank": 1, "query": "astra app", "value": 100 },
+    { "rank": 2, "query": "astra ai", "value": 50 }
+  ],
+  "rising": [
+    { "rank": 1, "query": "astra ai", "value": 250, "formattedValue": "+250%", "breakout": false },
+    { "rank": 2, "query": "astra new", "value": 5000, "formattedValue": "Breakout", "breakout": true }
+  ],
+  "regions": []
+}

@@ -1,0 +1,3349 @@
+{
+ "chart": {
+  "filter": "US, past 24h (2026-10-30 17:00 UTC+8 live)",
+  "queries": [
+   "ai-video-generator",
+   "gpts"
+  ],
+  "timeline": [
+   {
+    "time": "2026-10-29T08:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:56 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:04 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:12 AM",
+    "values": [
+     81,
+     0
+    ],
+    "formattedValues": [
+     "81",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:20 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:28 AM",
+    "values": [
+     51,
+     0
+    ],
+    "formattedValues": [
+     "51",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:36 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:44 AM",
+    "values": [
+     51,
+     0
+    ],
+    "formattedValues": [
+     "51",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T09:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:52 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:00 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:08 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:16 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:24 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:32 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:40 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:48 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T10:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:56 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:04 AM",
+    "values": [
+     24,
+     0
+    ],
+    "formattedValues": [
+     "24",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:12 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:20 AM",
+    "values": [
+     22,
+     0
+    ],
+    "formattedValues": [
+     "22",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:28 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:36 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:44 AM",
+    "values": [
+     21,
+     0
+    ],
+    "formattedValues": [
+     "21",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T11:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:52 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:00 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:08 PM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:16 PM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:24 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:32 PM",
+    "values": [
+     22,
+     0
+    ],
+    "formattedValues": [
+     "22",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:40 PM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:48 PM",
+    "values": [
+     14,
+     13
+    ],
+    "formattedValues": [
+     "14",
+     "13"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T12:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 12:56 PM",
+    "values": [
+     13,
+     0
+    ],
+    "formattedValues": [
+     "13",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:04 PM",
+    "values": [
+     10,
+     0
+    ],
+    "formattedValues": [
+     "10",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:12 PM",
+    "values": [
+     11,
+     11
+    ],
+    "formattedValues": [
+     "11",
+     "11"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:20 PM",
+    "values": [
+     15,
+     9
+    ],
+    "formattedValues": [
+     "15",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:28 PM",
+    "values": [
+     10,
+     13
+    ],
+    "formattedValues": [
+     "10",
+     "13"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:36 PM",
+    "values": [
+     13,
+     10
+    ],
+    "formattedValues": [
+     "13",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:44 PM",
+    "values": [
+     19,
+     9
+    ],
+    "formattedValues": [
+     "19",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T13:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 1:52 PM",
+    "values": [
+     20,
+     9
+    ],
+    "formattedValues": [
+     "20",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:00 PM",
+    "values": [
+     15,
+     9
+    ],
+    "formattedValues": [
+     "15",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:08 PM",
+    "values": [
+     12,
+     0
+    ],
+    "formattedValues": [
+     "12",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:16 PM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:24 PM",
+    "values": [
+     22,
+     15
+    ],
+    "formattedValues": [
+     "22",
+     "15"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:32 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:40 PM",
+    "values": [
+     14,
+     9
+    ],
+    "formattedValues": [
+     "14",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:48 PM",
+    "values": [
+     13,
+     8
+    ],
+    "formattedValues": [
+     "13",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T14:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 2:56 PM",
+    "values": [
+     13,
+     9
+    ],
+    "formattedValues": [
+     "13",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:04 PM",
+    "values": [
+     15,
+     9
+    ],
+    "formattedValues": [
+     "15",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:12 PM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:20 PM",
+    "values": [
+     19,
+     7
+    ],
+    "formattedValues": [
+     "19",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:28 PM",
+    "values": [
+     14,
+     8
+    ],
+    "formattedValues": [
+     "14",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:36 PM",
+    "values": [
+     15,
+     8
+    ],
+    "formattedValues": [
+     "15",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:44 PM",
+    "values": [
+     10,
+     10
+    ],
+    "formattedValues": [
+     "10",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T15:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 3:52 PM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:00 PM",
+    "values": [
+     17,
+     8
+    ],
+    "formattedValues": [
+     "17",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:08 PM",
+    "values": [
+     15,
+     11
+    ],
+    "formattedValues": [
+     "15",
+     "11"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:16 PM",
+    "values": [
+     11,
+     8
+    ],
+    "formattedValues": [
+     "11",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:24 PM",
+    "values": [
+     8,
+     7
+    ],
+    "formattedValues": [
+     "8",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:32 PM",
+    "values": [
+     13,
+     7
+    ],
+    "formattedValues": [
+     "13",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:40 PM",
+    "values": [
+     15,
+     12
+    ],
+    "formattedValues": [
+     "15",
+     "12"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:48 PM",
+    "values": [
+     9,
+     10
+    ],
+    "formattedValues": [
+     "9",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T16:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 4:56 PM",
+    "values": [
+     11,
+     0
+    ],
+    "formattedValues": [
+     "11",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:04 PM",
+    "values": [
+     9,
+     0
+    ],
+    "formattedValues": [
+     "9",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:12 PM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:20 PM",
+    "values": [
+     16,
+     7
+    ],
+    "formattedValues": [
+     "16",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:28 PM",
+    "values": [
+     7,
+     0
+    ],
+    "formattedValues": [
+     "7",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:36 PM",
+    "values": [
+     11,
+     7
+    ],
+    "formattedValues": [
+     "11",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:44 PM",
+    "values": [
+     13,
+     0
+    ],
+    "formattedValues": [
+     "13",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T17:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 5:52 PM",
+    "values": [
+     13,
+     7
+    ],
+    "formattedValues": [
+     "13",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:00 PM",
+    "values": [
+     14,
+     10
+    ],
+    "formattedValues": [
+     "14",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:08 PM",
+    "values": [
+     15,
+     7
+    ],
+    "formattedValues": [
+     "15",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:16 PM",
+    "values": [
+     14,
+     8
+    ],
+    "formattedValues": [
+     "14",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:24 PM",
+    "values": [
+     9,
+     7
+    ],
+    "formattedValues": [
+     "9",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:32 PM",
+    "values": [
+     9,
+     9
+    ],
+    "formattedValues": [
+     "9",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:40 PM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:48 PM",
+    "values": [
+     11,
+     9
+    ],
+    "formattedValues": [
+     "11",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T18:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 6:56 PM",
+    "values": [
+     16,
+     8
+    ],
+    "formattedValues": [
+     "16",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:04 PM",
+    "values": [
+     13,
+     7
+    ],
+    "formattedValues": [
+     "13",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:12 PM",
+    "values": [
+     20,
+     8
+    ],
+    "formattedValues": [
+     "20",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:20 PM",
+    "values": [
+     10,
+     0
+    ],
+    "formattedValues": [
+     "10",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:28 PM",
+    "values": [
+     13,
+     7
+    ],
+    "formattedValues": [
+     "13",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:36 PM",
+    "values": [
+     14,
+     9
+    ],
+    "formattedValues": [
+     "14",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:44 PM",
+    "values": [
+     16,
+     8
+    ],
+    "formattedValues": [
+     "16",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T19:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 7:52 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:00 PM",
+    "values": [
+     21,
+     11
+    ],
+    "formattedValues": [
+     "21",
+     "11"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:08 PM",
+    "values": [
+     11,
+     0
+    ],
+    "formattedValues": [
+     "11",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:16 PM",
+    "values": [
+     16,
+     7
+    ],
+    "formattedValues": [
+     "16",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:24 PM",
+    "values": [
+     13,
+     7
+    ],
+    "formattedValues": [
+     "13",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:32 PM",
+    "values": [
+     17,
+     12
+    ],
+    "formattedValues": [
+     "17",
+     "12"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:40 PM",
+    "values": [
+     8,
+     0
+    ],
+    "formattedValues": [
+     "8",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:48 PM",
+    "values": [
+     20,
+     8
+    ],
+    "formattedValues": [
+     "20",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T20:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 8:56 PM",
+    "values": [
+     9,
+     7
+    ],
+    "formattedValues": [
+     "9",
+     "7"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:04 PM",
+    "values": [
+     16,
+     8
+    ],
+    "formattedValues": [
+     "16",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:12 PM",
+    "values": [
+     16,
+     8
+    ],
+    "formattedValues": [
+     "16",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:20 PM",
+    "values": [
+     20,
+     8
+    ],
+    "formattedValues": [
+     "20",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:28 PM",
+    "values": [
+     16,
+     8
+    ],
+    "formattedValues": [
+     "16",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:36 PM",
+    "values": [
+     21,
+     0
+    ],
+    "formattedValues": [
+     "21",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:44 PM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T21:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 9:52 PM",
+    "values": [
+     15,
+     8
+    ],
+    "formattedValues": [
+     "15",
+     "8"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:00:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:00 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:08:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:08 PM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:16:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:16 PM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:24:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:24 PM",
+    "values": [
+     9,
+     0
+    ],
+    "formattedValues": [
+     "9",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:32:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:32 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:40:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:40 PM",
+    "values": [
+     15,
+     10
+    ],
+    "formattedValues": [
+     "15",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:48:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:48 PM",
+    "values": [
+     13,
+     0
+    ],
+    "formattedValues": [
+     "13",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T22:56:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 10:56 PM",
+    "values": [
+     13,
+     9
+    ],
+    "formattedValues": [
+     "13",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:04:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:04 PM",
+    "values": [
+     17,
+     9
+    ],
+    "formattedValues": [
+     "17",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:12:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:12 PM",
+    "values": [
+     17,
+     0
+    ],
+    "formattedValues": [
+     "17",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:20:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:20 PM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:28:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:28 PM",
+    "values": [
+     18,
+     9
+    ],
+    "formattedValues": [
+     "18",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:36:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:36 PM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:44:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:44 PM",
+    "values": [
+     18,
+     11
+    ],
+    "formattedValues": [
+     "18",
+     "11"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-29T23:52:00.000Z",
+    "formattedTime": "Oct 29, 2026 at 11:52 PM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:00:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:00 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:08:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:08 AM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:16:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:16 AM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:24:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:24 AM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:32:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:32 AM",
+    "values": [
+     16,
+     0
+    ],
+    "formattedValues": [
+     "16",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:40:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:40 AM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:48:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:48 AM",
+    "values": [
+     15,
+     0
+    ],
+    "formattedValues": [
+     "15",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T00:56:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 12:56 AM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:04:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:04 AM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:12:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:12 AM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:20:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:20 AM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:28:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:28 AM",
+    "values": [
+     27,
+     0
+    ],
+    "formattedValues": [
+     "27",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:36:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:36 AM",
+    "values": [
+     30,
+     0
+    ],
+    "formattedValues": [
+     "30",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:44:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:44 AM",
+    "values": [
+     14,
+     0
+    ],
+    "formattedValues": [
+     "14",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T01:52:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 1:52 AM",
+    "values": [
+     24,
+     9
+    ],
+    "formattedValues": [
+     "24",
+     "9"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:00:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:00 AM",
+    "values": [
+     29,
+     0
+    ],
+    "formattedValues": [
+     "29",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:08:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:08 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:16:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:16 AM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:24:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:24 AM",
+    "values": [
+     23,
+     0
+    ],
+    "formattedValues": [
+     "23",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:32:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:32 AM",
+    "values": [
+     26,
+     0
+    ],
+    "formattedValues": [
+     "26",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:40:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:40 AM",
+    "values": [
+     30,
+     12
+    ],
+    "formattedValues": [
+     "30",
+     "12"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:48:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:48 AM",
+    "values": [
+     23,
+     10
+    ],
+    "formattedValues": [
+     "23",
+     "10"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T02:56:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 2:56 AM",
+    "values": [
+     19,
+     0
+    ],
+    "formattedValues": [
+     "19",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:04:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:04 AM",
+    "values": [
+     18,
+     11
+    ],
+    "formattedValues": [
+     "18",
+     "11"
+    ],
+    "hasData": [
+     true,
+     true
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:12:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:12 AM",
+    "values": [
+     21,
+     0
+    ],
+    "formattedValues": [
+     "21",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:20:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:20 AM",
+    "values": [
+     20,
+     0
+    ],
+    "formattedValues": [
+     "20",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:28:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:28 AM",
+    "values": [
+     17,
+     0
+    ],
+    "formattedValues": [
+     "17",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:36:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:36 AM",
+    "values": [
+     21,
+     0
+    ],
+    "formattedValues": [
+     "21",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:44:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:44 AM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T03:52:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 3:52 AM",
+    "values": [
+     22,
+     0
+    ],
+    "formattedValues": [
+     "22",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:00:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:00 AM",
+    "values": [
+     17,
+     0
+    ],
+    "formattedValues": [
+     "17",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:08:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:08 AM",
+    "values": [
+     17,
+     0
+    ],
+    "formattedValues": [
+     "17",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:16:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:16 AM",
+    "values": [
+     28,
+     0
+    ],
+    "formattedValues": [
+     "28",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:24:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:24 AM",
+    "values": [
+     29,
+     0
+    ],
+    "formattedValues": [
+     "29",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:32:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:32 AM",
+    "values": [
+     25,
+     0
+    ],
+    "formattedValues": [
+     "25",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:40:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:40 AM",
+    "values": [
+     24,
+     0
+    ],
+    "formattedValues": [
+     "24",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:48:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:48 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T04:56:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 4:56 AM",
+    "values": [
+     18,
+     0
+    ],
+    "formattedValues": [
+     "18",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:04:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:04 AM",
+    "values": [
+     37,
+     0
+    ],
+    "formattedValues": [
+     "37",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:12:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:12 AM",
+    "values": [
+     26,
+     0
+    ],
+    "formattedValues": [
+     "26",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:20:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:20 AM",
+    "values": [
+     34,
+     0
+    ],
+    "formattedValues": [
+     "34",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:28:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:28 AM",
+    "values": [
+     22,
+     0
+    ],
+    "formattedValues": [
+     "22",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:36:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:36 AM",
+    "values": [
+     37,
+     0
+    ],
+    "formattedValues": [
+     "37",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:44:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:44 AM",
+    "values": [
+     25,
+     0
+    ],
+    "formattedValues": [
+     "25",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T05:52:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 5:52 AM",
+    "values": [
+     35,
+     0
+    ],
+    "formattedValues": [
+     "35",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:00:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:00 AM",
+    "values": [
+     45,
+     0
+    ],
+    "formattedValues": [
+     "45",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:08:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:08 AM",
+    "values": [
+     29,
+     0
+    ],
+    "formattedValues": [
+     "29",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:16:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:16 AM",
+    "values": [
+     35,
+     0
+    ],
+    "formattedValues": [
+     "35",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:24:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:24 AM",
+    "values": [
+     29,
+     0
+    ],
+    "formattedValues": [
+     "29",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:32:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:32 AM",
+    "values": [
+     30,
+     0
+    ],
+    "formattedValues": [
+     "30",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:40:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:40 AM",
+    "values": [
+     38,
+     0
+    ],
+    "formattedValues": [
+     "38",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:48:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:48 AM",
+    "values": [
+     53,
+     0
+    ],
+    "formattedValues": [
+     "53",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T06:56:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 6:56 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:04:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:04 AM",
+    "values": [
+     41,
+     0
+    ],
+    "formattedValues": [
+     "41",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:12:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:12 AM",
+    "values": [
+     35,
+     0
+    ],
+    "formattedValues": [
+     "35",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:20:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:20 AM",
+    "values": [
+     51,
+     0
+    ],
+    "formattedValues": [
+     "51",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:28:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:28 AM",
+    "values": [
+     42,
+     0
+    ],
+    "formattedValues": [
+     "42",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:36:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:36 AM",
+    "values": [
+     53,
+     0
+    ],
+    "formattedValues": [
+     "53",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:44:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:44 AM",
+    "values": [
+     47,
+     0
+    ],
+    "formattedValues": [
+     "47",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T07:52:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 7:52 AM",
+    "values": [
+     100,
+     0
+    ],
+    "formattedValues": [
+     "100",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:00:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:00 AM",
+    "values": [
+     85,
+     0
+    ],
+    "formattedValues": [
+     "85",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:08:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:08 AM",
+    "values": [
+     47,
+     0
+    ],
+    "formattedValues": [
+     "47",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:16:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:16 AM",
+    "values": [
+     47,
+     0
+    ],
+    "formattedValues": [
+     "47",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:24:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:24 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:32:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:32 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:40:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:40 AM",
+    "values": [
+     56,
+     0
+    ],
+    "formattedValues": [
+     "56",
+     "0"
+    ],
+    "hasData": [
+     true,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:48:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:48 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": false
+   },
+   {
+    "time": "2026-10-30T08:56:00.000Z",
+    "formattedTime": "Oct 30, 2026 at 8:56 AM",
+    "values": [
+     0,
+     0
+    ],
+    "formattedValues": [
+     "0",
+     "0"
+    ],
+    "hasData": [
+     false,
+     false
+    ],
+    "isPartial": true
+   }
+  ],
+  "averages": [
+   19,
+   3
+  ]
+ },
+ "tables": {
+  "filter": "Worldwide, past 12 months (live)",
+  "top": [
+   {
+    "query": "free ai video generator",
+    "value": 100,
+    "formattedValue": "100"
+   },
+   {
+    "query": "best ai video generator",
+    "value": 33,
+    "formattedValue": "33"
+   },
+   {
+    "query": "ai image generator",
+    "value": 24,
+    "formattedValue": "24"
+   },
+   {
+    "query": "ai image to video generator",
+    "value": 16,
+    "formattedValue": "16"
+   },
+   {
+    "query": "google video generator ai",
+    "value": 16,
+    "formattedValue": "16"
+   },
+   {
+    "query": "image to video ai",
+    "value": 16,
+    "formattedValue": "16"
+   },
+   {
+    "query": "ai video generator for free",
+    "value": 13,
+    "formattedValue": "13"
+   },
+   {
+    "query": "free ai image generator",
+    "value": 12,
+    "formattedValue": "12"
+   },
+   {
+    "query": "best free ai video generator",
+    "value": 12,
+    "formattedValue": "12"
+   },
+   {
+    "query": "kling",
+    "value": 11,
+    "formattedValue": "11"
+   },
+   {
+    "query": "kling ai",
+    "value": 11,
+    "formattedValue": "11"
+   },
+   {
+    "query": "kling ai video generator",
+    "value": 11,
+    "formattedValue": "11"
+   },
+   {
+    "query": "runway",
+    "value": 10,
+    "formattedValue": "10"
+   },
+   {
+    "query": "runway ai",
+    "value": 10,
+    "formattedValue": "10"
+   },
+   {
+    "query": "runway ai video generator",
+    "value": 10,
+    "formattedValue": "10"
+   },
+   {
+    "query": "sora",
+    "value": 9,
+    "formattedValue": "9"
+   },
+   {
+    "query": "free image to video ai generator",
+    "value": 9,
+    "formattedValue": "9"
+   },
+   {
+    "query": "sora ai video generator",
+    "value": 9,
+    "formattedValue": "9"
+   },
+   {
+    "query": "sora ai",
+    "value": 9,
+    "formattedValue": "9"
+   },
+   {
+    "query": "pika",
+    "value": 8,
+    "formattedValue": "8"
+   },
+   {
+    "query": "pika ai video generator",
+    "value": 8,
+    "formattedValue": "8"
+   },
+   {
+    "query": "pika ai",
+    "value": 8,
+    "formattedValue": "8"
+   },
+   {
+    "query": "gemini ai",
+    "value": 8,
+    "formattedValue": "8"
+   },
+   {
+    "query": "gemini ai video generator",
+    "value": 8,
+    "formattedValue": "8"
+   },
+   {
+    "query": "ai music video generator",
+    "value": 7,
+    "formattedValue": "7"
+   }
+  ],
+  "rising": [
+   {
+    "query": "seedance 2.0",
+    "value": 20950,
+    "formattedValue": "Breakout"
+   },
+   {
+    "query": "seedance",
+    "value": 1150,
+    "formattedValue": "+1,150%"
+   },
+   {
+    "query": "google flow ai video generator free",
+    "value": 1050,
+    "formattedValue": "+1,050%"
+   },
+   {
+    "query": "free ai video generator with no restrictions",
+    "value": 800,
+    "formattedValue": "+800%"
+   },
+   {
+    "query": "google flow",
+    "value": 750,
+    "formattedValue": "+750%"
+   },
+   {
+    "query": "google flow ai video generator",
+    "value": 750,
+    "formattedValue": "+750%"
+   },
+   {
+    "query": "google flow ai",
+    "value": 750,
+    "formattedValue": "+750%"
+   },
+   {
+    "query": "flow",
+    "value": 600,
+    "formattedValue": "+600%"
+   },
+   {
+    "query": "higgsfield ai",
+    "value": 600,
+    "formattedValue": "+600%"
+   },
+   {
+    "query": "higgsfield",
+    "value": 600,
+    "formattedValue": "+600%"
+   },
+   {
+    "query": "flow ai video generator",
+    "value": 600,
+    "formattedValue": "+600%"
+   },
+   {
+    "query": "flow ai",
+    "value": 600,
+    "formattedValue": "+600%"
+   },
+   {
+    "query": "grok ai",
+    "value": 500,
+    "formattedValue": "+500%"
+   },
+   {
+    "query": "grok",
+    "value": 500,
+    "formattedValue": "+500%"
+   },
+   {
+    "query": "grok video generator",
+    "value": 500,
+    "formattedValue": "+500%"
+   },
+   {
+    "query": "grok ai video generator",
+    "value": 500,
+    "formattedValue": "+500%"
+   },
+   {
+    "query": "luma dream machine ai video generator",
+    "value": 450,
+    "formattedValue": "+450%"
+   },
+   {
+    "query": "luma dream machine",
+    "value": 450,
+    "formattedValue": "+450%"
+   },
+   {
+    "query": "nano banana",
+    "value": 350,
+    "formattedValue": "+350%"
+   },
+   {
+    "query": "kling ai free",
+    "value": 300,
+    "formattedValue": "+300%"
+   },
+   {
+    "query": "pika ai video generator",
+    "value": 250,
+    "formattedValue": "+250%"
+   },
+   {
+    "query": "pika ai",
+    "value": 250,
+    "formattedValue": "+250%"
+   },
+   {
+    "query": "pika",
+    "value": 250,
+    "formattedValue": "+250%"
+   },
+   {
+    "query": "kling ai",
+    "value": 250,
+    "formattedValue": "+250%"
+   },
+   {
+    "query": "kling",
+    "value": 250,
+    "formattedValue": "+250%"
+   }
+  ]
+ }
+}

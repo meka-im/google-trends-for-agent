@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120">
+<rect width="640" height="120" rx="20" fill="#0b1220"/>
+<polyline points="28,84 52,70 72,76 94,46 116,56 138,30" fill="none" stroke="#22d3ee" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="138" cy="30" r="8" fill="#a78bfa"/>
+<text x="166" y="62" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="34" font-weight="800" fill="#f8fafc">google-trends-for-agent</text>
+<text x="168" y="94" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="16" fill="#94a3b8">search-interest signals for AI agents</text></svg>
