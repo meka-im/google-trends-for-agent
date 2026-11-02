@@ -189,7 +189,7 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 - 上游请求默认间隔：CLI/库的 Explore 请求为 **1000 ms**；Trending Now（`now` / `trends_now`）和所有 MCP 请求为 **1500 ms**。
 - `BLOCKED` 和 `RATE_LIMITED` 会立即返回，不自动重试。它们会触发自适应退避，上限 60 秒（下限 1 秒）；成功后退避惩罚减半。
 - 对 Explore 请求，瞬时 `TRENDS_TIMEOUT`、`TRENDS_TEMPORARILY_UNAVAILABLE` 和 `NETWORK_ERROR` 最多重试 `maxRetries` 次（默认 `1`，最大 `2`）。Explore 默认超时 8000 ms，`timeoutMs` 必须在 1000–60000 ms 之间。
-- Trending Now（`fetchTrending()` / `now`）不自动重试。其超时默认 8000 ms，并接受任意有限正值。
+- Trending Now（`fetchTrending()` / `now`）不自动重试。库的 `timeoutMs` 默认 8000 ms，接受任意有限正数；CLI 的 `now --timeout` 要求正的安全整数。
 - 批量和 `trends_now` 默认在第一次 block 后停止；后续条目会报告为 blocked/skipped。
 - 保持小规模工作负载。本项目不适合批量抓取或持续轮询；重试或代理也不保证访问成功。
 

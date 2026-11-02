@@ -189,7 +189,7 @@ These numbers are **estimates from an anchor**, not measured Google search volum
 - Default spacing between upstream requests is **1000 ms** for Explore requests from the CLI/library, and **1500 ms** for Trending Now (`now` / `trends_now`) and for all MCP requests.
 - `BLOCKED` and `RATE_LIMITED` are returned immediately, with no automatic retry. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
 - For Explore requests, transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may retry up to `maxRetries` (default `1`, maximum `2`). Explore’s default timeout is 8000 ms, and `timeoutMs` must be 1000–60000 ms.
-- Trending Now (`fetchTrending()` / `now`) performs no automatic retry. Its timeout defaults to 8000 ms and accepts any finite positive value.
+- Trending Now (`fetchTrending()` / `now`) performs no automatic retry. The library’s `timeoutMs` defaults to 8000 ms and accepts any finite positive number; the CLI’s `now --timeout` requires a positive safe integer.
 - Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped.
 - Keep workloads small. This is not suitable for bulk scraping or continuous polling, and retries or proxies do not guarantee access.
 
