@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { queryTrends, type TrendsResponse } from './api.js';
@@ -47,7 +47,11 @@ export interface TrafficEnvelopeOptions {
 }
 
 const mean = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-const chartZoneSlug = (timeZone: string) => timeZone.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'utc';
+const chartZoneSlug = (timeZone: string) => {
+  const base = timeZone.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'utc';
+  const hash = createHash('sha1').update(timeZone).digest('hex').slice(0, 8);
+  return `${base}-${hash}`;
+};
 const round = (n: number) => Math.round(n);
 const compact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n % 1000 ? 1 : 0)}k` : String(Math.round(n));
 const shortTime = (time: string) => ({

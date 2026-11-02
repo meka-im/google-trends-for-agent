@@ -279,11 +279,11 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
   },
   "chart": {
     "svg": "",
-    "path": ".gtfa/charts/<snapshotId>-<tz-slug>.svg"
+    "path": ".gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg"
   },
   "chart7d": {
     "svg": "",
-    "path": ".gtfa/charts/<7dSnapshotId>-<tz-slug>.svg"
+    "path": ".gtfa/charts/<7dSnapshotId>-<tz-slug>-<sha1-8>.svg"
   },
   "traffic7d": {
     "unit": "searches/day",
@@ -332,7 +332,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `series.points` | 原始 0–100 `score` 与逐点 `traffic`；gap 点带 `gap: true`（原始 `score` 仍为 0） |
 | `series.anchorPoints` | 锚点原始 `{t, score}`；同一次对比、同一标尺 |
 | `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回约 720×280 的内联 SVG（时间轴使用所选 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
-| `chart.path` | 写入 `.gtfa/charts/<snapshotId>-<tz-slug>.svg` 的路径（时区 slug 如 `utc`、`asia-shanghai`）；`null` 表示文件写入被禁用/失败 |
+| `chart.path` | 写入 `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` 的路径（时区 slug 如 `utc-bdfd4d8d`、`asia-shanghai-b485a3cf`；短 SHA-1 后缀避免不同时区碰撞）；`null` 表示文件写入被禁用/失败 |
 | `chart7d` | 始终存在的 `now 7-d` 曲线，形状与 `chart` 相同（`{ svg, path }`）；`svg` 默认 `""`，`path` 仍写入。7d 拉取失败时为 `{ "svg": "", "path": null }` 并写入 warning |
 | `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用同一 `gpts` 基线（550 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
 | `tables.popular[].estDaily` | 以 term 窗口平均日流量为顶行基准：`round(value / 100 × traffic.average)` |
@@ -366,7 +366,7 @@ published.est = round(popular.value / 100 × average)
 - gap 点（见上一节规则）不参与 `anchorLevel`、流量聚合、裁决和折线连接；主窗口与 7d 窗口各自独立排除 gap。
 - `fresh: false` 只复用同 term + filter + anchor 的快照；`blocked` 快照永不复用。
 - 图表时间轴默认 `UTC`；显式 `tz`（MCP）/ `--tz`（CLI）/ `timeZone`（库）优先于 `GTFA_TZ`，都没有时为 `UTC`。时区通过 `Intl.DateTimeFormat` 的 `timeZone` 计算日历字段（正确处理 DST），而不是固定偏移；非法 IANA 名称返回 `INVALID_INPUT`。
-- 图文件写在 `.gtfa/charts/`（MCP 进程可用 `GTFA_CHART_DIR` 覆盖，快照目录可用 `GTFA_SNAPSHOT_DIR` 覆盖）；`chart` 与 `chart7d` 各自使用对应快照 ID 加时区 slug 的 `.svg`（如 `traffic-fixture-utc.svg` / `traffic-fixture-asia-shanghai.svg`；主窗口为 `now 7-d` 时共用同一文件）。若目录不可写，对应 `path` 为 `null`；默认不内联 SVG，需要文本时设置 `svg: true` / `--svg`。
+- 图文件写在 `.gtfa/charts/`（MCP 进程可用 `GTFA_CHART_DIR` 覆盖，快照目录可用 `GTFA_SNAPSHOT_DIR` 覆盖）；`chart` 与 `chart7d` 各自使用对应快照 ID 加时区 slug 与短 SHA-1 哈希的 `.svg`（如 `traffic-fixture-utc-bdfd4d8d.svg` / `traffic-fixture-asia-shanghai-b485a3cf.svg`；主窗口为 `now 7-d` 时共用同一文件）。哈希基于精确时区名，`Etc/GMT+1` 与 `Etc/GMT-1` 也会得到不同文件名。若目录不可写，对应 `path` 为 `null`；默认不内联 SVG，需要文本时设置 `svg: true` / `--svg`。
 - 7d 拉取失败（`weekError` 或没有 7d 快照）时，`chart7d` / `traffic7d` **仍会返回**：`chart7d: { svg: "", path: null }`，`traffic7d` 数值全为 `null`、`gapCount: 0`，并在 `meta.warnings` 说明原因。
 
 ---

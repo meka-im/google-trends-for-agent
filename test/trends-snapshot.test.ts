@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,8 @@ import type { Transport } from '../src/transport.js';
 
 const dirs: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'gtfa-snapshot-')); dirs.push(dir); return dir; };
+const chartSlug = (tz: string) => `${tz.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'utc'}-${createHash('sha1').update(tz).digest('hex').slice(0, 8)}`;
+const chartPath = (dir: string, id: string, tz = 'UTC') => join(dir, `${id}-${chartSlug(tz)}.svg`);
 const fixture = () => JSON.parse(readFileSync(new URL('./fixtures/traffic-snapshot.json', import.meta.url), 'utf8')) as TermSnapshot;
 const weekFixture = (): TermSnapshot => {
   const snap = fixture();
@@ -69,7 +72,7 @@ describe('trends_snapshot traffic conversion', () => {
     const chartDir = temp();
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir });
     expect(e).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', term: 'Astra', filter: { geo: 'US', time: 'now 1-d', category: 0, property: 'web' } });
-    expect(e.chart).toEqual({ svg: '', path: join(chartDir, 'traffic-fixture-utc.svg') });
+    expect(e.chart).toEqual({ svg: '', path: chartPath(chartDir, 'traffic-fixture') });
     expect(e.anchor).toEqual({ term: 'gpts', dailySearches: 550, tolerance: 0.5, level: 100, ratio: 0.58, source: 'baseline', note: 'Anchor calibration estimate; not measured volume' });
     expect(e.traffic).toEqual({ unit: 'searches/day', average: 319, latest: 440, settledLatest: 330, peak: 440, low: 160, high: 479, gapCount: 1 });
     expect(e.series.points[1]).toEqual({ t: '2026-10-31T01:00:00.000Z', score: 0, traffic: 0, gap: true });
@@ -143,7 +146,7 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart.svg).toMatch(/peak 440 · 10\/31 05:00/);
     expect(e.chart.svg).toMatch(/latest 440 · 10\/31 05:00/);
     expect(e.chart.svg).not.toMatch(/NaN|undefined/);
-    expect(e.chart.path).toBe(join(chartDir, 'traffic-fixture-utc.svg'));
+    expect(e.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
     expect(readFileSync(e.chart.path!, 'utf8')).toBe(e.chart.svg);
   });
 
@@ -159,11 +162,23 @@ describe('trends_snapshot traffic conversion', () => {
     const chartDir = temp();
     const utc = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture() });
     const shanghai = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), timeZone: 'Asia/Shanghai' });
-    expect(utc.chart.path).toBe(join(chartDir, 'traffic-fixture-utc.svg'));
-    expect(utc.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-utc.svg'));
-    expect(shanghai.chart.path).toBe(join(chartDir, 'traffic-fixture-asia-shanghai.svg'));
-    expect(shanghai.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-asia-shanghai.svg'));
+    expect(utc.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
+    expect(utc.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
+    expect(shanghai.chart.path).toBe(chartPath(chartDir, 'traffic-fixture', 'Asia/Shanghai'));
+    expect(shanghai.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d', 'Asia/Shanghai'));
     expect(new Set([utc.chart.path, utc.chart7d.path, shanghai.chart.path, shanghai.chart7d.path]).size).toBe(4);
+  });
+
+  it('keeps chart paths distinct for zones whose names differ only by sign', async () => {
+    const chartDir = temp();
+    const plus = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), timeZone: 'Etc/GMT+1' });
+    const minus = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), timeZone: 'Etc/GMT-1' });
+    expect(plus.chart.path).toBe(chartPath(chartDir, 'traffic-fixture', 'Etc/GMT+1'));
+    expect(plus.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d', 'Etc/GMT+1'));
+    expect(minus.chart.path).toBe(chartPath(chartDir, 'traffic-fixture', 'Etc/GMT-1'));
+    expect(minus.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d', 'Etc/GMT-1'));
+    expect(plus.chart.path).not.toBe(minus.chart.path);
+    expect(plus.chart7d.path).not.toBe(minus.chart7d.path);
   });
 
   it('honors GTFA_TZ for chart labels when no explicit time zone is given', async () => {
@@ -182,9 +197,9 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart7d.svg).toContain('class="anchor-line"');
     expect(e.chart7d.svg).toContain('(UTC)');
     expect(e.chart7d.svg).not.toBe(e.chart.svg);
-    expect(e.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-utc.svg'));
+    expect(e.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
     expect(readFileSync(e.chart7d.path!, 'utf8')).toBe(e.chart7d.svg);
-    expect(e.chart.path).toBe(join(chartDir, 'traffic-fixture-utc.svg'));
+    expect(e.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
   });
 
   it('always includes chart7d/traffic7d with a null fallback when the week snapshot is missing', async () => {
@@ -212,7 +227,7 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart7d).toEqual(e.chart);
     expect(e.traffic7d).toEqual(e.traffic);
     expect(e.traffic7d).toMatchObject({ average: 275, settledLatest: 440, gapCount: 1 });
-    expect(e.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-utc.svg'));
+    expect(e.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
   });
 });
 
@@ -303,8 +318,8 @@ describe('trends_snapshot schema and CLI', () => {
     const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra' } });
     expect(r.isError).not.toBe(true);
     expect(r.structuredContent).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', term: 'Astra', traffic: { average: 319 }, traffic7d: { average: 275 }, anchor: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
-    expect((r.structuredContent as { chart: { path: string } }).chart.path).toBe(join(chartDir, 'traffic-fixture-utc.svg'));
-    expect((r.structuredContent as { chart7d: { path: string } }).chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-utc.svg'));
+    expect((r.structuredContent as { chart: { path: string } }).chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
+    expect((r.structuredContent as { chart7d: { path: string } }).chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
     expect((r.structuredContent as { chart: { svg: string } }).chart.svg).toBe('');
     expect((r.structuredContent as { chart7d: { svg: string } }).chart7d.svg).toBe('');
     expect(JSON.parse((r.content as { text: string }[])[0].text)).toEqual(r.structuredContent);
@@ -325,8 +340,8 @@ describe('trends_snapshot schema and CLI', () => {
     const out = JSON.parse(r.stdout);
     expect(out).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', term: 'Astra', traffic: { average: 319, settledLatest: 330 }, traffic7d: { average: 275, settledLatest: 440 }, anchor: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
     expect(Object.keys(out).slice(0, 3)).toEqual(['ok', 'schemaVersion', 'status']);
-    expect(out.chart.path).toBe(join(chartDir, 'traffic-fixture-utc.svg'));
-    expect(out.chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-utc.svg'));
+    expect(out.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
+    expect(out.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
     expect(out.chart.svg).toBe('');
     expect(out.chart7d.svg).toBe('');
     expect(query).not.toHaveBeenCalled();
@@ -346,8 +361,8 @@ describe('trends_snapshot schema and CLI', () => {
     expect(shanghai.code).toBe(0);
     expect(JSON.parse(shanghai.stdout).chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
     expect(JSON.parse(shanghai.stdout).chart.svg).toContain('10/31 08:00');
-    expect(JSON.parse(shanghai.stdout).chart.path).toBe(join(chartDir, 'traffic-fixture-asia-shanghai.svg'));
-    expect(JSON.parse(shanghai.stdout).chart7d.path).toBe(join(chartDir, 'traffic-fixture-7d-asia-shanghai.svg'));
+    expect(JSON.parse(shanghai.stdout).chart.path).toBe(chartPath(chartDir, 'traffic-fixture', 'Asia/Shanghai'));
+    expect(JSON.parse(shanghai.stdout).chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d', 'Asia/Shanghai'));
     process.env.GTFA_TZ = 'Asia/Shanghai';
     const fromEnv = await runSnapshotCli(['Astra', '--json', '--svg', '--store', storeDir, '--chart-dir', chartDir], { query: query as never });
     expect(fromEnv.code).toBe(0);
