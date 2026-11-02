@@ -47,6 +47,7 @@ export interface TrafficEnvelopeOptions {
 }
 
 const mean = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+const chartZoneSlug = (timeZone: string) => timeZone.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'utc';
 const round = (n: number) => Math.round(n);
 const compact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n % 1000 ? 1 : 0)}k` : String(Math.round(n));
 const shortTime = (time: string) => ({
@@ -171,6 +172,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const warnings: string[] = [];
   const timeZone = resolveTimeZone(opts.timeZone);
   const chartOptions = { ...opts, timeZone };
+  const zoneSlug = chartZoneSlug(timeZone);
   const primary = calibrate(snap, chartOptions);
   // Primary now 7-d is already the week curve: reuse it and avoid a duplicate upstream call.
   const weekSnap = snap.filter.time === 'now 7-d' ? snap : opts.week;
@@ -203,7 +205,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
     if (opts.chartDir === null) return null;
     try {
       const dir = opts.chartDir ?? '.gtfa/charts';
-      const path = join(dir, `${id}.svg`);
+      const path = join(dir, `${id}-${zoneSlug}.svg`);
       await mkdir(dir, { recursive: true });
       await writeFile(path, svg);
       return path;
