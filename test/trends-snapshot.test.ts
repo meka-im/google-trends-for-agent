@@ -181,6 +181,20 @@ describe('trends_snapshot traffic conversion', () => {
     expect(plus.chart7d.path).not.toBe(minus.chart7d.path);
   });
 
+  it('canonicalizes case-variant zone names for labels and chart paths', async () => {
+    const chartDir = temp(), canonical = 'America/Catamarca';
+    const base = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), svg: true, timeZone: 'America/Argentina/ComodRivadavia' });
+    expect(base.chart.svg).toContain('Astra — searches/day (America/Catamarca)');
+    expect(base.chart.path).toBe(chartPath(chartDir, 'traffic-fixture', canonical));
+    for (const variant of ['aMerICA/ARgentInA/CoMODRIvadAViA', 'AmERICA/ArgentinA/COmODRIvadAVIa']) {
+      const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), svg: true, timeZone: variant });
+      expect(e.chart.svg).toContain('Astra — searches/day (America/Catamarca)');
+      expect(e.chart.svg).toBe(base.chart.svg);
+      expect(e.chart.path).toBe(base.chart.path);
+      expect(e.chart7d.path).toBe(base.chart7d.path);
+    }
+  });
+
   it('honors GTFA_TZ for chart labels when no explicit time zone is given', async () => {
     process.env.GTFA_TZ = 'Asia/Shanghai';
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, svg: true });

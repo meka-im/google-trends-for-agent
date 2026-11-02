@@ -164,7 +164,7 @@ google-trends-for-agent help snapshot
 google-trends-for-agent --version
 ```
 
-The CLI has four commands: `ask`, `snapshot`, `compare` (the default `--query` mode is the same; both default to `--geo US --time "now 1-d"` like MCP, honoring `gtfa.config.json` / `GTFA_GEO` / `GTFA_TIME`; `--url` and `--start/--end` keep their own range) and `now` (Trending Now; `--hours` is the trending window 4/24/48/168, separate from the Explore `--time` range). `snapshot` adds a shared-scale `gpts` anchor and returns a calibrated searches/day estimate, related-query estimates, and a chart file path (inline SVG text only with `--svg`). Chart labels use UTC by default; pass `--tz <IANA>` (for example `--tz Asia/Shanghai`) or set `GTFA_TZ` to choose another time zone. `gtfa` and `trends-kit` remain CLI aliases. JSON is the default stdout format, including version and unknown-flag errors (exit 4); help prints plain text on an interactive TTY and JSON when piped or with `--json`. Explicitly request CSV with `--format csv`. Diagnostics go to stderr. By default `ask` omits the full `interest.points` series (use `--points`), and `snapshot` omits inline SVG text (use `--svg`) to keep agent context small.
+The CLI has four commands: `ask`, `snapshot`, `compare` (the default `--query` mode is the same; both default to `--geo US --time "now 1-d"` like MCP, honoring `gtfa.config.json` / `GTFA_GEO` / `GTFA_TIME`; `--url` and `--start/--end` keep their own range) and `now` (Trending Now; `--hours` is the trending window 4/24/48/168, separate from the Explore `--time` range). `snapshot` adds a shared-scale `gpts` anchor and returns a calibrated searches/day estimate, related-query estimates, and a chart file path (inline SVG text only with `--svg`). Chart labels use UTC by default; pass `--tz <IANA>` (for example `--tz Asia/Shanghai`) or set `GTFA_TZ` to choose another time zone. Names are validated and canonicalized with `Intl.DateTimeFormat`, so case variants share one label and chart file. `gtfa` and `trends-kit` remain CLI aliases. JSON is the default stdout format, including version and unknown-flag errors (exit 4); help prints plain text on an interactive TTY and JSON when piped or with `--json`. Explicitly request CSV with `--format csv`. Diagnostics go to stderr. By default `ask` omits the full `interest.points` series (use `--points`), and `snapshot` omits inline SVG text (use `--svg`) to keep agent context small.
 
 ## MCP server (local, stdio)
 
@@ -227,7 +227,7 @@ The MCP server exposes exactly **four** agent-facing tools. For a readable Chine
 | | `anchor` | string | `gpts` | Shared-scale anchor term |
 | | `fresh` | boolean | `false` | `false` reuses a saved term+filter+anchor snapshot under 360 min; `true` fetches live |
 | | `svg` | boolean | `false` | Embed inline `chart.svg` / `chart7d.svg` text; paths are still written by default |
-| | `tz` | string | `GTFA_TZ`, then `UTC` | IANA time zone for chart labels, e.g. `Asia/Shanghai`; invalid names return `INVALID_INPUT` |
+| | `tz` | string | `GTFA_TZ`, then `UTC` | IANA time zone for chart labels, canonicalized via `Intl.DateTimeFormat`, e.g. `Asia/Shanghai`; invalid names return `INVALID_INPUT` |
 | `trends_compare` | `keywords` | string[2–5] (required) | — | Terms to compare, e.g. a candidate plus an anchor |
 | | `geo` | string | `US` | Country or region |
 | | `time` | enum above | `now 1-d` | Time range |
@@ -268,7 +268,7 @@ Every tool result is JSON text plus identical `structuredContent`. Arguments rej
 | `anchor` | `{ term, dailySearches, tolerance, level, ratio, source, note }` | Shared-scale anchor; `level` is the gap-aware anchor mean with 2 decimals (e.g. `0.18`, never a lying `0`), `ratio` = term mean ÷ anchor mean (2 decimals) or `null` when the anchor fails the reliability gate; `dailySearches`/`tolerance` are `null` without calibration |
 | `traffic` | `{ unit, average, latest, settledLatest, peak, low, high, gapCount }` | `unit: "searches/day"`; aggregates exclude gaps; `low`/`high` apply the anchor tolerance to `average`; numeric fields are `null` without calibration or when the anchor is too sparse/weak |
 | `series` | `{ points: [{ t, score, traffic, gap? }], anchorPoints: [{ t, score }] }` | Raw 0–100 scores and per-point daily traffic on the shared scale |
-| `chart` | `{ svg, path }` | Default `svg: ""` to keep payloads small; `path` points at the written `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` (for example `-utc-bdfd4d8d.svg` or `-asia-shanghai-b485a3cf.svg`; the short SHA-1 of the exact zone name keeps names collision-free) (`null` if writing is disabled/failed). Set `svg: true` / `--svg` to embed the ~720×280 SVG text (gap points omitted, peak/latest marked, anchor dashed; labels use the selected time zone, default `UTC`) |
+| `chart` | `{ svg, path }` | Default `svg: ""` to keep payloads small; `path` points at the written `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` (for example `-utc-bdfd4d8d.svg` or `-asia-shanghai-b485a3cf.svg`; the short SHA-1 of the canonicalized IANA zone name keeps names collision-free) (`null` if writing is disabled/failed). Set `svg: true` / `--svg` to embed the ~720×280 SVG text (gap points omitted, peak/latest marked, anchor dashed; labels use the selected time zone, default `UTC`) |
 | `chart7d` | `{ svg, path }` | Always present; the `now 7-d` curve. `svg` is `""` unless `svg: true` / `--svg`; `path` is still written. If the extra week fetch is unavailable, `{ svg: "", path: null }` plus a warning |
 | `traffic7d` | same shape as `traffic` | Always present; numeric fields are `null` (and `gapCount` is `0`) when the week fetch is unavailable |
 | `tables.popular` | `[{ rank, query, value, formattedValue, estDaily }]` | `estDaily = round(value / 100 × traffic.average)` |
@@ -384,7 +384,7 @@ const batch = await batchTrends([
 
 Inputs also support `category`, `searchType`, `locale`, `timezoneOffsetMinutes`, `timeoutMs` (1000–60000), and `maxRetries` (0–2, default 1). Use `startDate`/`endDate` instead of `timeRange` for absolute dates. Reuse `new TrendsClient({ minIntervalMs: 1000 })` through `{ client }` options to share request spacing across calls.
 
-Chart APIs accept a `timeZone` option (`renderTrafficChart`, `fetchTrafficSnapshot`, and `trafficSnapshotEnvelope`). Resolution order is explicit `timeZone` > `GTFA_TZ` > `UTC`; values are validated with `Intl.DateTimeFormat` and invalid IANA names throw an `INVALID_INPUT` error. `resolveTimeZone` and `validateTimeZone` are exported for wrappers.
+Chart APIs accept a `timeZone` option (`renderTrafficChart`, `fetchTrafficSnapshot`, and `trafficSnapshotEnvelope`). Resolution order is explicit `timeZone` > `GTFA_TZ` > `UTC`; values are validated and canonicalized with `Intl.DateTimeFormat` (for example, case variants of `America/Argentina/ComodRivadavia` resolve to `America/Catamarca` and share labels and chart files), and invalid IANA names throw an `INVALID_INPUT` error. `resolveTimeZone` and `validateTimeZone` are exported for wrappers.
 
 ## Output contract
 
