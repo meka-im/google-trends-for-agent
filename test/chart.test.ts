@@ -14,6 +14,16 @@ const labelOf = (svg: string, kind: 'peak' | 'latest') => {
   const left = anchor === 'end' ? x - width : x;
   return { x, y, anchor, text, fontSize, width, left, right: left + width, top: y - 10, bottom: y + 3 };
 };
+const conservativeCallout = (svg: string, color: string) => {
+  const match = svg.match(new RegExp(`<text x="([\\d.]+)" y="([\\d.]+)"(?: text-anchor="(start|end)")?[^>]*font-size="([\\d.]+)"[^>]*fill="${color}">([^<]*)</text>`));
+  expect(match).not.toBeNull();
+  const [, rawX, rawY, rawAnchor, rawFontSize, text] = match!;
+  const x = Number(rawX), y = Number(rawY), anchor = (rawAnchor as 'start' | 'end' | undefined) ?? 'start';
+  const fontSize = Number(rawFontSize);
+  const width = text.length * fontSize;
+  const left = anchor === 'end' ? x - width : x;
+  return { x, y, anchor, text, fontSize, width, left, right: left + width, top: y - 10, bottom: y + 3 };
+};
 const intersects = (a: ReturnType<typeof labelOf>, b: ReturnType<typeof labelOf>) =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 const originalTz = process.env.GTFA_TZ;
@@ -168,5 +178,24 @@ describe('renderTrafficChart label placement', () => {
     expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
     expect(Math.max(peak.bottom, latest.bottom)).toBeLessThanOrEqual(110 - 58);
     expect(intersects(peak, latest)).toBe(false);
+  });
+
+  it('budgets a full em for the ellipsis and keeps it inside the plot', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([1_250_000]), width: 90, height: 110 });
+    const peak = conservativeCallout(svg, '#dc2626');
+    expect(peak.text).toBe('…');
+    expect(peak.width).toBeLessThanOrEqual(90 - CHART_LEFT - CHART_RIGHT);
+    expect(peak.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    expect(peak.right).toBeLessThanOrEqual(90 - CHART_RIGHT);
+    expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
+    expect(peak.bottom).toBeLessThanOrEqual(110 - 58);
+    expect(svg).not.toMatch(/fill="#059669">/);
+  });
+
+  it('omits callouts when even the ellipsis cannot fit', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([100]), width: 85, height: 110 });
+    expect(svg).not.toMatch(/fill="#dc2626">/);
+    expect(svg).not.toMatch(/fill="#059669">/);
+    expect(svg).toContain('Claude Code — searches/day (UTC)');
   });
 });

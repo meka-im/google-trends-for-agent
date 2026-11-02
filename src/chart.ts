@@ -27,6 +27,7 @@ interface LabelBox { left: number; right: number; top: number; bottom: number }
 
 const WIDTH = 720, HEIGHT = 300, LEFT = 58, RIGHT = 20, TOP = 32, BOTTOM = 58;
 const LABEL_FONT_SIZE = 11, LABEL_CHAR_WIDTH = LABEL_FONT_SIZE * 0.6, LABEL_ASCENT = 10, LABEL_DESCENT = 3, LABEL_GAP = 2;
+const LABEL_ELLIPSIS_WIDTH = LABEL_FONT_SIZE;
 const LABEL_FONT_SIZES = [LABEL_FONT_SIZE, 10, 9, 8, 7, 6] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TICK_TARGET = 6;
@@ -179,9 +180,11 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
     add(full, LABEL_FONT_SIZE);
     for (const fontSize of LABEL_FONT_SIZES) add(compact, fontSize);
     for (const fontSize of LABEL_FONT_SIZES) add(value, fontSize);
-    if (!out.length) {
-      const maxChars = Math.floor(plotW / LABEL_CHAR_WIDTH);
-      if (maxChars > 0) add(maxChars > 1 ? `${value.slice(0, maxChars - 1)}…` : '…', LABEL_FONT_SIZE);
+    if (!out.length && plotW >= LABEL_ELLIPSIS_WIDTH) {
+      // The ellipsis advances a full em in common sans fonts, unlike the average
+      // character estimate used above, so budget its rendered width explicitly.
+      const keep = Math.min(value.length, Math.max(0, Math.floor((plotW - LABEL_ELLIPSIS_WIDTH) / LABEL_CHAR_WIDTH)));
+      out.push({ text: keep > 0 ? `${value.slice(0, keep)}…` : '…', fontSize: LABEL_FONT_SIZE });
     }
     return out;
   };
