@@ -129,11 +129,11 @@ npx gtfa now --list-geos
 npx gtfa help snapshot
 ```
 
-JSON is the default stdout format. Help prints plain text on an interactive TTY and JSON when piped or with `--json`. Diagnostics go to stderr.
+`--json` selects the agent envelope. Without it, `snapshot` prints human-readable summary lines, and `ask --validate` prints a compact table (unless `--diff`, which implies JSON). `compare`/default mode prints JSON by default, but the agent envelope requires `--json`; `now` prints raw JSON unless `--json` is set. Help prints plain text on an interactive TTY and JSON when piped or with `--json`. Diagnostics go to stderr.
 
 ## Output contract and error codes
 
-The MCP results and the CLI agent envelopes (`ask`, `snapshot --json`, and compare/default mode with `--json`) use one shape: `ok`, `schemaVersion` (currently `1`), `status`, the tool-specific body, `error` only on failure, and `meta`. For snapshots, `status` is `ok`, `no_data`, or `partial` on success; `blocked` and `error` are failures. `no_data` and `partial` remain `ok: true`, while `blocked` sets `ok: false` and includes `error.code`. MCP results also set `isError: true` for `ok: false`. Without `--json`, compare/default mode prints the lower-level response described below.
+The MCP results and the CLI agent envelopes (`ask`, `snapshot --json`, and compare/default mode with `--json`) share the outer keys `ok`, `schemaVersion` (currently `1`), `status`, the tool-specific body, optional `error`, and `meta`. `trends_now` can return a partial result with `ok: true` and still include the first per-country `error`. For `ask`/`snapshot`, `status` is `ok`, `no_data`, or `partial` on success; `blocked` and `error` set `ok: false` and include `error.code`. `trends_compare` and `trends_now` use `ok`, `partial`, and `error`; schema rejections can set `ok: false` with `error.code`. MCP results also set `isError: true` for `ok: false`. Without `--json`, compare/default mode prints the lower-level response described below.
 
 Tool bodies:
 
@@ -147,7 +147,7 @@ Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`
 | Code / outcome | CLI exit | Meaning |
 | --- | --- | --- |
 | success | `0` | Complete success; `no_data` also exits 0 in the snapshot/ask envelope. |
-| `partial` | `2` | Some sections or countries succeeded, others failed. |
+| `partial` | `2` for `ask`, `compare`/default, and `now`; `0` for `snapshot` | Some sections or countries succeeded, others failed. Successful snapshot partials still exit 0. |
 | `BLOCKED` | `3` | Upstream challenge / unusual traffic detected. Stop and report. |
 | `RATE_LIMITED` | `3` | Upstream rate limit. Wait for `retryAfterSec` before a bounded retry. |
 | `INVALID_INPUT` | `4` | Invalid argument or CLI usage. |
@@ -182,11 +182,11 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 
 The 24-hour Sora run above failed the third condition (`27/180` nonzero, 15%) even though `anchorLevel` was `2.72`. So `anchor.ratio` and numeric `traffic` fields are `null`, and `anchor.note` explains why. The verdict still uses related-query and series-shape signals. A 7-day run is denser and calibrates normally.
 
-These numbers are **estimates from an anchor**, not measured Google search volume. Treat `traffic7d` and `chart7d` as a second, independent check of the requested window.
+These numbers are **estimates from an anchor**, not measured Google search volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from a separate 7-day fetch and give you a second check. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent.
 
 ## Rate limits
 
-- Default spacing between upstream requests is **1000 ms** for the CLI/library and **1500 ms** for MCP.
+- Default spacing between upstream requests is **1000 ms** for Explore requests from the CLI/library, and **1500 ms** for Trending Now (`now` / `trends_now`) and for all MCP requests.
 - `BLOCKED` and `RATE_LIMITED` are returned immediately, with no automatic retry. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
 - Transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may retry up to `maxRetries` (default `1`, maximum `2`). The default timeout is 8000 ms; valid values are 1000–60000 ms.
 - Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped.

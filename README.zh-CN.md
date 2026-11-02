@@ -129,11 +129,11 @@ npx gtfa now --list-geos
 npx gtfa help snapshot
 ```
 
-stdout 默认输出 JSON。交互式 TTY 下帮助文本为纯文本；管道或加 `--json` 时输出 JSON。诊断信息写入 stderr。
+`--json` 用于选择 Agent 信封。不加时，`snapshot` 输出人类可读的摘要行；`ask --validate` 输出紧凑表格（`--diff` 会隐含 JSON）。`compare`/默认模式默认输出 JSON，但只有加 `--json` 才是 Agent 信封；`now` 默认输出原始 JSON，加 `--json` 才是信封。交互式 TTY 下帮助文本为纯文本；管道或加 `--json` 时输出 JSON。诊断信息写入 stderr。
 
 ## 输出契约与错误码
 
-MCP 结果和 CLI 的 Agent 信封（`ask`、`snapshot --json`，以及 compare/默认模式加 `--json`）使用统一结构：`ok`、`schemaVersion`（当前为 `1`）、`status`、工具专属正文、仅失败时出现的 `error`，以及 `meta`。快照类成功状态为 `ok`、`no_data` 或 `partial`；`blocked` 和 `error` 表示失败。`no_data` 与 `partial` 仍是 `ok: true`，`blocked` 会设置 `ok: false` 并包含 `error.code`。MCP 在 `ok: false` 时还会设置 `isError: true`。不带 `--json` 时，compare/默认模式输出下面所述的底层响应。
+MCP 结果和 CLI 的 Agent 信封（`ask`、`snapshot --json`，以及 compare/默认模式加 `--json`）共享外层字段 `ok`、`schemaVersion`（当前为 `1`）、`status`、工具专属正文、可选 `error` 和 `meta`。`trends_now` 可能返回 `ok: true` 的 partial 结果，同时仍包含第一个按国家/地区记录的 `error`。对 `ask`/`snapshot` 而言，成功状态为 `ok`、`no_data` 或 `partial`；`blocked` 和 `error` 会设置 `ok: false` 并包含 `error.code`。`trends_compare` 和 `trends_now` 使用 `ok`、`partial` 和 `error`；schema 拒绝可设置 `ok: false` 并带 `error.code`。MCP 在 `ok: false` 时还会设置 `isError: true`。不带 `--json` 时，compare/默认模式输出下面所述的底层响应。
 
 各工具正文：
 
@@ -147,7 +147,7 @@ MCP 结果和 CLI 的 Agent 信封（`ask`、`snapshot --json`，以及 compare/
 | 错误码 / 结果 | CLI 退出码 | 含义 |
 | --- | --- | --- |
 | 成功 | `0` | 完全成功；快照/ask 信封中的 `no_data` 也以 0 退出。 |
-| `partial` | `2` | 部分区块或国家/地区成功，其余失败。 |
+| `partial` | `ask`、`compare`/默认模式和 `now` 为 `2`；`snapshot` 为 `0` | 部分区块或国家/地区成功，其余失败。成功的 snapshot partial 仍以 0 退出。 |
 | `BLOCKED` | `3` | 上游出现挑战 / 异常流量。停止并报告。 |
 | `RATE_LIMITED` | `3` | 上游限流。按 `retryAfterSec` 等待后再做有限重试。 |
 | `INVALID_INPUT` | `4` | 参数或 CLI 用法无效。 |
@@ -182,11 +182,11 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 
 上面的 Sora 24 小时运行未通过第三条（`27/180` 非零，15%），尽管 `anchorLevel` 为 `2.72`。因此 `anchor.ratio` 和数值 `traffic` 字段为 `null`，`anchor.note` 会说明原因。verdict 仍会使用相关查询和序列形态信号。7 天窗口更密集，可以正常校准。
 
-这些数字是**基于锚点的估算**，不是 Google 实测搜索量。请将 `traffic7d` 和 `chart7d` 视为对请求窗口的第二个独立检查。
+这些数字是**基于锚点的估算**，不是 Google 实测搜索量。当请求窗口不是 `now 7-d` 时，`traffic7d` 和 `chart7d` 来自另一次 7 天抓取，可作为第二重检查；当请求本身就是 `now 7-d` 时，它们复用主快照和主图表，因此并不独立。
 
 ## 速率限制
 
-- 上游请求默认间隔：CLI/库为 **1000 ms**，MCP 为 **1500 ms**。
+- 上游请求默认间隔：CLI/库的 Explore 请求为 **1000 ms**；Trending Now（`now` / `trends_now`）和所有 MCP 请求为 **1500 ms**。
 - `BLOCKED` 和 `RATE_LIMITED` 会立即返回，不自动重试。它们会触发自适应退避，上限 60 秒（下限 1 秒）；成功后退避惩罚减半。
 - 瞬时 `TRENDS_TIMEOUT`、`TRENDS_TEMPORARILY_UNAVAILABLE` 和 `NETWORK_ERROR` 最多重试 `maxRetries` 次（默认 `1`，最大 `2`）。默认超时 8000 ms；有效范围 1000–60000 ms。
 - 批量和 `trends_now` 默认在第一次 block 后停止；后续条目会报告为 blocked/skipped。
