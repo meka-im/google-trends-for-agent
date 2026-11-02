@@ -20,5 +20,5 @@
 <text x="39" y="288" fill="#e2e8f0" opacity="0">},<animate attributeName="opacity" from="0" to="1" begin="5.15s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="307" fill="#e2e8f0" opacity="0">"chart7d": { "path": ".gtfa/charts/52918b59-006e-4382-837a-627c92019f0d-utc-bdfd4d8d.svg" }<animate attributeName="opacity" from="0" to="1" begin="5.40s" dur="0.2s" fill="freeze"/></text>
 <text x="24" y="326" fill="#94a3b8" opacity="0">}<animate attributeName="opacity" from="0" to="1" begin="5.65s" dur="0.2s" fill="freeze"/></text>
-<text x="24" y="355" fill="#64748b" font-size="11" opacity="0"># trimmed; long strings shortened with … · full output adds series, anchor points, estimates, warnings, meta<animate attributeName="opacity" from="0" to="1" begin="5.95s" dur="0.2s" fill="freeze"/></text>
+<text x="24" y="355" fill="#64748b" font-size="11" opacity="0"># trimmed; long strings shortened with … · path shown under default --chart-dir · full output adds series, warnings, meta<animate attributeName="opacity" from="0" to="1" begin="5.95s" dur="0.2s" fill="freeze"/></text>
 </svg>
