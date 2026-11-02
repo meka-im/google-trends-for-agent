@@ -46,13 +46,12 @@
 需要 Node.js 20+。
 
 ```sh
-npm install github:meka-im/google-trends-for-agent
-npx gtfa --help
-# 或从本地检出：git clone https://github.com/meka-im/google-trends-for-agent.git
-# 然后：cd google-trends-for-agent && npm install && npm run build
+npm install -g github:meka-im/google-trends-for-agent
+gtfa --help
+gtfa-mcp   # stdio MCP 服务器
 ```
 
-`gtfa`、`google-trends-for-agent` 和 `trends-kit` 都是 CLI 别名。MCP 服务器以 `gtfa-mcp` / `google-trends-for-agent-mcp` 安装。
+该包安装两个命令：CLI 使用 `gtfa`，MCP 服务器使用 `gtfa-mcp`。
 
 ## 快速开始
 
@@ -62,12 +61,15 @@ npx gtfa --help
 npx gtfa snapshot Sora --geo US --json --pretty
 ```
 
-用 `npx gtfa-mcp` 启动 stdio MCP 服务器，或让客户端连接：
+MCP 服务器通过 stdio 运行。让客户端指向已发布的包：
 
 ```json
 {
   "mcpServers": {
-    "google-trends": { "command": "gtfa-mcp" }
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "--package", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+    }
   }
 }
 ```

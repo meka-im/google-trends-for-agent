@@ -120,7 +120,6 @@
       "high": 198,
       "gapCount": 0
     },
-    "estimate": { "low": 1980, "mid": 3960, "high": 5940 },
     "anchor": {
       "term": "gpts",
       "ratio": 0.24,
@@ -176,7 +175,6 @@
 | `regions` | 分区兴趣，高到低 |
 | `verdict.label` | `spiking` · `rising` · `steady` · `flat` · `no_data` · `blocked` |
 | `verdict.traffic` | **searches/day**，字段与 `trends_snapshot.traffic` 相同；与 snapshot 共用 `traffic = score ÷ anchorLevel × dailySearches`。无标定或锚点可靠性门失败时数值字段为 `null` |
-| `verdict.estimate` | 兼容用的**月度**字段，等于 `verdict.traffic.average × 30`（`low` / `high` 同样由日频带 ×30）；无标定时为 `null`（无法估）。日频 `traffic` 才是 source of truth |
 | `verdict.warnings` | 可选；锚点过稀/过弱时包含 `anchor too sparse/weak for calibration; traffic omitted` |
 | `diff` | 相对同 term+filter 的上一份快照；始终返回（或 `null`） |
 | `diff` 字段 | 即库函数 `diffSnapshots(prev, next)` 原样返回（MCP 不裁剪）：`term`、`filter{geo,time,category,property,hl?}`（快照内部 filter，web 搜索时 `property` 为 `""`，与顶层 `filter.property: "web"` 不同）、`from` / `to`（上一 / 本次快照 id）、`newPopular[]`（query 字符串）、`droppedPopular[]`、`newRising[{rank,query,value,breakout}]`、`risingUp[{query,from,to}]`、`regionMoves[{code,fromRank,toRank}]`、`interestDelta{latestFrom,latestTo,delta}`（基于 `settledLatest`） |
@@ -200,7 +198,6 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 ```
 
 - 两个均值都排除 `gap: true` 的低样本零点；`traffic` 使用完整对比窗口，而不是只看 settled 尾段。
-- **日频是 source of truth**。`trends_ask` 的 `verdict.estimate` 只是兼容字段：`daily × 30`，文档和字段名都明确标为月度。
 - **锚点可靠性门**：至少 1 个非 gap 锚点、`anchorLevel ≥ 1`（Trends 整数刻度）、且非 gap 锚点中至少 **25%** 非零。失败时：`anchor.level` 保留 2 位小数（例如 `0.18`，不会四舍五入成 `0`），`ratio: null`，`traffic` 数值字段全为 `null`（形状不变），并在 `anchor.note` / `meta.warnings` / `verdict.warnings` 写 `anchor too sparse/weak for calibration; traffic omitted`。裁决仍可使用 related-query / 形状信号。
 
 ---
@@ -356,7 +353,7 @@ published.est = round(popular.value / 100 × average)
 失败 => ratio = null, traffic 数值 = null, warning = anchor too sparse/weak for calibration; traffic omitted
 ```
 
-内建默认锚点为 `{"term":"gpts","dailySearches":550,"geo":"US","tolerance":0.5}`（约 16.5k/月）。`examples/baselines.json` 可覆盖；库调用可用 `baselines` 传入同结构。**没有匹配 `geo + anchor` 的标定时**（例如 `geo: "JP"`），或**锚点可靠性门失败时**，`traffic` / `traffic7d` 的数值字段和 `estDaily` 全部为 `null`，`anchor.note` / `meta.warnings` 会说明原因，但 `summary`、`series`、`chart`、`chart7d` 仍会返回。`trends_ask`（`validate: true`）使用完全相同的公式与门，`verdict.traffic` 为日频、`verdict.estimate` 为 `daily × 30` 的月度兼容字段。
+内建默认锚点为 `{"term":"gpts","dailySearches":550,"geo":"US","tolerance":0.5}`（约 16.5k/月）。`examples/baselines.json` 可覆盖；库调用可用 `baselines` 传入同结构。**没有匹配 `geo + anchor` 的标定时**（例如 `geo: "JP"`），或**锚点可靠性门失败时**，`traffic` / `traffic7d` 的数值字段和 `estDaily` 全部为 `null`，`anchor.note` / `meta.warnings` 会说明原因，但 `summary`、`series`、`chart`、`chart7d` 仍会返回。`trends_ask`（`validate: true`）使用完全相同的公式与门，`verdict.traffic` 为日频。
 
 **注意事项：**
 
@@ -559,21 +556,3 @@ diffTrending(prevSg, nextSg);
 // 或多国：
 diffTrendsNow(prevEnvelope, nextEnvelope);
 ```
-
----
-
-## 破坏性变更（摘要）
-
-以下为**旧名**（已删除，无别名开关）→ 当前名：
-
-| 旧名 | 当前 |
-| --- | --- |
-| MCP `trending_list` | `trends_now` |
-| CLI `trending` | `now` |
-| MCP `trends_query` | `trends_compare` |
-| MCP `trends_validate` / `trends_diff` | `trends_ask`（`validate`；`diff` 始终返回） |
-| CLI `validate` / `diff` | `ask --validate` / `ask --diff` |
-
-> 旧版的 `trends_snapshot` / CLI `snapshot` 只是 `trends_ask` 的快照别名，已移除；**新版同名工具 / 命令是校准流量功能**（输入含 `anchor`，输出 `traffic` / `chart`），与旧语义不兼容。
-
-详见仓库 [README](../README.md) 的 Migration 段。

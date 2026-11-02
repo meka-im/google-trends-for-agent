@@ -4,6 +4,7 @@
 
 Initial release.
 
+- Two install commands: `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 - Tools (CLI + MCP): `ask`, `snapshot`, `compare`, and `now` (Trending Now) for search-interest questions.
 - Searches/day calibration anchored to `gpts`, with a reliability gate that marks low-confidence estimates.
 - 24h and 7d charts (SVG, opt-in inline) with gap-aware rendering and peak/latest callouts.

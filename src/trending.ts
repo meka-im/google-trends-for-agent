@@ -128,7 +128,7 @@ export interface TrendsNowByGeo {
   geo: string; ok?: boolean; fetchedAt?: string; items: TrendsNowItem[];
   error?: { code: string; message: string; retryAfterSec?: number };
 }
-/** The agent-facing `trends_now` structuredContent shape (or a compatible saved JSON). */
+/** The agent-facing `trends_now` structuredContent shape (or a saved JSON document in the same shape). */
 export interface TrendsNowEnvelope { hours?: number; byGeo: TrendsNowByGeo[] }
 
 /** Map one MCP item onto a library TrendingItem (traffic/trafficLabel → volume/volumeLabel). */

@@ -9,7 +9,7 @@ export function trendingExitCode(results: TrendingResponse[]): number {
   if (results.every(r => r.status === 'ok')) return 0;
   return results.some(r => r.status === 'ok') ? 2 : 1;
 }
-const help = `Usage: google-trends-for-agent now --geo SG [options]
+const help = `Usage: gtfa now --geo SG [options]
   Trending Now. --hours is the trending window (4|24|48|168), not the Explore --time range.
   --geo US,SG,JP | --all-geos | --default-geos
   --hours 4|24|48|168 (default 24)
@@ -18,7 +18,7 @@ const help = `Usage: google-trends-for-agent now --geo SG [options]
   --json              Agent envelope JSON (same as the trends_now MCP tool)
   --timeout MS --min-interval MS (default 1500)
   --help
-Example: google-trends-for-agent now --geo SG --hours 24 --limit 20
+Example: gtfa now --geo SG --hours 24 --limit 20
 Exit codes: 0 success, 1 upstream failure, 2 partial, 3 blocked/rate limited, 4 invalid input`;
 export async function runTrendingCli(args: string[], options: TrendingOptions = {}): Promise<{ code: number; stdout: string; stderr: string }> {
   let format = 'json'; let pretty = false; let json = args.includes('--json');

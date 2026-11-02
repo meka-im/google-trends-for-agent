@@ -7,12 +7,12 @@ import { fetchTrending, type TrendingItem } from './trending.js';
 import { anchorDailySearches, DEFAULT_ANCHOR, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, type TrafficEstimate } from './calibration.js';
 export interface LeadInput { name: string; variants?: string[]; source?: string; url?: string; firstSeen?: string }
-export function parseNtrInput(json: unknown): LeadInput[] {
-  if (typeof json === 'string') { try { return parseNtrInput(JSON.parse(json)); } catch { return [{ name: json }]; } }
-  if (Array.isArray(json)) return json.flatMap(x => typeof x === 'string' ? [{ name: x }] : parseNtrInput(x));
+export function parseLeadInput(json: unknown): LeadInput[] {
+  if (typeof json === 'string') { try { return parseLeadInput(JSON.parse(json)); } catch { return [{ name: json }]; } }
+  if (Array.isArray(json)) return json.flatMap(x => typeof x === 'string' ? [{ name: x }] : parseLeadInput(x));
   if (!json || typeof json !== 'object') return [];
   const row = json as Record<string, unknown>;
-  for (const field of ['leads', 'rows', 'keywords', 'table']) if (Array.isArray(row[field])) return parseNtrInput(row[field]);
+  for (const field of ['leads', 'rows', 'keywords', 'table']) if (Array.isArray(row[field])) return parseLeadInput(row[field]);
   const name = row.name ?? row.term ?? row.keyword;
   return typeof name === 'string' && name.trim() ? [{ ...row, name } as unknown as LeadInput] : [];
 }
@@ -20,8 +20,8 @@ export interface TermVerdict {
   term: string; input: LeadInput; filter: TrendsFilter; verdict: 'spiking' | 'rising' | 'steady' | 'flat' | 'no_data' | 'blocked'; freshSpike?: { ratio: number; baseline: number; recent: number; recheckAfterMin: number };
   confidence: 'high' | 'mid' | 'low'; reasons: string[]; interest: TermSnapshot['interest'];
   popular: TermSnapshot['popular']; rising: TermSnapshot['rising']; regions: TermSnapshot['regions'];
-  /** `traffic` is searches/day (shared snapshot formula); `estMonthly` is a legacy monthly compat field derived as daily × 30. */
-  anchor: { term: string; ratio: number | null; band: 'high' | 'mid' | 'low' | null; traffic: TrafficEstimate; estMonthly: { low: number; mid: number; high: number } | null; note: string; warning?: string };
+  /** `traffic` is searches/day (shared snapshot formula). */
+  anchor: { term: string; ratio: number | null; band: 'high' | 'mid' | 'low' | null; traffic: TrafficEstimate; note: string; warning?: string };
   trendingNow?: TrendingItem; retryAfterSec?: number; snapshotId: string; fetchedAt: string; source: 'live' | 'cache'; exploreUrl: string;
 }
 export interface ValidateOptions {
@@ -45,7 +45,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
   const results: TermVerdict[] = [], rows = new Map<string, TermVerdict>(); let blocked = false;
   const pending: { term: string; anchor: TermVerdict['anchor'] }[] = [];
   const trending = opts.trending ? await (opts.trendingFetch ?? fetchTrending)({ geo: filter.geo, hours: 24 }) : undefined;
-  for (const lead of parseNtrInput(input)) {
+  for (const lead of parseLeadInput(input)) {
     const term = lead.name;
     const answer = await askTerm(term, { filter, store, maxAgeMin: opts.maxAgeMin, refresh: opts.refresh, query: blocked ? async i => ({ status: 'error', input: i, error: { code: 'BLOCKED', message: 'skipped after upstream block' }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } }) : query });
     const s = answer.snapshot, interest = summarizeInterest(s.interest.points, filter), settled = settledNonGapPoints(s.interest.points, filter), values = settled.map(p => p.value);
@@ -61,7 +61,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     else if (values.length >= 2 && ratio >= 1.5 || s.rising.some(r => r.breakout)) { verdict = 'rising'; reasons.push(s.rising.some(r => r.breakout) ? 'Breakout related queries' : 'Settled tail mean >= 1.5 × earlier mean'); }
     else if (Math.max(...values) >= 10 && tail >= early) { verdict = 'steady'; reasons.push('Settled peak >= 10 with no decline'); }
     else reasons.push('Insufficient sustained rise or declining interest');
-    const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'gpts', ratio: null, band: null, traffic: nullTraffic(), estMonthly: null, note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
+    const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'gpts', ratio: null, band: null, traffic: nullTraffic(), note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
     if (anchorTerm && verdict !== 'blocked' && verdict !== 'no_data' && !blocked) pending.push({ term, anchor });
     if (!anchor.traffic.average && filter.geo !== 'US') anchor.note = `无法估 (no calibration for geo ${filter.geo})`;
     const match = trending?.items.find(i => i.title.toLowerCase().includes(term.toLowerCase()) || i.query.toLowerCase().includes(term.toLowerCase()));
@@ -95,9 +95,6 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
       anchor.ratio = c.ratio;
       anchor.band = c.ratio === null ? null : c.ratio >= 1 ? 'high' : c.ratio >= .1 ? 'mid' : 'low';
       anchor.traffic = c.traffic;
-      const average = c.traffic.average;
-      // Legacy monthly compat only: daily traffic is the source of truth.
-      anchor.estMonthly = average === null ? null : { low: (c.traffic.low ?? average) * 30, mid: average * 30, high: (c.traffic.high ?? average) * 30 };
       anchor.note = daily === null ? `无法估 (no calibration for geo ${filter.geo}); traffic fields are null` : c.note;
       if (c.warning) anchor.warning = c.warning;
       else delete anchor.warning;

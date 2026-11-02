@@ -16,10 +16,7 @@
     }
   },
   "bin": {
-    "google-trends-for-agent": "./dist/cli.js",
     "gtfa": "./dist/cli.js",
-    "trends-kit": "./dist/cli.js",
-    "google-trends-for-agent-mcp": "./dist/mcp-bin.js",
     "gtfa-mcp": "./dist/mcp-bin.js"
   },
   "files": [

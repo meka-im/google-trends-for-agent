@@ -21,7 +21,6 @@ describe('MCP offline', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map(t => t.name).sort()).toEqual(['trends_ask', 'trends_compare', 'trends_now', 'trends_snapshot'].sort());
-    expect((await client.callTool({ name: 'trending_now', arguments: { geo: 'SG' } })).isError).toBe(true);
   });
   it('exposes only the slim input schemas', async () => {
     const client = await connect();
@@ -132,7 +131,7 @@ describe('output envelopes', () => {
     expect(e).toMatchObject({ ok: true, schemaVersion: 1, filter: { geo: 'US', time: 'now 1-d' }, summary: expect.stringContaining('a latest 10/peak 10'), series: [{ keyword: 'a', points: [{ t: '1', value: 10 }], average: 10, latest: 10, peak: 10 }, { keyword: 'b', average: 40, latest: 40, peak: 40 }] });
   });
   it('marks a blocked verdict as a failed envelope with error before meta', () => {
-    const verdict = { label: 'blocked', confidence: 'low', reasons: ['RATE_LIMITED'], estimate: null, anchor: { term: 'gpts', ratio: null, band: null, note: 'rate limited' } };
+    const verdict = { label: 'blocked', confidence: 'low', reasons: ['RATE_LIMITED'], anchor: { term: 'gpts', ratio: null, band: null, note: 'rate limited' } };
     const e = blockedVerdict(askEnvelope(snap, { cached: false, ageMin: 0, verdict, diff: null })) as Record<string, unknown>;
     expect(e).toMatchObject({ ok: false, status: 'blocked', error: { code: 'RATE_LIMITED', message: 'rate limited' } });
     expect(Object.keys(e).slice(0, 3)).toEqual(['ok', 'schemaVersion', 'status']);

@@ -6,13 +6,13 @@ import type { queryTrends } from './api.js';
 import type { Baselines } from './traffic.js';
 import { resolveTimeZone } from './timezone.js';
 
-export const snapshotHelp = `Usage: google-trends-for-agent snapshot <term> [options]
+export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   One term + a shared-scale anchor comparison -> calibrated searches/day estimate,
   traffic series, related queries, verdict, and chart file paths for the requested
   window plus an always-on now 7-d curve (chart7d / traffic7d); --svg embeds SVG text.
   --geo US --time "now 1-d"          Explore filter (all categories, web)
   --anchor gpts                     Anchor term (default gpts)
-  --fresh                           Force live data (alias --no-cache)
+  --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
   --chart-dir DIR                   SVG output directory (default .gtfa/charts)
@@ -27,15 +27,15 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
   let json = false, pretty = false;
   try {
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
-      geo: { type: 'string' }, time: { type: 'string' }, anchor: { type: 'string' }, maxAge: { type: 'string' }, 'max-age': { type: 'string' },
+      geo: { type: 'string' }, time: { type: 'string' }, anchor: { type: 'string' }, 'max-age': { type: 'string' },
       store: { type: 'string' }, 'chart-dir': { type: 'string' }, tz: { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
-      fresh: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean' },
+      fresh: { type: 'boolean' }, help: { type: 'boolean' },
     } });
     json = v.json ?? false; pretty = v.pretty ?? false;
     if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? snapshotHelp : JSON.stringify({ help: snapshotHelp }), stderr: '' };
     const term = positionals.join(' ').trim();
     if (!term) throw new Error('provide a term');
-    const maxAgeMin = v['max-age'] ?? v.maxAge;
+    const maxAgeMin = v['max-age'];
     const filter = resolveFilter({ geo: v.geo, time: v.time, category: 0, property: '' });
     const timeZone = resolveTimeZone(v.tz);
     const store = new SnapshotStore(v.store);
@@ -43,7 +43,7 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
     if (!Number.isFinite(maxAge) || maxAge < 0) throw new Error('invalid max-age');
     const result = await fetchTrafficSnapshot(term, {
       filter, store, anchor: v.anchor, maxAgeMin: maxAge, query: options.query, timeZone,
-      refresh: v.fresh || v['no-cache'] ? 'always' : undefined,
+      refresh: v.fresh ? 'always' : undefined,
     });
     const chartDir = v['chart-dir'] ?? options.chartDir;
     const envelope = await trafficSnapshotEnvelope(result.snapshot, {

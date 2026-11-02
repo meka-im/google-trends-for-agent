@@ -11,14 +11,14 @@ import { publicInput } from './core.js';
 import { resolveFilter } from './filter.js';
 import { compareEnvelope, schemaRejectionEnvelope } from './mcp.js';
 
-const help = `google-trends-for-agent — Search-interest signals for AI agents — an unofficial Google Trends client
+const help = `gtfa — Search-interest signals for AI agents — an unofficial Google Trends client
 
 Usage:
-  google-trends-for-agent ask <term> [--validate] [--diff] [--fresh] [--points]   One term: interest, Popular + Rising, regions (ask --help)
-  google-trends-for-agent snapshot <term> [--json] [--svg] [--tz IANA]        Calibrated searches/day + chart path (snapshot --help)
-  google-trends-for-agent compare <kw> <kw> [...] [options]            Relative interest for 2-5 keywords
-  google-trends-for-agent --query coffee [--query tea] [options]       Same as compare (default mode)
-  google-trends-for-agent now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168
+  gtfa ask <term> [--validate] [--diff] [--fresh] [--points]   One term: interest, Popular + Rising, regions (ask --help)
+  gtfa snapshot <term> [--json] [--svg] [--tz IANA]        Calibrated searches/day + chart path (snapshot --help)
+  gtfa compare <kw> <kw> [...] [options]            Relative interest for 2-5 keywords
+  gtfa --query coffee [--query tea] [options]       Same as compare (default mode)
+  gtfa now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168
 Options for compare / default mode:
   --url URL           Explore URL (repeatable; multiple URLs run sequentially)
   --geo US            Country or region
@@ -37,12 +37,12 @@ Options for compare / default mode:
   --version           Show version
 
 Examples:
-  google-trends-for-agent ask "nano banana" --validate --diff
-  google-trends-for-agent snapshot Astra --json
-  google-trends-for-agent compare coffee tea --geo US
-  google-trends-for-agent --query coffee --query tea --geo US
-  google-trends-for-agent now --geo SG --hours 24
-  google-trends-for-agent help now
+  gtfa ask "nano banana" --validate --diff
+  gtfa snapshot Astra --json
+  gtfa compare coffee tea --geo US
+  gtfa --query coffee --query tea --geo US
+  gtfa now --geo SG --hours 24
+  gtfa help now
 
 Exit codes: 0 success, 1 upstream failure, 2 partial, 3 blocked/rate limited, 4 invalid input`;
 function exitCode(results: TrendsResponse[]): number {

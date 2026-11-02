@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { resolveFilter, DEFAULT_FILTER, settledPoints } from '../src/filter.js';
 import { SnapshotStore, snapshotTerm, askTerm, diffSnapshots, type TermSnapshot } from '../src/snapshot.js';
-import { validateTerms, parseNtrInput, detectFreshSpike } from '../src/validate.js';
+import { validateTerms, parseLeadInput, detectFreshSpike } from '../src/validate.js';
 import { runAskCli } from '../src/ask-cli.js';
 import { trafficSnapshotEnvelope } from '../src/trends-snapshot.js';
 import { verdictEnvelope } from '../src/mcp.js';
-import { loadBaselines, DEFAULT_ANCHOR } from '../src/traffic.js';
+import { loadBaselines } from '../src/traffic.js';
 import type { queryTrends } from '../src/api.js';
 const dirs: string[] = [];
 async function store() { const dir = await mkdtemp(join(tmpdir(), 'gtfa-')); dirs.push(dir); return new SnapshotStore(dir); }
@@ -46,11 +46,8 @@ it('uses the full shared-scale comparison window and calibrates only matching ge
     expect(r.anchor.ratio).toBe(3.6);
     if (geo === 'US') {
       expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 1980, low: 990, high: 2970 });
-      const mid = r.anchor.traffic.average! * 30;
-      expect(r.anchor.estMonthly).toEqual({ low: mid * (1 - DEFAULT_ANCHOR.tolerance!), mid, high: mid * (1 + DEFAULT_ANCHOR.tolerance!) });
     } else {
       expect(r.anchor.traffic.average).toBeNull();
-      expect(r.anchor.estMonthly).toBeNull();
       expect(r.anchor.note).toContain('无法估');
     }
   }
@@ -71,7 +68,6 @@ it('matches trends_snapshot traffic for the same fixture comparison', async () =
   expect(r.anchor.ratio).toBe(e.anchor.ratio);
   expect(r.anchor.traffic).toEqual(e.traffic);
   expect(verdictEnvelope(r).traffic).toEqual(e.traffic);
-  expect(r.anchor.estMonthly?.mid).toBe(e.traffic.average! * 30);
 });
 it('omits traffic and warns for a sparse/near-zero anchor', async () => {
   const start = Date.parse('2026-10-31T00:00:00.000Z');
@@ -93,9 +89,9 @@ it('stops after upstream blocking and reports every lead honestly', async () => 
   expect(rows.map(r => r.verdict)).toEqual(['blocked', 'blocked']);
   expect(query).toHaveBeenCalledTimes(1);
 });
-it('accepts new-term-radar report shapes and preserves evidence', () => {
-  for (const field of ['leads', 'rows', 'keywords', 'table']) expect(parseNtrInput({ [field]: [{ term: 'a' }, { keyword: 'b' }, { name: 'c', url: 'https://example.com' }] }).map(r => r.name)).toEqual(['a', 'b', 'c']);
-  expect(parseNtrInput(['x', { name: 'y', variants: ['z'] }])[1].variants).toEqual(['z']);
+it('accepts JSON lead report shapes and preserves evidence', () => {
+  for (const field of ['leads', 'rows', 'keywords', 'table']) expect(parseLeadInput({ [field]: [{ term: 'a' }, { keyword: 'b' }, { name: 'c', url: 'https://example.com' }] }).map(r => r.name)).toEqual(['a', 'b', 'c']);
+  expect(parseLeadInput(['x', { name: 'y', variants: ['z'] }])[1].variants).toEqual(['z']);
 });
 it('reuses fresh and never-refresh cache, refreshes stale, and diffs lists independently', async () => {
   const s = await store(), query = mock([10, 10, 10, 10, 0]);

@@ -4,12 +4,12 @@ Operational detail for the CLI, the MCP server, and the numbers behind `snapshot
 
 ## CLI surface
 
-`gtfa`, `google-trends-for-agent`, and `trends-kit` are aliases for the CLI. The MCP server is installed as `gtfa-mcp` / `google-trends-for-agent-mcp`.
+The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 
 | Command | Flags | Purpose |
 | --- | --- | --- |
-| `gtfa ask <term>` | `--validate`, `--from FILE\|-`, `--anchor TERM`, `--no-anchor`, `--trending`, `--diff`, `--points`, `--fresh`, `--no-cache`, `--refresh always\|never\|if-stale`, `--max-age MIN`, `--geo`, `--time`, `--category`, `--property`, `--store DIR`, `--json`, `--help` | One term: interest, Popular/Rising, regions, optional verdict and diff. |
-| `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--no-cache`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--json`, `--pretty`, `--help` | Calibrated searches/day, traffic series, verdict, charts, and chart paths. |
+| `gtfa ask <term>` | `--validate`, `--from FILE\|-`, `--anchor TERM`, `--no-anchor`, `--trending`, `--diff`, `--points`, `--fresh`, `--refresh always\|never\|if-stale`, `--max-age MIN`, `--geo`, `--time`, `--category`, `--property`, `--store DIR`, `--json`, `--help` | One term: interest, Popular/Rising, regions, optional verdict and diff. |
+| `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--json`, `--pretty`, `--help` | Calibrated searches/day, traffic series, verdict, charts, and chart paths. |
 | `gtfa compare <kw> <kw> [...]` | `--url URL` (repeatable), `--geo`, `--time`, `--start YYYY-MM-DD`, `--end YYYY-MM-DD`, `--types LIST`, `--format json\|csv`, `--json`, `--timeout MS`, `--retries N`, `--min-interval MS`, `--pretty`, `--help`, `--version` | Relative interest for 1–5 keywords. The default `--query` mode is the same command. |
 | `gtfa now` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
 
@@ -17,7 +17,7 @@ Operational detail for the CLI, the MCP server, and the numbers behind `snapshot
 
 ```sh
 npx gtfa ask "nano banana" --validate --diff --json
-new-term-radar leads --json | npx gtfa ask --validate --from - --json
+cat leads.json | npx gtfa ask --validate --from - --json
 npx gtfa snapshot Sora --geo US --svg --tz Asia/Shanghai --fresh --json
 npx gtfa compare coffee tea --geo US --time "today 3-m" --pretty
 npx gtfa --query coffee --query tea --geo US --json
@@ -30,7 +30,7 @@ npx gtfa help snapshot
 
 ## MCP tools
 
-The stdio server exposes exactly four tools and no aliases.
+The stdio server exposes exactly four tools.
 
 | Tool | Inputs | What it returns |
 | --- | --- | --- |
