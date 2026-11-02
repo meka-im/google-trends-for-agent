@@ -158,7 +158,7 @@ MCP 结果和 CLI 的 Agent 信封（`ask`、`snapshot --json`，以及 compare/
 | `TRENDS_TEMPORARILY_UNAVAILABLE` | `1` | 上游服务器故障。 |
 | `NETWORK_ERROR` | `1` | 传输连接失败。 |
 
-批量请求的退出码优先级为：blocked/rate-limited、无效输入、部分成功、其他错误。
+compare/默认模式和 `now` 的批量退出码优先级为：blocked/rate-limited、无效输入、部分成功、其他错误。`ask --validate --from` 则取各个条目退出码的最大值，因此一个成功加一个上游失败会以 1 退出（而不是 2）；只要任一条目为 blocked verdict，仍会短路为 3。
 
 ## 校准与锚点
 
@@ -188,7 +188,8 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 
 - 上游请求默认间隔：CLI/库的 Explore 请求为 **1000 ms**；Trending Now（`now` / `trends_now`）和所有 MCP 请求为 **1500 ms**。
 - `BLOCKED` 和 `RATE_LIMITED` 会立即返回，不自动重试。它们会触发自适应退避，上限 60 秒（下限 1 秒）；成功后退避惩罚减半。
-- 瞬时 `TRENDS_TIMEOUT`、`TRENDS_TEMPORARILY_UNAVAILABLE` 和 `NETWORK_ERROR` 最多重试 `maxRetries` 次（默认 `1`，最大 `2`）。默认超时 8000 ms；有效范围 1000–60000 ms。
+- 对 Explore 请求，瞬时 `TRENDS_TIMEOUT`、`TRENDS_TEMPORARILY_UNAVAILABLE` 和 `NETWORK_ERROR` 最多重试 `maxRetries` 次（默认 `1`，最大 `2`）。Explore 默认超时 8000 ms，`timeoutMs` 必须在 1000–60000 ms 之间。
+- Trending Now（`fetchTrending()` / `now`）不自动重试。其超时默认 8000 ms，并接受任意有限正值。
 - 批量和 `trends_now` 默认在第一次 block 后停止；后续条目会报告为 blocked/skipped。
 - 保持小规模工作负载。本项目不适合批量抓取或持续轮询；重试或代理也不保证访问成功。
 

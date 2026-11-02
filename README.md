@@ -158,7 +158,7 @@ Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`
 | `TRENDS_TEMPORARILY_UNAVAILABLE` | `1` | Upstream server failure. |
 | `NETWORK_ERROR` | `1` | Transport connection failure. |
 
-For batches, exit-code precedence is blocked/rate-limited, invalid input, partial success, then other errors.
+Batch exit precedence for compare/default mode and `now` is blocked/rate-limited, invalid input, partial success, then other errors. `ask --validate --from` instead takes the maximum per-item exit code, so one success plus one upstream failure exits 1 (not 2); any blocked verdict still short-circuits to 3.
 
 ## Calibration and the anchor
 
@@ -188,7 +188,8 @@ These numbers are **estimates from an anchor**, not measured Google search volum
 
 - Default spacing between upstream requests is **1000 ms** for Explore requests from the CLI/library, and **1500 ms** for Trending Now (`now` / `trends_now`) and for all MCP requests.
 - `BLOCKED` and `RATE_LIMITED` are returned immediately, with no automatic retry. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
-- Transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may retry up to `maxRetries` (default `1`, maximum `2`). The default timeout is 8000 ms; valid values are 1000–60000 ms.
+- For Explore requests, transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may retry up to `maxRetries` (default `1`, maximum `2`). Explore’s default timeout is 8000 ms, and `timeoutMs` must be 1000–60000 ms.
+- Trending Now (`fetchTrending()` / `now`) performs no automatic retry. Its timeout defaults to 8000 ms and accepts any finite positive value.
 - Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped.
 - Keep workloads small. This is not suitable for bulk scraping or continuous polling, and retries or proxies do not guarantee access.
 
