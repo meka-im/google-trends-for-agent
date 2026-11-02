@@ -2,6 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderTrafficChart, type TrafficChartPoint } from '../src/chart.js';
 
 const at = (iso: string, traffic: number): TrafficChartPoint => ({ t: iso, traffic });
+const CHART_LEFT = 58, CHART_RIGHT = 20, CHART_TOP = 32, CHART_AXIS_Y = 242;
+const labelOf = (svg: string, kind: 'peak' | 'latest') => {
+  const match = svg.match(new RegExp(`<text x="([\\d.]+)" y="([\\d.]+)"(?: text-anchor="(start|end)")?[^>]*>${kind} ([^<]*)</text>`));
+  expect(match).not.toBeNull();
+  const [, rawX, rawY, rawAnchor, callout] = match!;
+  const text = `${kind} ${callout}`;
+  const x = Number(rawX), y = Number(rawY), anchor = (rawAnchor as 'start' | 'end' | undefined) ?? 'start';
+  const width = text.length * 11 * 0.6;
+  const left = anchor === 'end' ? x - width : x;
+  return { x, y, anchor, text, left, right: left + width, top: y - 10, bottom: y + 3 };
+};
+const intersects = (a: ReturnType<typeof labelOf>, b: ReturnType<typeof labelOf>) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 const originalTz = process.env.GTFA_TZ;
 beforeEach(() => { delete process.env.GTFA_TZ; });
 afterEach(() => {
@@ -70,5 +83,53 @@ describe('renderTrafficChart time axis', () => {
     try { renderTrafficChart({ term: 'Astra', points: [at('2026-10-31T00:00:00.000Z', 40)], timeZone: 'Not/AZone' }); }
     catch (e) { error = e; }
     expect(error).toMatchObject({ code: 'INVALID_INPUT' });
+  });
+});
+
+describe('renderTrafficChart label placement', () => {
+  const series = (values: number[], start = '2026-10-26T08:00:00.000Z') =>
+    values.map((traffic, i) => at(new Date(Date.parse(start) + i * 60 * 60 * 1000).toISOString(), traffic));
+
+  it('places a top-left peak below the title band and inside the plot', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([100, 30, 40, 50, 60, 70]) });
+    const peak = labelOf(svg, 'peak');
+    expect(peak.anchor).toBe('start');
+    expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
+    expect(peak.y).toBeGreaterThan(CHART_TOP);
+    expect(peak.y).toBeLessThanOrEqual(CHART_AXIS_Y - 4);
+    expect(peak.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    expect(peak.right).toBeLessThanOrEqual(720 - CHART_RIGHT);
+  });
+
+  it('keeps a right-edge peak label inside the plot', () => {
+    const svg = renderTrafficChart({ term: 'Claude Code', points: series([10, 20, 30, 40, 50, 100]) });
+    const peak = labelOf(svg, 'peak');
+    expect(peak.anchor).toBe('end');
+    expect(peak.x).toBeLessThanOrEqual(720 - CHART_RIGHT);
+    expect(peak.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    expect(peak.right).toBeLessThanOrEqual(720 - CHART_RIGHT);
+    expect(peak.top).toBeGreaterThanOrEqual(CHART_TOP);
+    expect(peak.y).toBeLessThanOrEqual(CHART_AXIS_Y - 4);
+  });
+
+  it('separates peak and latest labels when they share or nearly share a point', () => {
+    const same = renderTrafficChart({ term: 'Claude Code', points: series([10, 20, 30, 40, 50, 100]) });
+    expect(intersects(labelOf(same, 'peak'), labelOf(same, 'latest'))).toBe(false);
+
+    const adjacent = renderTrafficChart({ term: 'Claude Code', points: series(Array.from({ length: 20 }, (_, i) => i === 18 ? 100 : i === 19 ? 99 : 10 + i)) });
+    expect(intersects(labelOf(adjacent, 'peak'), labelOf(adjacent, 'latest'))).toBe(false);
+  });
+
+  it('keeps the usual above-peak and below-latest placement when there is room', () => {
+    const points = series([10, 20, 80, 30, 20, 10]);
+    const anchorPoints = points.map((p, i) => ({ ...p, traffic: i === 5 ? 100 : 0 }));
+    const svg = renderTrafficChart({ term: 'Claude Code', points, anchorPoints });
+    const peak = labelOf(svg, 'peak'), latest = labelOf(svg, 'latest');
+    const peakPointY = CHART_TOP + 210 - (80 / 100) * 210;
+    const latestPointY = CHART_TOP + 210 - (10 / 100) * 210;
+    expect(peak.y).toBeCloseTo(peakPointY - 8);
+    expect(latest.y).toBeCloseTo(latestPointY + 16);
+    expect(peak.y).toBeLessThan(peakPointY);
+    expect(latest.y).toBeGreaterThan(latestPointY);
   });
 });
