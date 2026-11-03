@@ -6,10 +6,47 @@ export interface TransportRequest { url: string; method?: string; body?: string;
 export interface TransportResponse { status: number; headers: Record<string, string>; body: string }
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
 
-/** Uses global fetch directly, or an HTTPS proxy when configured. Redirects are never followed. */
-export function createDefaultTransport(): Transport {
-  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
-  const dispatcher = proxy ? new ProxyAgent(proxy) : undefined;
+const PROXY_ENV = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'] as const;
+export type ProxySource = (typeof PROXY_ENV)[number] | 'none';
+export interface ProxyConfig { source: ProxySource; url: string | null }
+
+/** HTTPS_PROXY wins over HTTP_PROXY; an empty variable is treated as unset. */
+export function getProxyConfig(env: NodeJS.ProcessEnv = process.env): ProxyConfig {
+  for (const source of PROXY_ENV) {
+    const url = env[source]?.trim();
+    if (url) return { source, url };
+  }
+  return { source: 'none', url: null };
+}
+
+/** Never print proxy credentials in diagnostics. */
+export function redactProxyUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    if (url.username) url.username = '***';
+    if (url.password) url.password = '***';
+    return url.toString().replace(/\/$/, '');
+  } catch { return '<invalid URL>'; }
+}
+
+export function describeProxy(env: NodeJS.ProcessEnv = process.env): string {
+  const proxy = getProxyConfig(env);
+  return proxy.url ? `${proxy.source}=${redactProxyUrl(proxy.url)}` : 'direct (no HTTPS_PROXY/HTTP_PROXY)';
+}
+
+/** Uses global fetch directly, or HTTPS_PROXY/HTTP_PROXY when configured. Redirects are never followed. */
+export function createDefaultTransport(env: NodeJS.ProcessEnv = process.env): Transport {
+  const proxy = getProxyConfig(env);
+  let dispatcher: ProxyAgent | undefined;
+  if (proxy.url) {
+    try {
+      const parsed = new URL(proxy.url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('proxy URL must start with http:// or https://');
+      dispatcher = new ProxyAgent(proxy.url);
+    } catch (error) {
+      throw new GTrendsError('NETWORK_ERROR', `Invalid ${proxy.source} "${redactProxyUrl(proxy.url)}": ${error instanceof Error ? error.message : 'invalid URL'}. Set it to http://host:port, or unset it for a direct connection.`);
+    }
+  }
   return async req => {
     const init = { method: req.method ?? 'GET', body: req.body, headers: req.headers, redirect: 'manual' as const, signal: AbortSignal.timeout(req.timeoutMs) };
     const res = dispatcher ? await proxyFetch(req.url, { ...init, dispatcher }) : await globalThis.fetch(req.url, init);
@@ -18,6 +55,32 @@ export function createDefaultTransport(): Transport {
     if (cookies.length) headers['set-cookie'] = cookies.join('\n');
     return { status: res.status, headers, body: await res.text() };
   };
+}
+
+export const RETRYABLE_ERROR_CODES = ['RATE_LIMITED', 'TRENDS_TIMEOUT', 'TRENDS_TEMPORARILY_UNAVAILABLE', 'NETWORK_ERROR'] as const;
+export interface RetryOptions { maxRetries: number; sleep: (ms: number) => Promise<void>; maxRateLimitWaitMs?: number }
+const DEFAULT_MAX_RATE_LIMIT_WAIT_MS = 10_000;
+
+/** RATE_LIMITED honors Retry-After when it fits the bounded wait; other transient failures retry immediately. */
+export function retryDelayMs(error: GTrendsError, attempt: number, maxWaitMs = DEFAULT_MAX_RATE_LIMIT_WAIT_MS): number | null {
+  if (!(RETRYABLE_ERROR_CODES as readonly string[]).includes(error.code)) return null;
+  if (error.code !== 'RATE_LIMITED') return 0;
+  const retryAfterMs = error.retryAfterSec !== undefined ? error.retryAfterSec * 1000 : 0;
+  if (retryAfterMs > maxWaitMs) return null;
+  return Math.min(maxWaitMs, Math.max(1000, retryAfterMs, 1000 * 2 ** attempt));
+}
+
+/** Bounded retry wrapper shared by Explore and Trending Now requests. */
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await fn(); }
+    catch (error) {
+      if (!(error instanceof GTrendsError) || attempt >= options.maxRetries) throw error;
+      const delay = retryDelayMs(error, attempt, options.maxRateLimitWaitMs);
+      if (delay === null) throw error;
+      if (delay > 0) await options.sleep(delay);
+    }
+  }
 }
 
 export interface RateLimitOptions {
@@ -70,7 +133,10 @@ export class Session {
       try { res = await this.transport({ ...req, headers: { ...req.headers, ...(cookie ? { cookie } : {}) } }); }
       catch (error) {
         const timeout = error instanceof Error && /timeout|abort/i.test(error.name);
-        throw new GTrendsError(timeout ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', timeout ? 'upstream request timed out' : 'upstream request failed');
+        const message = timeout
+          ? `Google Trends request timed out after ${req.timeoutMs} ms. Retry, raise --timeout (max 60000), or set HTTPS_PROXY/HTTP_PROXY if this network blocks Google.`
+          : 'Could not reach Google Trends (network, DNS, TLS, or proxy failure). Check connectivity/firewall; if a proxy is required, set HTTPS_PROXY or HTTP_PROXY.';
+        throw new GTrendsError(timeout ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', message);
       }
       const headers = Object.fromEntries(Object.entries(res.headers).map(([k,v]) => [k.toLowerCase(),v]));
       // Split combined headers without splitting an Expires date's comma.
@@ -84,10 +150,17 @@ export class Session {
         const retry = headers['retry-after'];
         const delay = retry ? (/^\d+$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - this.limiter.now()) : 0;
         this.limiter.penalize(Number.isFinite(delay) ? delay : 0);
-        throw new GTrendsError(blocked ? 'BLOCKED' : 'RATE_LIMITED', blocked ? 'upstream challenge detected' : 'upstream rate limit reached', delay > 0 && Number.isFinite(delay) ? Math.ceil(delay / 1000) : undefined);
+        const retryAfterSec = delay > 0 && Number.isFinite(delay) ? Math.ceil(delay / 1000) : undefined;
+        const message = blocked
+          ? 'Google Trends returned a challenge (CAPTCHA/unusual traffic) for this IP. Stop and report; retry later, reduce request rate, or set HTTPS_PROXY/HTTP_PROXY to use a different egress.'
+          : `Google Trends rate limit (HTTP 429). ${retryAfterSec !== undefined ? `Wait ${retryAfterSec}s` : 'Wait a few seconds'} before retrying; lower request rate or set HTTPS_PROXY/HTTP_PROXY.`;
+        throw new GTrendsError(blocked ? 'BLOCKED' : 'RATE_LIMITED', message, retryAfterSec);
       }
       if (res.status < 200 || res.status >= 300) {
-        throw new GTrendsError(res.status >= 500 ? 'TRENDS_TEMPORARILY_UNAVAILABLE' : 'TRENDS_PROTOCOL_CHANGED', `unexpected upstream status ${res.status}`);
+        throw new GTrendsError(res.status >= 500 ? 'TRENDS_TEMPORARILY_UNAVAILABLE' : 'TRENDS_PROTOCOL_CHANGED',
+          res.status >= 500
+            ? `Google Trends is temporarily unavailable (HTTP ${res.status}). Retry in a moment; if it persists, check connectivity or set HTTPS_PROXY/HTTP_PROXY.`
+            : `Google Trends returned unexpected HTTP ${res.status}; the public endpoint may have changed. Retry later and update gtfa if it persists.`);
       }
       this.limiter.recover();
       return res.body;

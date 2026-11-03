@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-204%20passed-22c55e?style=flat-square" alt="204 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-220%20passed-22c55e?style=flat-square" alt="220 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -41,34 +41,37 @@
 </table>
 <p align="center"><sub>Estimates calibrated to the <code>gpts</code> anchor ≈ 550 searches/day; US, last 7 days, labels in UTC, fetched 2026-11-02 UTC.</sub></p>
 
-## Install
+## Install from GitHub
 
-Requires Node.js 20+.
+Requires Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout.
 
 ```sh
-npm install -g github:meka-im/google-trends-for-agent
-gtfa --help
-gtfa-mcp   # stdio MCP server
+# pinned release (recommended)
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa --help
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa doctor
+
+# latest main
+npx -y github:meka-im/google-trends-for-agent gtfa --help
 ```
 
-The package installs two commands: `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
+For a global install, use the same git spec: `npm install -g github:meka-im/google-trends-for-agent#v0.1.0`. The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 
 ## Quick start
 
 One snapshot, calibrated searches/day:
 
 ```sh
-npx gtfa snapshot Sora --geo US --json --pretty
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-The MCP server runs over stdio. Point a client at the published package:
+The MCP server runs over stdio. Point a client at the GitHub package (pin the tag for reproducibility):
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "--package", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+      "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"]
     }
   }
 }
@@ -93,6 +96,7 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 | `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, and SVG charts. |
 | `gtfa compare <kw> <kw> [...]` | Relative interest for 1–5 keywords (also `--query` mode). |
 | `gtfa now` | Trending Now by country; `--hours` is the Now window. |
+| `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch; `--json` for machines. |
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
 
@@ -117,7 +121,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 204 tests
+npm test          # 220 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

@@ -46,6 +46,18 @@ describe('Trending Now offline', () => {
     const r = await fetchTrending({ geo: 'JP' }, { transport: async () => { const e = new Error('offline'); e.name = name; throw e; } });
     expect(r.error?.code).toBe(name === 'Error' ? 'NETWORK_ERROR' : 'TRENDS_TIMEOUT');
   });
+  it('retries a bounded 429 before parsing Trending Now', async () => {
+    let calls = 0, now = 0;
+    const sleeps: number[] = [];
+    const r = await fetchTrending({ geo: 'SG' }, { minIntervalMs: 0, maxRetries: 1, now: () => now, sleep: async ms => { sleeps.push(ms); now += ms; }, transport: async req => {
+      if (++calls === 1) return { status: 429, body: '', headers: { 'retry-after': '2' } };
+      return transport(req);
+    } });
+    expect(r.status).toBe('ok');
+    expect(calls).toBe(2);
+    expect(sleeps).toEqual([2000]);
+    expect(r.meta.upstreamRequests).toBe(2);
+  });
   it('rejects invalid input before transport', async () => {
     for (const input of [{ geo: 'ZZ' }, { geo: 'SG', hours: 12 }, { geo: 'SG', minVolume: -1 }, { geo: 'SG', limit: NaN }]) {
       const r = await fetchTrending(input as Parameters<typeof fetchTrending>[0], opts);

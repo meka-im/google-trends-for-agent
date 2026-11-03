@@ -1,6 +1,6 @@
 # Reference
 
-Operational detail for the CLI, the MCP server, and the numbers behind `snapshot`. For a Chinese field guide to MCP envelopes, see [mcp-api.md](mcp-api.md). Install and a short tour are in the [README](../README.md). From a checkout, run `npm install && npm run build`, then `node dist/cli.js --help`.
+Operational detail for the CLI, the MCP server, and the numbers behind `snapshot`. For a Chinese field guide to MCP envelopes, see [mcp-api.md](mcp-api.md). Install and a short tour are in the [README](../README.md) and [AGENTS.md](../AGENTS.md). From a checkout, run `npm install && npm run build`, then `node dist/cli.js --help`.
 
 ## CLI surface
 
@@ -12,8 +12,9 @@ The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 | `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--json`, `--pretty`, `--help` | Calibrated searches/day, traffic series, verdict, charts, and chart paths. |
 | `gtfa compare <kw> <kw> [...]` | `--url URL` (repeatable), `--geo`, `--time`, `--start YYYY-MM-DD`, `--end YYYY-MM-DD`, `--types LIST`, `--format json\|csv`, `--json`, `--timeout MS`, `--retries N`, `--min-interval MS`, `--pretty`, `--help`, `--version` | Relative interest for 1–5 keywords. The default `--query` mode is the same command. |
 | `gtfa now` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
+| `gtfa doctor` | `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit 0 only when all checks pass. |
 
-`--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `npx gtfa` with `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 npx gtfa ask "nano banana" --validate --diff --json
@@ -23,6 +24,7 @@ npx gtfa compare coffee tea --geo US --time "today 3-m" --pretty
 npx gtfa --query coffee --query tea --geo US --json
 npx gtfa now --geo SG --hours 24 --limit 20 --pretty
 npx gtfa now --list-geos
+npx gtfa doctor --json
 npx gtfa help snapshot
 ```
 
@@ -41,7 +43,7 @@ The stdio server exposes exactly four tools.
 
 `time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live.
 
-Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` selects an HTTP proxy.
+Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
 ## Output contract
 
@@ -54,7 +56,7 @@ Tool bodies:
 - `trends_compare`: `filter`, `summary`, `series`, `meta`.
 - `trends_now`: `hours`, `geos`, `summary`, `byGeo`, `meta`.
 
-Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`. The lower-level `queryTrends()` API instead returns `{ status, input, data?, error?, meta }`.
+Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`. Messages are actionable for agents: they say what happened and whether to retry, lower the request rate, raise `--timeout`, check the network, or set `HTTPS_PROXY` / `HTTP_PROXY`. The lower-level `queryTrends()` API instead returns `{ status, input, data?, error?, meta }`.
 
 ## Exit codes
 
@@ -101,8 +103,8 @@ These numbers are **estimates from an anchor**, not measured Google search volum
 ## Rate limits, retries, and timeouts
 
 - Default spacing between upstream requests is **1000 ms** for Explore requests from the CLI/library, and **1500 ms** for Trending Now (`now` / `trends_now`) and for all MCP requests.
-- `BLOCKED` and `RATE_LIMITED` are returned immediately, with no automatic retry. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
-- For Explore requests, transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may retry up to `maxRetries` (default `1`, maximum `2`). Explore's default timeout is 8000 ms, and `timeoutMs` must be 1000–60000 ms.
-- Trending Now (`fetchTrending()` / `now`) performs no automatic retry. The library's `timeoutMs` defaults to 8000 ms and accepts any finite positive number; the CLI's `now --timeout` requires a positive safe integer.
+- HTTP 429 triggers a bounded automatic retry: `Retry-After` is honored when it is at most **10 s**, otherwise the request fails immediately with `retryAfterSec` so the caller can wait. Without `Retry-After`, the delay is 1 s, then 2 s. `maxRetries` defaults to `1` and is capped at `2`.
+- `BLOCKED` challenge pages are never retried. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
+- For Explore and Trending Now requests, transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may also retry up to `maxRetries` (default `1`, maximum `2`). Explore's default timeout is 8000 ms, and `timeoutMs` must be 1000–60000 ms. The Trending Now library `timeoutMs` defaults to 8000 ms and accepts any finite positive number; the CLI's `now --timeout` requires a positive safe integer.
 - Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped.
 - Keep workloads small. This is not suitable for bulk scraping or continuous polling, and retries or proxies do not guarantee access.

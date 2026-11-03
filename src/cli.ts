@@ -10,6 +10,7 @@ import { planTrendsRequest } from './input.js';
 import { publicInput } from './core.js';
 import { resolveFilter } from './filter.js';
 import { compareEnvelope, schemaRejectionEnvelope } from './mcp.js';
+import { runDoctorCli } from './doctor-cli.js';
 
 const help = `gtfa — Search-interest signals for AI agents — an unofficial Google Trends client
 
@@ -19,6 +20,7 @@ Usage:
   gtfa compare <kw> <kw> [...] [options]            Relative interest for 2-5 keywords
   gtfa --query coffee [--query tea] [options]       Same as compare (default mode)
   gtfa now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168
+  gtfa doctor [--json]                              Check Node, Google Trends reachability, proxy, and one gpts fetch
 Options for compare / default mode:
   --url URL           Explore URL (repeatable; multiple URLs run sequentially)
   --geo US            Country or region
@@ -42,6 +44,7 @@ Examples:
   gtfa compare coffee tea --geo US
   gtfa --query coffee --query tea --geo US
   gtfa now --geo SG --hours 24
+  gtfa doctor --json
   gtfa help now
 
 Exit codes: 0 success, 1 upstream failure, 2 partial, 3 blocked/rate limited, 4 invalid input`;
@@ -103,7 +106,7 @@ async function main(): Promise<void> {
   for (const response of results) if (response.error) console.error(`${response.error.code}: ${response.error.message}`);
 }
 if (process.argv[2] === 'help') {
-  process.argv.splice(2, process.argv.length - 2, ...(['now', 'ask', 'snapshot'].includes(process.argv[3]) ? [process.argv[3], '--help'] : process.argv.length === 3 ? ['--help'] : ['--invalid-help-topic']));
+  process.argv.splice(2, process.argv.length - 2, ...(['now', 'ask', 'snapshot', 'doctor'].includes(process.argv[3]) ? [process.argv[3], '--help'] : process.argv.length === 3 ? ['--help'] : ['--invalid-help-topic']));
 }
 if (process.argv[2] === 'compare') {
   const rest = process.argv.slice(3), keywords: string[] = [], flags: string[] = [];
@@ -122,6 +125,11 @@ if (process.argv[2] === 'ask') {
   process.exitCode = result.code;
 } else if (process.argv[2] === 'snapshot') {
   const result = await runSnapshotCli(process.argv.slice(3));
+  console.log(result.stdout);
+  if (result.stderr) console.error(result.stderr);
+  process.exitCode = result.code;
+} else if (process.argv[2] === 'doctor') {
+  const result = await runDoctorCli(process.argv.slice(3));
   console.log(result.stdout);
   if (result.stderr) console.error(result.stderr);
   process.exitCode = result.code;

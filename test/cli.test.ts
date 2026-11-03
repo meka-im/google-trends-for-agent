@@ -51,6 +51,23 @@ describe('CLI offline output', () => {
 });
 
 describe('CLI flags and exit codes', () => {
+  it('runs doctor with pass lines and JSON offline', () => {
+    const text = runCli([...args, 'doctor'], { encoding: 'utf8', env });
+    expect(text.status).toBe(0);
+    expect(text.stdout).toMatch(/PASS node:/);
+    expect(text.stdout).toMatch(/PASS fetch: gpts US 24h fetch returned \d+ interest points/);
+    expect(text.stdout).toContain('Summary: 4 passed, 0 failed');
+    const json = JSON.parse(runCli([...args, 'doctor', '--json'], { encoding: 'utf8', env }).stdout);
+    expect(json).toMatchObject({ ok: true, summary: { passed: 4, failed: 0 }, proxy: { direct: true } });
+    expect(json.checks.map((c: { name: string }) => c.name)).toEqual(['node', 'reachability', 'proxy', 'fetch']);
+  }, 20000);
+  it('returns doctor help and rejects unknown flags', () => {
+    expect(runCli([...args, 'doctor', '--help'], { encoding: 'utf8', env }).stdout).toContain('gtfa doctor');
+    expect(runCli([...args, 'help', 'doctor'], { encoding: 'utf8', env }).stdout).toContain('gtfa doctor');
+    const bad = runCli([...args, 'doctor', '--bogus'], { encoding: 'utf8', env });
+    expect(bad.status).toBe(4);
+    expect(JSON.parse(bad.stdout).error.code).toBe('INVALID_INPUT');
+  });
   it('supports help and version offline', () => {
     expect((runCli([...args, '--help'], { encoding: 'utf8', env })).stdout).toContain('gtfa ask <term>');
     expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.1.0' });

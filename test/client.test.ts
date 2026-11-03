@@ -83,7 +83,7 @@ describe('offline client sessions', () => {
     const transport = vi.fn<Transport>().mockResolvedValue(response('', 429));
     const client = new TrendsClient({ transport, minIntervalMs: 0 });
     expect((await client.query({ queries: [] })).meta.upstreamRequests).toBe(0);
-    expect((await client.query({ queries: ['coffee'] })).error?.code).toBe('RATE_LIMITED');
+    expect((await client.query({ queries: ['coffee'], maxRetries: 0 })).error?.code).toBe('RATE_LIMITED');
   });
   it('preserves successful keywords when a later related widget is malformed', async () => {
     const f = fixtureTransport('explore-multi.txt');

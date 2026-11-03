@@ -1,7 +1,7 @@
 import { GTrendsError } from './core.js';
 import type { TrendsErrorCode } from './api.js';
 import { TRENDING_GEOS } from './geos.js';
-import { createDefaultTransport, RateLimiter, Session, type Transport, type RateLimitOptions } from './transport.js';
+import { createDefaultTransport, RateLimiter, Session, withRetry, type Transport, type RateLimitOptions } from './transport.js';
 
 export const TRENDING_CATEGORIES: Record<number, string> = {
   1: 'Autos and Vehicles', 2: 'Beauty and Fashion', 3: 'Business and Finance', 4: 'Entertainment',
@@ -21,7 +21,7 @@ export interface TrendingResponse {
   error?: { code: TrendsErrorCode; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number };
 }
-export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; stopOnBlocked?: boolean }
+export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; maxRetries?: number; stopOnBlocked?: boolean }
 export function trendingVolumeLabel(volume: number): string {
   return `${volume >= 1e6 ? `${volume / 1e6}M` : volume >= 1000 ? `${volume / 1000}K` : volume}+`;
 }
@@ -67,22 +67,24 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
       (input.lang !== undefined && (typeof input.lang !== 'string' || !/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]+)*$/.test(input.lang))) ||
       [input.minVolume, input.limit].some(n => n !== undefined && (!Number.isSafeInteger(n) || n < 0)) ||
       (input.categories !== undefined && (!Array.isArray(input.categories) || !input.categories.every(n => Number.isSafeInteger(n) && n > 0))) ||
-      (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0))) {
-      throw new GTrendsError('INVALID_INPUT', 'invalid geo, hours, language, filters, or timeout');
+      (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)) ||
+      (options.maxRetries !== undefined && (!Number.isSafeInteger(options.maxRetries) || options.maxRetries < 0 || options.maxRetries > 2))) {
+      throw new GTrendsError('INVALID_INPUT', 'invalid geo, hours, language, filters, retries, or timeout');
     }
     const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
     session = new Session(options.transport ?? createDefaultTransport(), limiter);
     const req = [[['i0OFE', JSON.stringify([null, null, result.geo, 0, input.lang ?? 'en', result.hours, 1]), null, 'generic']]];
-    const body = await session.request({ url: 'https://trends.google.com/_/TrendsUi/data/batchexecute', method: 'POST',
+    const body = await withRetry(() => session!.request({ url: 'https://trends.google.com/_/TrendsUi/data/batchexecute', method: 'POST',
       body: `f.req=${encodeURIComponent(JSON.stringify(req))}`, timeoutMs: options.timeoutMs ?? 8000,
-      headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'Mozilla/5.0', accept: '*/*' } });
+      headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'Mozilla/5.0', accept: '*/*' } }),
+    { maxRetries: options.maxRetries ?? 1, sleep: limiter.sleep });
     result.items = parseTrendingResponse(body).filter(item => item.volume >= (input.minVolume ?? 0) &&
       (!input.categories?.length || item.categoryIds.some(id => input.categories!.includes(id))));
     if (input.limit !== undefined) result.items = result.items.slice(0, input.limit);
     result.status = 'ok'; delete result.error;
   } catch (e) {
     result.error = e instanceof GTrendsError ? { code: e.code, message: e.message, ...(e.retryAfterSec !== undefined ? { retryAfterSec: e.retryAfterSec } : {}) } :
-      { code: e instanceof RangeError && !session ? 'INVALID_INPUT' : 'TRENDS_PROTOCOL_CHANGED', message: 'upstream response did not match the expected protocol' };
+      { code: e instanceof RangeError && !session ? 'INVALID_INPUT' : 'TRENDS_PROTOCOL_CHANGED', message: 'Google Trends returned an unexpected Trending Now response; the public endpoint may have changed. Retry later, and check for a newer gtfa if it persists.' };
   }
   result.meta = { upstreamRequests: session?.upstreamRequests ?? 0, durationMs: now() - start };
   result.fetchedAt = new Date(now()).toISOString();

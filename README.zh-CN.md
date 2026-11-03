@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-204%20passed-22c55e?style=flat-square" alt="204 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-220%20passed-22c55e?style=flat-square" alt="220 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -41,34 +41,37 @@
 </table>
 <p align="center"><sub>估算以 <code>gpts</code> 锚点 ≈ 550 次搜索/天校准；美国、近 7 天，标签使用 UTC，抓取于 2026-11-02 UTC。</sub></p>
 
-## 安装
+## 从 GitHub 安装（Install from GitHub）
 
-需要 Node.js 20+。
+需要 Node.js 20+。无需发布到 npm；`npx` 会从 git 检出构建。
 
 ```sh
-npm install -g github:meka-im/google-trends-for-agent
-gtfa --help
-gtfa-mcp   # stdio MCP 服务器
+# 固定版本（推荐）
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa --help
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa doctor
+
+# 最新 main
+npx -y github:meka-im/google-trends-for-agent gtfa --help
 ```
 
-该包安装两个命令：CLI 使用 `gtfa`，MCP 服务器使用 `gtfa-mcp`。
+全局安装使用同一 git 地址：`npm install -g github:meka-im/google-trends-for-agent#v0.1.0`。该包安装两个命令：CLI 使用 `gtfa`，MCP 服务器使用 `gtfa-mcp`。
 
 ## 快速开始
 
 一次快照，返回校准后的每日搜索量：
 
 ```sh
-npx gtfa snapshot Sora --geo US --json --pretty
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-MCP 服务器通过 stdio 运行。让客户端指向已发布的包：
+MCP 服务器通过 stdio 运行。让客户端指向 GitHub 包（建议固定 tag）：
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "--package", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+      "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"]
     }
   }
 }
@@ -93,6 +96,7 @@ MCP 服务器通过 stdio 运行。让客户端指向已发布的包：
 | `gtfa snapshot <term>` | 校准流量、相关查询、verdict 和 SVG 图表。 |
 | `gtfa compare <kw> <kw> [...]` | 1–5 个关键词的相对兴趣（也支持 `--query` 模式）。 |
 | `gtfa now` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
+| `gtfa doctor` | 检查 Node、Google Trends 可达性、代理，并执行一次 `gpts` 美国 24 小时抓取；`--json` 供机器读取。 |
 
 完整选项和示例见[参考文档](docs/reference.md#cli-surface)。
 
@@ -117,7 +121,7 @@ MCP 服务器通过 stdio 运行。让客户端指向已发布的包：
 
 ```sh
 npm install
-npm test          # 204 个测试
+npm test          # 220 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

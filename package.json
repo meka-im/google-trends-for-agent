@@ -21,6 +21,7 @@
   },
   "files": [
     "dist",
+    "AGENTS.md",
     "README.md",
     "README.zh-CN.md",
     "docs/mcp-api.md",
