@@ -1,0 +1,14 @@
+# Build TypeScript with dev dependencies, then keep only runtime dependencies.
+FROM apify/actor-node:20 AS builder
+COPY package.json package-lock.json tsconfig.json ./
+COPY src ./src
+RUN npm ci --include=dev --ignore-scripts --no-audit --no-fund \
+    && npm run build \
+    && npm prune --omit=dev --ignore-scripts
+
+FROM apify/actor-node:20
+COPY --from=builder /usr/src/app/package.json /usr/src/app/package-lock.json ./
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/dist ./dist
+ENV NODE_ENV=production
+CMD ["node", "dist/actor.js"]

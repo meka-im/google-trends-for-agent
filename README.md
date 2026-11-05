@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-220%20passed-22c55e?style=flat-square" alt="220 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-228%20passed-22c55e?style=flat-square" alt="228 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -64,7 +64,7 @@ One snapshot, calibrated searches/day:
 npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-The MCP server runs over stdio. Point a client at the GitHub package (pin the tag for reproducibility):
+The MCP server runs over stdio by default. Point a client at the GitHub package (pin the tag for reproducibility):
 
 ```json
 {
@@ -76,6 +76,45 @@ The MCP server runs over stdio. Point a client at the GitHub package (pin the ta
   }
 }
 ```
+
+For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`), add the optional flag:
+
+```sh
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
+# MCP endpoint: http://127.0.0.1:4321/mcp
+```
+
+## Deploy to Apify
+
+[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](https://console.apify.com/actors/new)
+
+The Actor runs this MCP server in **Standby mode** over **Streamable HTTP** and sends Google Trends requests through an **Apify Residential proxy in the US** by default. It is the remote path for agents that cannot run local processes or reach `localhost`.
+
+From this repository:
+
+```sh
+apify push
+```
+
+Then give the client the Standby URL and an Apify API token:
+
+```text
+https://<user>--google-trends-for-agent.apify.actor/mcp
+Authorization: Bearer APIFY_TOKEN
+```
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://<user>--google-trends-for-agent.apify.actor/mcp",
+      "headers": { "Authorization": "Bearer APIFY_TOKEN" }
+    }
+  }
+}
+```
+
+The Actor charges nothing. Apify Residential proxy traffic is billed per GB from your Apify credits at your plan's proxy rate; see the Apify Console for current pricing. Keep calls light: `trends_now` over many countries consumes more proxy traffic than a single `trends_ask`. Actor configuration and Store notes live in [`.actor/README.md`](.actor/README.md).
 
 ## MCP tools
 
@@ -121,7 +160,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 220 tests
+npm test          # 228 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

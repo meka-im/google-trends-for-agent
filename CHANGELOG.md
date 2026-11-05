@@ -15,3 +15,4 @@ Initial release.
 - `gtfa doctor` for Node, reachability, proxy, and live `gpts` US 24h checks; human PASS/FAIL lines or `--json`.
 - Install straight from GitHub with `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa`; no npm publish required.
 - Pluggable transport.
+- Optional local Streamable HTTP MCP endpoint via `gtfa-mcp --http --port 4321`, plus an Apify Standby Actor (`.actor/`) that serves `/mcp`, uses an Apify Residential proxy in the US by default, and rotates the proxy session on HTTP 429 or a Google challenge.

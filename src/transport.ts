@@ -34,6 +34,19 @@ export function describeProxy(env: NodeJS.ProcessEnv = process.env): string {
   return proxy.url ? `${proxy.source}=${redactProxyUrl(proxy.url)}` : 'direct (no HTTPS_PROXY/HTTP_PROXY)';
 }
 
+/** True when Google Trends returned its CAPTCHA / unusual-traffic challenge. */
+export function isChallengeResponse(res: Pick<TransportResponse, 'status' | 'headers' | 'body'>): boolean {
+  const headers = Object.fromEntries(Object.entries(res.headers).map(([k, v]) => [k.toLowerCase(), v]));
+  const looksJson = /^\s*(?:\)\]\}'[,]?\s*)?[{[]/.test(res.body);
+  return /\/sorry(?:\/|\b)/i.test(headers.location ?? '') ||
+    !looksJson && /captcha|unusual traffic|\/sorry(?:\/|\b)/i.test(res.body);
+}
+
+/** HTTP 429 from Google Trends. */
+export function isRateLimitResponse(res: Pick<TransportResponse, 'status'>): boolean {
+  return res.status === 429;
+}
+
 /** Uses global fetch directly, or HTTPS_PROXY/HTTP_PROXY when configured. Redirects are never followed. */
 export function createDefaultTransport(env: NodeJS.ProcessEnv = process.env): Transport {
   const proxy = getProxyConfig(env);
@@ -143,10 +156,8 @@ export class Session {
       for (const cookie of (headers['set-cookie'] ?? '').split(/\n|,(?=\s*[^;,=\s]+\s*=)/)) {
         if (cookie.trim()) await this.jar.setCookie(cookie.trim(), req.url, { ignoreError: true });
       }
-      const looksJson = /^\s*(?:\)\]\}'[,]?\s*)?[{[]/.test(res.body);
-      const blocked = /\/sorry(?:\/|\b)/i.test(headers.location ?? '') ||
-        !looksJson && /captcha|unusual traffic|\/sorry(?:\/|\b)/i.test(res.body);
-      if (blocked || res.status === 429) {
+      const blocked = isChallengeResponse(res);
+      if (blocked || isRateLimitResponse(res)) {
         const retry = headers['retry-after'];
         const delay = retry ? (/^\d+$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - this.limiter.now()) : 0;
         this.limiter.penalize(Number.isFinite(delay) ? delay : 0);

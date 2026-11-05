@@ -14,7 +14,7 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa --help
 npx -y github:meka-im/google-trends-for-agent gtfa --help
 ```
 
-The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (stdio MCP server). The first run may take longer while TypeScript builds; later runs use the npx cache. For a persistent install, use `npm install -g github:meka-im/google-trends-for-agent#v0.1.0`.
+The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The first run may take longer while TypeScript builds; later runs use the npx cache. For a persistent install, use `npm install -g github:meka-im/google-trends-for-agent#v0.1.0`.
 
 ## MCP client config
 
@@ -45,6 +45,22 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa doctor --json
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
 
 Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY` (preferred) or `HTTP_PROXY` to `http://host:port`; no other configuration is required. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most. On `BLOCKED`, stop and report—do not loop, rotate requests, or invent results.
+
+## Network egress: pick the right path
+
+Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
+
+1. **Your own machine IP (preferred).** Run the stdio server locally, or run `gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
+2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
+3. **Apify Residential proxy.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN`. The Actor sets `HTTPS_PROXY` from Apify Proxy and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits.
+
+| Agent environment | Egress it uses | Can it reach a local server? | Recommended path |
+| --- | --- | --- | --- |
+| dots cloud computer | OpenAI data-center IP | Yes, it can connect to the user's local computer | Local stdio or local HTTP, or the Apify URL when remote |
+| Muse | Meta cloud VM | No; remote HTTPS MCP only, no localhost | Apify Actor URL (`/mcp` + bearer token) |
+| Grok Bot | Shared box plus the user's registered computers | Yes, through the registered computers | Local stdio/HTTP on a registered computer, or the Apify URL for the shared box |
+
+Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most; on `BLOCKED`, stop and report.
 
 ## Tools and when to use them
 

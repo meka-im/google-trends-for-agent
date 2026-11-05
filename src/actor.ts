@@ -1,0 +1,85 @@
+import { Actor } from 'apify';
+import { createServer } from './mcp.js';
+import { startHttpMcpServer, resolveStandbyPort } from './http.js';
+import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
+import type { Transport } from './transport.js';
+
+interface ActorInput {
+  proxyConfiguration?: Record<string, unknown>;
+  anchor?: string;
+  geo?: string;
+}
+
+const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
+
+await Actor.init();
+
+try {
+  const input = (await Actor.getInput<ActorInput>()) ?? {};
+  const geo = text(input.geo, 'US');
+  const anchor = text(input.anchor, 'gpts');
+  const proxyInput = actorProxyInput(input.proxyConfiguration);
+  const hasApifyCredentials = Boolean(process.env.APIFY_PROXY_PASSWORD || process.env.APIFY_TOKEN);
+  const hasCustomProxy = Array.isArray(proxyInput.proxyUrls) && proxyInput.proxyUrls.length > 0;
+
+  let proxyTransport: Transport | undefined;
+  if (Actor.isAtHome() || hasApifyCredentials || hasCustomProxy) {
+    // Reuse the Actor SDK's proxy configuration and the existing HTTPS_PROXY path;
+    // only the URL (and later the session id) is new here.
+    const proxyConfiguration = await Actor.createProxyConfiguration(proxyInput as never);
+    if (proxyConfiguration) {
+      const session = new ApifyProxySession(proxyConfiguration);
+      const url = await session.rotate();
+      if (url) {
+        proxyTransport = createRotatingTransport(session, {
+          onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : 'a Google challenge'}.`),
+          onError: error => console.error(`Proxy rotation failed; keeping the current egress. ${error instanceof Error ? error.message : String(error)}`),
+        });
+        console.log('Egress: Apify proxy (rotates on HTTP 429 or a Google challenge).');
+      } else if (Actor.isAtHome()) {
+        throw new Error('Apify proxy returned no URL. Check that the selected proxy group and country are available to this account.');
+      } else {
+        console.warn('Apify proxy is unavailable locally; continuing with direct egress.');
+      }
+    } else {
+      console.log('Egress: direct (proxy disabled in Actor input).');
+    }
+  } else {
+    console.log('Egress: direct (no Apify proxy credentials outside the Apify platform).');
+  }
+
+  const snapshotDir = process.env.GTFA_SNAPSHOT_DIR || '/tmp/gtfa/snapshots';
+  const chartDir = process.env.GTFA_CHART_DIR || '/tmp/gtfa/charts';
+  const port = resolveStandbyPort();
+
+  const http = await startHttpMcpServer({
+    port,
+    host: '0.0.0.0',
+    path: '/mcp',
+    log: message => console.log(message),
+    createMcpServer: () => createServer({
+      defaultGeo: geo,
+      defaultAnchor: anchor,
+      snapshotDir,
+      chartDir,
+      ...(proxyTransport ? { transport: proxyTransport } : {}),
+    }),
+  });
+
+  // Never charge: this Actor only proxies MCP requests and has no PPE events.
+  console.log(`Standby MCP ready on port ${http.port} at /mcp (geo=${geo}, anchor=${anchor}).`);
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal}; shutting down.`);
+    await http.close();
+    await Actor.exit();
+  };
+  process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+  process.once('SIGINT', () => { void shutdown('SIGINT'); });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : 'Actor failed to start');
+  await Actor.exit({ exitCode: 1 });
+}

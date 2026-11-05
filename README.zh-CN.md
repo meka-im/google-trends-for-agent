@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-220%20passed-22c55e?style=flat-square" alt="220 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-228%20passed-22c55e?style=flat-square" alt="228 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -64,7 +64,7 @@ npx -y github:meka-im/google-trends-for-agent gtfa --help
 npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-MCP 服务器通过 stdio 运行。让客户端指向 GitHub 包（建议固定 tag）：
+MCP 服务器默认通过 stdio 运行。让客户端指向 GitHub 包（建议固定 tag）：
 
 ```json
 {
@@ -76,6 +76,45 @@ MCP 服务器通过 stdio 运行。让客户端指向 GitHub 包（建议固定 
   }
 }
 ```
+
+如需本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`），加上可选参数：
+
+```sh
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
+# MCP 端点：http://127.0.0.1:4321/mcp
+```
+
+## 部署到 Apify（Deploy to Apify）
+
+[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](https://console.apify.com/actors/new)
+
+该 Actor 以 **Standby 模式**通过 **Streamable HTTP** 运行同一个 MCP 服务器，并默认通过**美国 Apify 住宅代理**访问 Google Trends。它是无法运行本地进程、也无法访问 `localhost` 的远程 Agent 的接入方式。
+
+在本仓库执行：
+
+```sh
+apify push
+```
+
+然后把 Standby URL 和 Apify API Token 交给客户端：
+
+```text
+https://<user>--google-trends-for-agent.apify.actor/mcp
+Authorization: Bearer APIFY_TOKEN
+```
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://<user>--google-trends-for-agent.apify.actor/mcp",
+      "headers": { "Authorization": "Bearer APIFY_TOKEN" }
+    }
+  }
+}
+```
+
+Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除，费率以你的套餐和 Apify 控制台为准。请保持轻量调用：`trends_now` 查询多个国家比单次 `trends_ask` 消耗更多代理流量。Actor 配置和商店说明见 [`.actor/README.md`](.actor/README.md)。
 
 ## MCP 工具
 
@@ -121,7 +160,7 @@ MCP 服务器通过 stdio 运行。让客户端指向 GitHub 包（建议固定 
 
 ```sh
 npm install
-npm test          # 220 个测试
+npm test          # 228 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

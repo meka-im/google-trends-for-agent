@@ -34,12 +34,14 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
+    "start": "node dist/actor.js",
     "typecheck": "tsc --noEmit",
     "trends": "tsx src/cli.ts",
     "prepare": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "apify": "^3.7.2",
     "tough-cookie": "^6.0.2",
     "undici": "^6.21.0",
     "zod": "^4.6.7"

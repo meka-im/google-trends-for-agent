@@ -122,11 +122,17 @@ export interface ServerOptions extends ClientOptions {
   chartDir?: string | null;
   /** Optional calibration overrides; the built-in US gpts default is always available. */
   baselines?: Baselines;
+  /** Default geo for trends_ask/trends_compare/trends_snapshot (default US). */
+  defaultGeo?: string;
+  /** Default anchor for validate/trends_snapshot (default gpts). */
+  defaultAnchor?: string;
 }
 /** Creates an unconnected server. options.transport injects HTTP, not MCP, transport. */
 export function createServer(options: ServerOptions = {}): McpServer {
   const transport = options.transport ?? createDefaultTransport();
   const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
+  const defaultGeo = options.defaultGeo?.trim() || DEFAULTS.geo;
+  const defaultAnchor = options.defaultAnchor?.trim() || 'gpts';
   const shared = { ...options, transport, limiter };
   const client = new TrendsClient(shared);
   const storeFor = () => new SnapshotStore(options.snapshotDir);
@@ -137,11 +143,11 @@ export function createServer(options: ServerOptions = {}): McpServer {
     const result = schemaRejectionEnvelope(message);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result, isError: true };
   };
-  server.registerTool('trends_ask', { description: 'Ask about one term. ' + ASK_DOC + guidance, inputSchema: { term: z.string().trim().min(1).max(100), geo: z.string().default(DEFAULTS.geo), time: time.default(DEFAULTS.time), fresh: z.boolean().default(false), validate: z.boolean().default(false), points: z.boolean().default(false) } }, async ({ term, geo, time, fresh, validate, points }) => {
+  server.registerTool('trends_ask', { description: 'Ask about one term. ' + ASK_DOC + guidance, inputSchema: { term: z.string().trim().min(1).max(100), geo: z.string().default(defaultGeo), time: time.default(DEFAULTS.time), fresh: z.boolean().default(false), validate: z.boolean().default(false), points: z.boolean().default(false) } }, async ({ term, geo, time, fresh, validate, points }) => {
     const store = storeFor(), filter = { geo, time, category: DEFAULTS.category, property: DEFAULTS.property };
     let snap: TermSnapshot, cached = false, ageMin = 0, verdict: Record<string, unknown> | undefined, validationWarnings: string[] = [];
     if (validate) {
-      const [v] = await validateTerms([term], { filter, store, refresh: fresh ? 'always' : undefined, query, trendingFetch: input => fetchTrending(input, shared) });
+      const [v] = await validateTerms([term], { filter, store, refresh: fresh ? 'always' : undefined, query, anchor: defaultAnchor, trendingFetch: input => fetchTrending(input, shared) });
       snap = (await store.history(term, filter, 1))[0];
       cached = v.source === 'cache'; ageMin = Math.max(0, (Date.now() - Date.parse(v.fetchedAt)) / 60000);
       verdict = verdictEnvelope(v);
@@ -155,7 +161,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
     const diff = rows.length < 2 ? null : diffSnapshots(rows[1], rows[0]);
     return response(blockedVerdict(askEnvelope(snap, { cached, ageMin, verdict, diff, ...(diff ? {} : { diffReason: 'Need two snapshots' }), includePoints: points, ...(validationWarnings.length ? { warnings: validationWarnings } : {}) })));
   });
-  server.registerTool('trends_snapshot', { description: 'Calibrated searches/day snapshot for one term against a shared-scale anchor. ' + SNAPSHOT_DOC + guidance, inputSchema: { term: z.string().trim().min(1).max(100), geo: z.string().default(DEFAULTS.geo), time: time.default(DEFAULTS.time), anchor: z.string().trim().min(1).max(100).default('gpts'), fresh: z.boolean().default(false), svg: z.boolean().default(false), tz: z.string().trim().min(1).max(100).optional() } }, async ({ term, geo, time, anchor, fresh, svg, tz }) => {
+  server.registerTool('trends_snapshot', { description: 'Calibrated searches/day snapshot for one term against a shared-scale anchor. ' + SNAPSHOT_DOC + guidance, inputSchema: { term: z.string().trim().min(1).max(100), geo: z.string().default(defaultGeo), time: time.default(DEFAULTS.time), anchor: z.string().trim().min(1).max(100).default(defaultAnchor), fresh: z.boolean().default(false), svg: z.boolean().default(false), tz: z.string().trim().min(1).max(100).optional() } }, async ({ term, geo, time, anchor, fresh, svg, tz }) => {
     const store = storeFor(), filter = { geo, time, category: DEFAULTS.category, property: DEFAULTS.property };
     try {
       const a = await fetchTrafficSnapshot(term, { filter, store, anchor, refresh: fresh ? 'always' : undefined, query, timeZone: tz });
@@ -164,7 +170,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
       return response(trafficSnapshotError(term, e instanceof Error ? e.message : String(e), filter));
     }
   });
-  server.registerTool('trends_compare', { description: 'Compare relative search interest for 2–5 keywords (e.g. a candidate against an anchor). ' + COMPARE_DOC + guidance, inputSchema: { keywords: z.array(z.string().trim().min(1).max(100)).min(2).max(5), geo: z.string().default(DEFAULTS.geo), time: time.default(DEFAULTS.time) } }, async ({ keywords, geo, time }) => {
+  server.registerTool('trends_compare', { description: 'Compare relative search interest for 2–5 keywords (e.g. a candidate against an anchor). ' + COMPARE_DOC + guidance, inputSchema: { keywords: z.array(z.string().trim().min(1).max(100)).min(2).max(5), geo: z.string().default(defaultGeo), time: time.default(DEFAULTS.time) } }, async ({ keywords, geo, time }) => {
     const seen = new Set<string>(), dup = keywords.find(k => { const n = k.trim().toLowerCase().replace(/\s+/g, ' '); return seen.has(n) || !seen.add(n); });
     if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo, time }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
     const r = await compareTrends(keywords, { geo, timeRange: time, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client } as never);

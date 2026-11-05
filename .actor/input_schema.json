@@ -1,0 +1,32 @@
+{
+  "title": "Google Trends MCP",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "proxyConfiguration": {
+      "title": "Proxy configuration",
+      "type": "object",
+      "description": "Egress for Google Trends requests. The default is Apify Residential proxy in the US; residential traffic is billed per GB from your Apify credits.",
+      "editor": "proxy",
+      "prefill": {
+        "useApifyProxy": true,
+        "apifyProxyGroups": ["RESIDENTIAL"],
+        "apifyProxyCountry": "US"
+      }
+    },
+    "anchor": {
+      "title": "Calibration anchor",
+      "type": "string",
+      "description": "Anchor term used for calibrated searches/day estimates. The built-in US baseline is gpts.",
+      "editor": "textfield",
+      "default": "gpts"
+    },
+    "geo": {
+      "title": "Default country",
+      "type": "string",
+      "description": "Default Google Trends country (ISO 3166-1 alpha-2) when a tool call omits geo.",
+      "editor": "textfield",
+      "default": "US"
+    }
+  }
+}
