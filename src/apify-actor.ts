@@ -219,8 +219,9 @@ export class ApifyActorClient {
       },
     });
     if (!created.ok) {
-      if (created.status === 400 && /already exists|name\b.*\bexists|exists\b/i.test(created.message)) {
-        return { ok: false, code: 'exists', status: 400, message: 'An Actor with this name already exists. Refresh the list and select it.' };
+      // Apify answers 409 `actor-name-not-unique` ("Some other Actor already has this name").
+      if (created.status === 409 || (created.status === 400 && /already has this name|not unique|already exists/i.test(created.message))) {
+        return { ok: false, code: 'exists', status: created.status ?? 409, message: 'An Actor with this name already exists. Refresh the list and select it.' };
       }
       return created;
     }

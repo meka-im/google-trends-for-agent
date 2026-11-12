@@ -185,7 +185,7 @@ describe('Apify Actor client', () => {
   });
 
   it('maps a name conflict to exists and never leaks the token', async () => {
-    const fetchMock = vi.fn(async () => json({ error: { message: `Actor named google-trends-for-agent already exists (${TOKEN})` } }, 400));
+    const fetchMock = vi.fn(async () => json({ error: { type: 'actor-name-not-unique', message: `Some other Actor already has this name ("google-trends-for-agent"). ${TOKEN}` } }, 409));
     const client = new ApifyActorClient({ fetch: fetchMock as unknown as typeof fetch });
     const result = await client.deployActor(TOKEN);
     expect(result).toMatchObject({ ok: false, code: 'exists' });

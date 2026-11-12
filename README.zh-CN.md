@@ -96,11 +96,11 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 可配置出口（`local` 或 `apify`）、Apify Token、你的 Actor、默认地区、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。选择 Apify 后，设置页会显示本计费周期的用量（套餐、美元、住宅流量）、Token 输入框和带最新构建状态的 **Actor** 下拉框。**测试连接**通过已保存的出口发出一次请求；用量、Actor 列表、部署和测试都在 Host 运行，浏览器看不到 Token。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
 
-`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 会把每个请求发到**你自己 Apify 账号**里的 `google-trends-for-agent` Actor 的 `/egress/fetch`；Actor 用平台内住宅代理执行请求，并在 HTTP 429 或 Google 验证页时轮换会话。代理在 Actor 内使用，所以免费版也可以工作。Apify 住宅流量按 GB 从你的 Apify 额度中扣除。
+`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 会把每个请求发到**你自己 Apify 账号**里的 `google-trends-for-agent` Actor 的 `/egress/fetch`；Actor 用平台内住宅代理执行请求，并在 HTTP 429 或 Google 验证页时轮换会话。代理在 Actor 内使用，所以免费版也可以工作。Apify 住宅流量按 GB 从你的 Apify 额度中扣除。实测估算：单次独立的 `trends_ask` 约 $0.0025（约 65 KB 住宅流量加一次短时 512 MB 运行），免费版每月 $5 约够 2,000 次；同一次运行内的连续调用更便宜。
 
 先部署一次 Actor，然后在下拉框里选中它：
 
-- **一键**：在 **Plugins → Google Trends → Configure → Apify** 中点击 **部署到我的 Apify 账号 →**。等待**构建中…（约 2–4 分钟）**和 `succeeded` 状态，新 Actor 会自动选中。
+- **一键**：在 **Plugins → Google Trends → Configure → Apify** 中点击 **部署到我的 Apify 账号 →**。等待**构建中…（约 1–2 分钟）**和 `succeeded` 状态，新 Actor 会自动选中。
 - **手动**：Apify Console → Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**；或克隆仓库后运行 `apify push`。
 
 如果 `apify` 出口没有选择 Actor，工具会返回明确的 `INVALID_INPUT` 错误，而不会调用 Google。

@@ -106,8 +106,9 @@ function json(data: unknown, status = 200): Response {
 
 /**
  * One reachability check for the saved egress: one target request per call.
- * The apify check relays `GET https://trends.google.com/trends/` through the
- * selected Actor, so it exercises the same path the tools use.
+ * It sends `HEAD https://trends.google.com/trends/` (no page body, so almost no
+ * residential traffic); apify relays it through the selected Actor, the same
+ * path the tools use.
  */
 export async function testConnection(options: {
   egress: EgressMode;
@@ -128,7 +129,7 @@ export async function testConnection(options: {
     try {
       const response = await raceAbort(transport({
         url: TRENDS_URL,
-        method: 'GET',
+        method: 'HEAD',
         headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0' },
         timeoutMs,
         ...(options.signal ? { signal: options.signal } : {}),
@@ -171,7 +172,7 @@ export async function testConnection(options: {
   try {
     const response = await raceAbort(transport({
       url: TRENDS_URL,
-      method: 'GET',
+      method: 'HEAD',
       headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0' },
       timeoutMs,
       ...(options.signal ? { signal: options.signal } : {}),

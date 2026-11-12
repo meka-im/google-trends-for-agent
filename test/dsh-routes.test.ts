@@ -253,7 +253,7 @@ describe('dsh host routes', () => {
     const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
     expect(await response.json()).toMatchObject({ ok: true, egress: 'local', status: 200, latencyMs: 0 });
     expect(transport).toHaveBeenCalledTimes(1);
-    expect(transport.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'GET' });
+    expect(transport.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'HEAD' });
   });
 
   it('tests apify egress with exactly one relay call through the saved Actor', async () => {
@@ -273,7 +273,7 @@ describe('dsh host routes', () => {
     });
     expect(seen).toEqual({ token: TOKEN, actorId: ACTOR });
     expect(target).toHaveBeenCalledTimes(1);
-    expect(target.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'GET' });
+    expect(target.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'HEAD' });
   });
 
   it('maps apify test-connection codes: no-token, no-actor, invalid-token, network, http', async () => {

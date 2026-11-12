@@ -24,10 +24,11 @@ export const APIFY_SIGNUP_URL = 'https://console.apify.com/sign-up';
 export const APIFY_PRICING_URL = 'https://apify.com/pricing';
 export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
 /**
- * Placeholder estimate for one tool call made through the Actor; re-measure
- * before publishing the number (everything else in the UI reads this value).
+ * Estimated cost of one isolated `trends_ask` through the Actor, measured on
+ * build 0.1.7 (Nov 2026): ~65 KB residential ($8/GB) plus a 512 MB Standby run
+ * that exits after 60 s idle ($0.2/CU). Calls in a warm run cost less.
  */
-export const APIFY_EST_COST_PER_CALL_USD = 0.0011;
+export const APIFY_EST_COST_PER_CALL_USD = 0.0025;
 
 /** Rough monthly call allowance: floor(credit / cost) rounded down to the nearest 100. */
 export function apifyEstimatedCalls(
