@@ -47,17 +47,33 @@ describe('dsh Config schema', () => {
     expect(schema.dict.egress.meta.default).toBe('local');
     expect(schema.dict.apifyToken.meta.role).toBe('secret');
     expect(schema.dict.apifyToken.meta.default).toBeUndefined();
-    expect(schema.dict.apifyProxyGroups.meta.default).toEqual(['RESIDENTIAL']);
+    expect(schema.dict.apifyProxyGroup.meta.default).toBe('RESIDENTIAL');
     expect(schema.dict.apifyProxyCountry.meta.default).toBe('US');
     expect(schema.dict.geo.meta.default).toBe('US');
     expect(schema.dict.cache.meta.default).toBe(true);
     expect(values.egress.get()).toBe('local');
-    expect(values.apifyProxyGroups.get()).toEqual(['RESIDENTIAL']);
+    expect(values.apifyProxyGroup.get()).toBe('RESIDENTIAL');
+    expect(values.apifyProxyCountry.get()).toBe('US');
+    expect(values.geo.get()).toBe('US');
     expect(values.cache.get()).toBe(true);
   });
 
   it('rejects an unsupported egress value', () => {
     expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "apify"/);
+  });
+
+  it('accepts only the shared proxy modes and curated countries', () => {
+    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'auto' }) as never).apifyProxyGroup).toBe('auto');
+    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'residential' }) as never).apifyProxyGroup).toBe('RESIDENTIAL');
+    expect(() => Config!({ apifyProxyGroup: 'GOOGLE_SERP' } as never)).toThrow(/apifyProxyGroup/);
+    expect(resolveGtfaSettings(Config!({ apifyProxyCountry: 'gb' }) as never).apifyProxyCountry).toBe('GB');
+    expect(() => Config!({ apifyProxyCountry: 'XX' })).toThrow(/apifyProxyCountry/);
+  });
+
+  it('accepts Worldwide (empty geo) and rejects unknown geos', () => {
+    expect(resolveGtfaSettings(Config!({ geo: '' }) as never).geo).toBe('');
+    expect(resolveGtfaSettings(Config!({ geo: 'gb' }) as never).geo).toBe('GB');
+    expect(() => Config!({ geo: 'ZZ' })).toThrow(/geo must be empty/);
   });
 
   it('validates inline baselines with the shared traffic rules', () => {
@@ -87,7 +103,7 @@ describe('dsh Config schema', () => {
   it('unwraps volatile values into runtime defaults', () => {
     expect(resolveGtfaSettings(Config!({}) as never)).toEqual({
       egress: 'local',
-      apifyProxyGroups: ['RESIDENTIAL'],
+      apifyProxyGroup: 'RESIDENTIAL',
       apifyProxyCountry: 'US',
       geo: 'US',
       cache: true,
@@ -122,6 +138,13 @@ describe('dsh Config schema', () => {
     const otherGeo = await ask.execute({ term: 'bitcoin' });
     expect((otherGeo.filter as { geo: string }).geo).toBe('GB');
     expect(explores).toBe(3); // a different geo has no cached snapshot
+    settings = { cache: false, defaultGeo: '' };
+    const worldwide = await ask.execute({ term: 'bitcoin' });
+    expect((worldwide.filter as { geo: string }).geo).toBe('');
+    expect(explores).toBe(4);
+    const explicitWorldwide = await ask.execute({ term: 'bitcoin', geo: '' });
+    expect((explicitWorldwide.filter as { geo: string }).geo).toBe('');
+    expect(explores).toBe(5);
   });
 });
 
@@ -137,11 +160,13 @@ describe('Apify token resolution', () => {
     expect(resolveApifyCredentials()).toEqual({});
   });
 
-  it('builds the proxy URL from configured groups', async () => {
-    const provider = new ApifyProxyUrlProvider({ proxyPassword: 'secret', groups: ['RESIDENTIAL', 'DATACENTER'], country: 'gb' });
-    expect(await provider.newUrl('s1')).toBe('http://groups-RESIDENTIAL+DATACENTER,session-s1,country-GB:secret@proxy.apify.com:8000');
-    await expect(new ApifyProxyUrlProvider({ proxyPassword: 'secret', groups: ['bad group'] }).newUrl())
-      .rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  it('builds the proxy URL for residential and automatic datacenter modes', async () => {
+    const residential = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'RESIDENTIAL', country: 'gb' });
+    expect(await residential.newUrl('s1')).toBe('http://groups-RESIDENTIAL,session-s1,country-GB:secret@proxy.apify.com:8000');
+    const automatic = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto', country: 'us' });
+    expect(await automatic.newUrl('s2')).toBe('http://auto,session-s2,country-US:secret@proxy.apify.com:8000');
+    expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto' }).newUrl())
+      .toBe('http://auto,country-US:secret@proxy.apify.com:8000');
   });
 
   it('never puts the configured token in a tool envelope or an error message', async () => {

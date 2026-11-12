@@ -41,6 +41,7 @@ const mean = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 export async function validateTerms(input: (string | LeadInput)[], opts: ValidateOptions = {}): Promise<TermVerdict[]> {
   if (opts.concurrency !== undefined && opts.concurrency !== 1) throw new Error('validation concurrency must be 1');
   const filter = resolveFilter(opts.filter), store = opts.store ?? new SnapshotStore(), query = opts.query ?? queryTrends;
+  const geoLabel = filter.geo || 'Worldwide';
   const anchorTerm = opts.anchor === false ? '' : opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
   const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
   const daily = calibration ? anchorDailySearches(calibration) : null;
@@ -66,7 +67,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     else reasons.push('Insufficient sustained rise or declining interest');
     const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'none', dailySearches: daily === null ? null : Math.round(daily), ratio: null, band: null, traffic: nullTraffic(), note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
     if (anchorTerm && verdict !== 'blocked' && verdict !== 'no_data' && !blocked) pending.push({ term, anchor });
-    if (!anchor.traffic.average && filter.geo !== 'US') anchor.note = `无法估 (no calibration for geo ${filter.geo})`;
+    if (!anchor.traffic.average && filter.geo !== 'US') anchor.note = `无法估 (no calibration for geo ${geoLabel})`;
     const match = trending?.items.find(i => i.title.toLowerCase().includes(term.toLowerCase()) || i.query.toLowerCase().includes(term.toLowerCase()));
     const row: TermVerdict = { term, input: lead, filter, verdict, ...(spike && verdict === 'spiking' ? { freshSpike: spike } : {}), confidence: verdict === 'spiking' ? 'mid' : verdict === 'blocked' || verdict === 'no_data' || values.length < 4 ? 'low' : values.length >= 12 ? 'high' : 'mid', reasons,
       interest: { ...s.interest, points: interest.points, latest: interest.latest, peak: interest.peak, settledLatest: interest.settledLatest }, popular: s.popular.slice(0, 5), rising: s.rising.slice(0, 5), regions: s.regions.slice(0, 5), anchor, ...(match ? { trendingNow: match } : {}), ...(retryAfterSec !== undefined ? { retryAfterSec } : {}),
@@ -99,7 +100,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
       anchor.ratio = c.ratio;
       anchor.band = c.ratio === null ? null : c.ratio >= 1 ? 'high' : c.ratio >= .1 ? 'mid' : 'low';
       anchor.traffic = c.traffic;
-      anchor.note = daily === null ? `无法估 (no calibration for geo ${filter.geo}); traffic fields are null` : c.note;
+      anchor.note = daily === null ? `无法估 (no calibration for geo ${geoLabel}); traffic fields are null` : c.note;
       if (c.warning) anchor.warning = c.warning;
       else delete anchor.warning;
     });

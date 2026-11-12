@@ -117,8 +117,9 @@ export function calibrateTraffic(termPoints: readonly CalibrationPoint[], anchor
     gapCount,
   };
   const warning = weakAnchor ? ANCHOR_WEAK_WARNING : undefined;
+  const geoLabel = opts.filter.geo || 'Worldwide';
   const note = daily === null
-    ? `No calibration for geo ${opts.filter.geo}; traffic fields are null`
+    ? `No calibration for geo ${geoLabel}; traffic fields are null`
     : weakAnchor
       ? `${ANCHOR_WEAK_WARNING} (${anchorNonzeroCount}/${anchorSampleCount} non-gap anchor points nonzero, level ${round2(anchorLevel)})`
       : anchorUsable

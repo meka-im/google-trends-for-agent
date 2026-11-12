@@ -208,9 +208,10 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const weekSnap = snap.filter.time === 'now 7-d' ? snap : opts.week;
   const week = weekSnap ? (weekSnap === snap ? primary : calibrate(weekSnap, chartOptions)) : undefined;
   const filter = snap.filter, anchorTerm = primary.anchorTerm, traffic = primary.traffic;
+  const geoLabel = filter.geo || 'Worldwide';
   const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter.geo, opts.baselines);
   if (primary.gapCount) warnings.push(`${primary.gapCount} low-sample gap point${primary.gapCount === 1 ? '' : 's'} in interest series (zero values between nonzero points) excluded from aggregates and verdict`);
-  if (primary.daily === null) warnings.push(`No anchor calibration for geo ${filter.geo}; traffic fields are null`);
+  if (primary.daily === null) warnings.push(`No anchor calibration for geo ${geoLabel}; traffic fields are null`);
   else if (primary.warning) warnings.push(primary.warning);
   if (snap.warnings?.length) warnings.push(...snap.warnings);
   if (weekSnap && weekSnap !== snap) {

@@ -1,6 +1,7 @@
 import { GTrendsError } from './core.js';
 import { ApifyProxySession, createRotatingTransport, type ProxyUrlProvider } from './actor-proxy.js';
 import { createDefaultTransport, type Transport } from './transport.js';
+import { DEFAULT_APIFY_PROXY_GROUP, normalizeApifyProxyGroup, type ApifyProxyGroup } from './options.js';
 
 export type EgressMode = 'local' | 'apify';
 
@@ -9,8 +10,8 @@ export interface ApifyProxyUrlProviderOptions {
   token?: string;
   /** Apify Proxy password; defaults to APIFY_PROXY_PASSWORD. */
   proxyPassword?: string;
-  /** Apify proxy groups (default RESIDENTIAL). */
-  groups?: readonly string[];
+  /** Apify proxy mode: RESIDENTIAL (default) or auto for automatic datacenter selection. */
+  group?: ApifyProxyGroup;
   /** Residential proxy country; defaults to US. */
   country?: string;
   /** Fetch implementation used for the one-time password lookup. */
@@ -18,7 +19,6 @@ export interface ApifyProxyUrlProviderOptions {
 }
 
 const APIFY_PROXY_HOST = 'proxy.apify.com:8000';
-const APIFY_PROXY_GROUPS = ['RESIDENTIAL'] as const;
 const APIFY_ME_URL = 'https://api.apify.com/v2/users/me';
 
 /** Resolve Apify credentials in order: config token, APIFY_TOKEN, APIFY_PROXY_PASSWORD. */
@@ -29,16 +29,10 @@ export function resolveApifyCredentials(options: { token?: string; proxyPassword
   return proxyPassword ? { proxyPassword } : {};
 }
 
-/** Normalize configured Apify proxy groups into the URL's `groups-...` segment. */
-export function apifyProxyGroups(groups?: readonly string[]): string {
-  const cleaned = (groups ?? APIFY_PROXY_GROUPS)
-    .map(group => group.trim().toUpperCase())
-    .filter(Boolean);
-  const unique = [...new Set(cleaned.length ? cleaned : APIFY_PROXY_GROUPS)];
-  for (const group of unique) {
-    if (!/^[A-Z0-9_]+$/.test(group)) throw new GTrendsError('INVALID_INPUT', `Invalid Apify proxy group "${group}"; use letters, digits, or underscores`);
-  }
-  return unique.join('+');
+/** Apify proxy username: `groups-RESIDENTIAL`, or `auto` for automatic datacenter selection. */
+export function apifyProxyUsername(group?: ApifyProxyGroup): string {
+  const normalized = normalizeApifyProxyGroup(group ?? DEFAULT_APIFY_PROXY_GROUP);
+  return normalized === 'auto' ? 'auto' : `groups-${normalized}`;
 }
 
 /** Build the Apify proxy URL without touching process.env. */
@@ -100,7 +94,7 @@ export class ApifyProxyUrlProvider implements ProxyUrlProvider {
     const session = sessionId === undefined || sessionId === null || String(sessionId).trim() === ''
       ? ''
       : `,session-${encodeURIComponent(String(sessionId).trim())}`;
-    return `http://groups-${apifyProxyGroups(this.options.groups)}${session},country-${encodeURIComponent(country)}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
+    return `http://${apifyProxyUsername(this.options.group)}${session},country-${encodeURIComponent(country)}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
   }
 }
 
@@ -111,8 +105,8 @@ export interface EgressOptions {
   apifyToken?: string;
   /** Apify Proxy password; defaults to APIFY_PROXY_PASSWORD. */
   apifyProxyPassword?: string;
-  /** Apify proxy groups (default RESIDENTIAL). */
-  apifyProxyGroups?: readonly string[];
+  /** Apify proxy mode: RESIDENTIAL (default) or auto for automatic datacenter selection. */
+  apifyProxyGroup?: ApifyProxyGroup;
   /** Residential proxy country; defaults to US. */
   apifyProxyCountry?: string;
   /** Fetch implementation used for the one-time password lookup. */
@@ -136,7 +130,7 @@ export function createEgressTransport(options: EgressOptions = {}): Transport {
   const provider = new ApifyProxyUrlProvider({
     token: options.apifyToken,
     proxyPassword: options.apifyProxyPassword,
-    groups: options.apifyProxyGroups,
+    group: options.apifyProxyGroup,
     country: options.apifyProxyCountry,
     fetch: options.fetch,
   });

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { BUILTIN_ANCHOR_TERMS } from './options.js';
 
 export interface Anchor { term: string; dailySearches?: number; tolerance?: number; geo: string }
 /** Optional per-window overrides; short = now 1-H / now 4-H / now 1-d, long = everything else. */
@@ -15,8 +16,8 @@ const DEFAULTS = { short: 'sudoku', long: 'gpts' } as const;
  * sudoku ≈63,000/day is the same ruler measured through the 7-day sudoku/gpts ratio.
  */
 export const BUILTIN_ANCHORS: readonly Anchor[] = [
-  { term: 'gpts', dailySearches: 3500, geo: 'US', tolerance: 0.5 },
-  { term: 'sudoku', dailySearches: 63000, geo: 'US', tolerance: 0.5 },
+  { term: BUILTIN_ANCHOR_TERMS[0], dailySearches: 3500, geo: 'US', tolerance: 0.5 },
+  { term: BUILTIN_ANCHOR_TERMS[1], dailySearches: 63000, geo: 'US', tolerance: 0.5 },
 ];
 
 function invalid(message: string): never { throw new Error(`Invalid baselines: ${message}`); }

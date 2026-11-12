@@ -14,11 +14,28 @@ function proxyPasswordResponse(password = 'proxy-pass') {
 }
 
 describe('Apify egress transport', () => {
-  it('builds the documented residential proxy URL', async () => {
+  it('builds the documented residential and automatic datacenter proxy URLs', async () => {
     const provider = new ApifyProxyUrlProvider({ proxyPassword: 'secret', country: 'US' });
     expect(await provider.newUrl('s1')).toBe('http://groups-RESIDENTIAL,session-s1,country-US:secret@proxy.apify.com:8000');
     expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', country: 'gb' }).newUrl('s2'))
       .toBe('http://groups-RESIDENTIAL,session-s2,country-GB:secret@proxy.apify.com:8000');
+    expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto', country: 'gb' }).newUrl('s3'))
+      .toBe('http://auto,session-s3,country-GB:secret@proxy.apify.com:8000');
+    expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto' }).newUrl())
+      .toBe('http://auto,country-US:secret@proxy.apify.com:8000');
+  });
+
+  it('uses auto for the datacenter URL and keeps session/country params', async () => {
+    const fetchMock = vi.fn(async () => proxyPasswordResponse('pw'));
+    const urls: string[] = [];
+    const egress = createEgressTransport({
+      egress: 'apify', apifyToken: 'token', apifyProxyGroup: 'auto', apifyProxyCountry: 'GB',
+      fetch: fetchMock as unknown as typeof fetch,
+      sessionId: counter => `sess_${counter}`,
+      createTransport: url => { urls.push(url); return async () => ({ status: 200, headers: {}, body: 'ok' }); },
+    });
+    expect((await egress(request)).status).toBe(200);
+    expect(urls).toEqual(['http://auto,session-sess_1,country-GB:pw@proxy.apify.com:8000']);
   });
 
   it('fetches data.proxy.password once with the API token and never logs it', async () => {

@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
 import { loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
+import {
+  DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY,
+  normalizeApifyProxyGroup, normalizeGeo, normalizeProxyCountry, type ApifyProxyGroup,
+} from './options.js';
 import { throwIfAborted, type Transport } from './transport.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
@@ -23,8 +27,8 @@ export interface GtfaConfig {
   egress?: EgressMode;
   /** Apify API token; saved in the profile's cordis.patch.yml and hidden from reads. */
   apifyToken?: string;
-  /** Apify proxy groups used by `apify` egress (default RESIDENTIAL). */
-  apifyProxyGroups?: readonly string[];
+  /** Apify proxy mode used by `apify` egress (default RESIDENTIAL). */
+  apifyProxyGroup?: ApifyProxyGroup;
   /** Apify proxy country for apify egress (default US). */
   apifyProxyCountry?: string;
   /** Snapshot directory, resolved against the dsh process working directory. */
@@ -75,12 +79,15 @@ function createConfig(Schema: SchemaFactory) {
       .description('local sends Google requests from the dsh machine; apify uses the Apify proxy.').volatile(),
     apifyToken: Schema.string().role('secret')
       .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
-    apifyProxyGroups: Schema.array(Schema.string()).default(['RESIDENTIAL'])
-      .description('Apify proxy groups, for example RESIDENTIAL.').volatile(),
-    apifyProxyCountry: Schema.string().default('US')
-      .description('Apify proxy country code.').volatile(),
-    geo: Schema.string().default('US')
-      .description('Default country for trends_ask, trends_compare, and trends_snapshot.').volatile(),
+    apifyProxyGroup: Schema.transform(Schema.string(), (value: string) => normalizeApifyProxyGroup(value))
+      .default(DEFAULT_APIFY_PROXY_GROUP)
+      .description('Apify proxy mode: RESIDENTIAL for residential IPs, or auto for automatic datacenter selection.').volatile(),
+    apifyProxyCountry: Schema.transform(Schema.string(), (value: string) => normalizeProxyCountry(value))
+      .default(DEFAULT_PROXY_COUNTRY)
+      .description('Apify proxy country from the built-in list.').volatile(),
+    geo: Schema.transform(Schema.string(), (value: string) => normalizeGeo(value))
+      .default(DEFAULT_GEO)
+      .description('Default geo for trends_ask, trends_compare, and trends_snapshot; empty means Worldwide.').volatile(),
     anchor: Schema.string()
       .description('Optional fixed anchor for validate and trends_snapshot; blank picks the window default.').volatile(),
     baselines: baselines.volatile(),
@@ -123,7 +130,7 @@ export interface RegisterOverrides {
 export interface GtfaRuntimeSettings {
   egress: EgressMode;
   apifyToken?: string;
-  apifyProxyGroups: string[];
+  apifyProxyGroup: ApifyProxyGroup;
   apifyProxyCountry: string;
   geo: string;
   anchor?: string;
@@ -160,18 +167,18 @@ export function baselinesFromConfig(value: unknown): Baselines | undefined {
 export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines): GtfaRuntimeSettings {
   const egress = read(config.egress) ?? 'local';
   if (egress !== 'local' && egress !== 'apify') throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local" or "apify"`);
-  const groups = (read(config.apifyProxyGroups) ?? ['RESIDENTIAL'])
-    .map(group => group.trim().toUpperCase())
-    .filter(Boolean);
+  const apifyProxyGroup = normalizeApifyProxyGroup(read(config.apifyProxyGroup) ?? DEFAULT_APIFY_PROXY_GROUP);
+  const apifyProxyCountry = normalizeProxyCountry(read(config.apifyProxyCountry) ?? DEFAULT_PROXY_COUNTRY);
+  const geo = normalizeGeo(read(config.geo) ?? DEFAULT_GEO);
   const chartDirValue = read(config.chartDir);
   const charts = read(config.charts) ?? chartDirValue !== null;
   const baselines = baselinesFromConfig(read(config.baselines)) ?? envBaselines;
   return {
     egress,
     ...(read(config.apifyToken)?.trim() ? { apifyToken: read(config.apifyToken)!.trim() } : {}),
-    apifyProxyGroups: groups.length ? [...new Set(groups)] : ['RESIDENTIAL'],
-    apifyProxyCountry: read(config.apifyProxyCountry)?.trim().toUpperCase() || 'US',
-    geo: read(config.geo)?.trim() || 'US',
+    apifyProxyGroup,
+    apifyProxyCountry,
+    geo,
     ...(read(config.anchor)?.trim() ? { anchor: read(config.anchor)!.trim() } : {}),
     ...(baselines ? { baselines } : {}),
     cache: read(config.cache) ?? true,
@@ -186,13 +193,13 @@ function createLiveTransport(get: () => GtfaRuntimeSettings, overrides?: EgressO
   let key = '';
   return async request => {
     const settings = get();
-    const next = JSON.stringify([settings.egress, settings.apifyToken ?? null, settings.apifyProxyGroups, settings.apifyProxyCountry]);
+    const next = JSON.stringify([settings.egress, settings.apifyToken ?? null, settings.apifyProxyGroup, settings.apifyProxyCountry]);
     if (!current || next !== key) {
       current = createEgressTransport({
         ...overrides,
         egress: settings.egress,
         apifyToken: settings.apifyToken,
-        apifyProxyGroups: settings.apifyProxyGroups,
+        apifyProxyGroup: settings.apifyProxyGroup,
         apifyProxyCountry: settings.apifyProxyCountry,
       });
       key = next;
