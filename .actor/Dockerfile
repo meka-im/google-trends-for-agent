@@ -2,6 +2,7 @@
 FROM apify/actor-node:20 AS builder
 COPY package.json package-lock.json tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 RUN npm ci --include=dev --ignore-scripts --no-audit --no-fund \
     && npm run build \
     && npm prune --omit=dev --ignore-scripts
