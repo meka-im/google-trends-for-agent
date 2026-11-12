@@ -87,8 +87,7 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 ## dsh 插件
 
 ```sh
-# 固定 tag 可让 allowBuilds 的 key 保持稳定。
-dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # 首次运行会打印 pnpm 给出的完整 allowBuilds key 并失败。把该 key 加到
 # ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑同一条命令。
 ```

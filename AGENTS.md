@@ -36,7 +36,7 @@ Restart the client, then call `trends_ask` with a single term. `trends_ask` and 
 ## dsh plugin
 
 ```sh
-dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # First run prints pnpm's exact allowBuilds key; add it under allowBuilds: in
 # ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```

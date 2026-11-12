@@ -47,7 +47,7 @@ Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the 
 
 ## dsh plugin
 
-`dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0` mounts the bare `google-trends-for-agent` row (`gtfa`). The pinned tag keeps pnpm's `allowBuilds` key stable; the first run prints that key, add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. It does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`.
+`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). pnpm keys git builds by commit, so the first run prints that key (it changes when main moves), add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. It does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`.
 
 Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
 

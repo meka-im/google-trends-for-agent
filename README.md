@@ -87,8 +87,7 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 ## dsh plugin
 
 ```sh
-# Pinned tag keeps the allowBuilds key stable.
-dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # The first run prints pnpm's exact allowBuilds key and fails. Add that key under
 # allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```
