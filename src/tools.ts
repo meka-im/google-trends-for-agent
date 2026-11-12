@@ -51,6 +51,22 @@ export function zodRejectionEnvelope(error: z.ZodError) {
 /** Context supplied by each transport adapter for one tool invocation. */
 export interface ToolCallContext { signal?: AbortSignal }
 
+/** Options read at call time by the dsh plugin so `.volatile()` settings apply without a restart. */
+export interface ToolLiveSettings {
+  /** Default geo for trends_ask/trends_compare/trends_snapshot. */
+  defaultGeo?: string;
+  /** Server-wide anchor override for validate/trends_snapshot. */
+  anchor?: string;
+  /** Optional calibration overrides. */
+  baselines?: Baselines;
+  /** Reuse saved snapshots (default true); false forces a fresh upstream fetch. */
+  cache?: boolean;
+  /** Snapshot storage directory. */
+  snapshotDir?: string;
+  /** Chart output directory; null disables chart files. */
+  chartDir?: string | null;
+}
+
 /** Options shared by the MCP and dsh adapters. */
 export interface ToolsOptions extends ClientOptions {
   /** Snapshot storage shared by trends_ask and trends_snapshot (default `.gtfa/snapshots`). */
@@ -63,6 +79,8 @@ export interface ToolsOptions extends ClientOptions {
   defaultGeo?: string;
   /** Server-wide anchor for validate/trends_snapshot (a per-call trends_snapshot anchor still wins); unset = automatic by window. */
   anchor?: string;
+  /** Live values for the dsh settings UI; overrides the static fields above per call. */
+  settings?: () => ToolLiveSettings;
 }
 
 /** One transport-neutral agent tool: the single source for MCP and dsh. */
@@ -156,7 +174,19 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
   const defaultGeo = options.defaultGeo?.trim() || DEFAULTS.geo;
   const anchorOverride = options.anchor?.trim() || undefined;
-  const storeFor = () => new SnapshotStore(options.snapshotDir);
+  const live = (): Required<Pick<ToolLiveSettings, 'defaultGeo' | 'cache' | 'snapshotDir' | 'chartDir'>> & Pick<ToolLiveSettings, 'anchor' | 'baselines'> => {
+    const values = options.settings?.() ?? {};
+    return {
+      defaultGeo: values.defaultGeo?.trim() || defaultGeo,
+      anchor: values.anchor?.trim() || anchorOverride,
+      baselines: values.baselines ?? options.baselines,
+      cache: values.cache ?? true,
+      snapshotDir: values.snapshotDir?.trim() || options.snapshotDir?.trim() || '.gtfa/snapshots',
+      chartDir: values.chartDir !== undefined ? values.chartDir : options.chartDir !== undefined ? options.chartDir : '.gtfa/charts',
+    };
+  };
+  const geoField = options.settings ? z.string().trim().optional() : z.string().default(defaultGeo);
+  const storeFor = () => new SnapshotStore(live().snapshotDir);
   const scoped = (context?: ToolCallContext) => {
     context?.signal?.throwIfAborted();
     const scopedTransport: Transport = context?.signal
@@ -172,7 +202,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     description: 'Ask about one term. ' + ASK_DOC + guidance,
     inputSchema: z.object({
       term: z.string().trim().min(1).max(100),
-      geo: z.string().default(defaultGeo),
+      geo: geoField,
       time: time.default(DEFAULTS.time),
       fresh: z.boolean().default(false),
       validate: z.boolean().default(false),
@@ -181,19 +211,21 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     async execute(raw, context) {
       const parsed = ask.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { term, geo, time: range, fresh, validate, points } = parsed.data as { term: string; geo: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean };
+      const { term, geo, time: range, fresh, validate, points } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean };
+      const settings = live();
       const { query, shared } = scoped(context);
-      const store = storeFor(), filter = { geo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = storeFor(), filter = { geo: geo?.trim() || settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const refresh = fresh || settings.cache === false ? 'always' : undefined;
       let snap: TermSnapshot, cached = false, ageMin = 0, verdict: Record<string, unknown> | undefined, validationWarnings: string[] = [];
       if (validate) {
-        const [v] = await validateTerms([term], { filter, store, refresh: fresh ? 'always' : undefined, query, anchor: anchorOverride, baselines: options.baselines, trendingFetch: input => fetchTrending(input, shared) });
+        const [v] = await validateTerms([term], { filter, store, refresh, query, anchor: settings.anchor, baselines: settings.baselines, trendingFetch: input => fetchTrending(input, shared) });
         snap = (await store.history(term, filter, 1))[0];
         cached = v.source === 'cache'; ageMin = Math.max(0, (Date.now() - Date.parse(v.fetchedAt)) / 60000);
         verdict = verdictEnvelope(v);
         if (v.anchor.warning) validationWarnings = [v.anchor.warning];
         if (!snap) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: v.verdict, term, filter: { ...filter, property: 'web' }, verdict, diff: null, diffReason: 'No snapshot', meta: { cached: false, fetchedAt: v.fetchedAt } });
       } else {
-        const a = await askTerm(term, { filter, store, refresh: fresh ? 'always' : undefined, query });
+        const a = await askTerm(term, { filter, store, refresh, query });
         snap = a.snapshot; cached = a.source === 'cache'; ageMin = a.ageMin;
       }
       const rows = await store.history(term, filter, 2);
@@ -207,7 +239,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     description: 'Calibrated searches/day snapshot for one term against a shared-scale anchor. ' + SNAPSHOT_DOC + guidance,
     inputSchema: z.object({
       term: z.string().trim().min(1).max(100),
-      geo: z.string().default(defaultGeo),
+      geo: geoField,
       time: time.default(DEFAULTS.time),
       anchor: z.string().trim().min(1).max(100).optional(),
       fresh: z.boolean().default(false),
@@ -217,13 +249,15 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     async execute(raw, context) {
       const parsed = snapshot.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { term, geo, time: range, anchor, fresh, svg, tz } = parsed.data as { term: string; geo: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string };
+      const { term, geo, time: range, anchor, fresh, svg, tz } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string };
+      const settings = live();
       const { query } = scoped(context);
-      const store = storeFor(), filter = { geo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = storeFor(), filter = { geo: geo?.trim() || settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       try {
-        const forcedAnchor = anchor ?? anchorOverride;
-        const a = await fetchTrafficSnapshot(term, { filter, store, anchor: forcedAnchor, baselines: options.baselines, refresh: fresh ? 'always' : undefined, query, timeZone: tz });
-        return response(await trafficSnapshotEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, baselines: options.baselines, chartDir: options.chartDir, week: a.week, weekAnchor: forcedAnchor, svg, timeZone: tz, ...(a.weekError ? { weekError: a.weekError } : {}) }));
+        const forcedAnchor = anchor ?? settings.anchor;
+        const refresh = fresh || settings.cache === false ? 'always' : undefined;
+        const a = await fetchTrafficSnapshot(term, { filter, store, anchor: forcedAnchor, baselines: settings.baselines, refresh, query, timeZone: tz });
+        return response(await trafficSnapshotEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, baselines: settings.baselines, chartDir: settings.chartDir, week: a.week, weekAnchor: forcedAnchor, svg, timeZone: tz, ...(a.weekError ? { weekError: a.weekError } : {}) }));
       } catch (e) {
         return response(trafficSnapshotError(term, e instanceof Error ? e.message : String(e), filter));
       }
@@ -235,18 +269,19 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     description: 'Compare relative search interest for 2–5 keywords (e.g. a candidate against an anchor). ' + COMPARE_DOC + guidance,
     inputSchema: z.object({
       keywords: z.array(z.string().trim().min(1).max(100)).min(2).max(5),
-      geo: z.string().default(defaultGeo),
+      geo: geoField,
       time: time.default(DEFAULTS.time),
     }),
     async execute(raw, context) {
       const parsed = compare.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { keywords, geo, time: range } = parsed.data as { keywords: string[]; geo: string; time: (typeof TIME_RANGES)[number] };
+      const { keywords, geo, time: range } = parsed.data as { keywords: string[]; geo?: string; time: (typeof TIME_RANGES)[number] };
+      const geoValue = geo?.trim() || live().defaultGeo;
       const { client } = scoped(context);
       const seen = new Set<string>(), dup = keywords.find(k => { const n = k.trim().toLowerCase().replace(/\s+/g, ' '); return seen.has(n) || !seen.add(n); });
-      if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
-      const r = await compareTrends(keywords, { geo, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client } as never);
-      return response(compareEnvelope(keywords, r, { geo, time: range }));
+      if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
+      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client } as never);
+      return response(compareEnvelope(keywords, r, { geo: geoValue, time: range }));
     },
   };
 

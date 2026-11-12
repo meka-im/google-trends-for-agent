@@ -43,38 +43,44 @@ export function findAnchor(baselines: Baselines | undefined, term: string, geo: 
   return baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo === geo)
     ?? BUILTIN_ANCHORS.find(a => a.term === wanted && a.geo === geo);
 }
-/** Load a version 2 baselines file; version 1 is rejected rather than translated. */
-export async function loadBaselines(path: string): Promise<Baselines> {
-  let parsed: unknown;
-  try { parsed = JSON.parse(await readFile(path, 'utf8')); }
-  catch (e) { invalid(`${path}: ${e instanceof Error ? e.message : String(e)}`); }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) invalid(`${path}: expected a JSON object`);
+/** Validate a version 2 baselines value; version 1 is rejected rather than translated. */
+export function parseBaselines(parsed: unknown, source = 'baselines'): Baselines {
+  const label = source ? `${source}: ` : '';
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) invalid(`${label}expected a JSON object`);
   const row = parsed as Record<string, unknown>;
-  if (row.version === 1) invalid(`${path}: version 1 is no longer supported; use version 2 with "anchors" and optional "windowAnchors"`);
-  if (row.version !== 2) invalid(`${path}: "version" must be 2`);
+  if (row.version === 1) invalid(`${label}version 1 is no longer supported; use version 2 with "anchors" and optional "windowAnchors"`);
+  if (row.version !== 2) invalid(`${label}"version" must be 2`);
   const anchorRows = row.anchors;
-  if (!Array.isArray(anchorRows) || !anchorRows.length) invalid(`${path}: "anchors" must be a non-empty array`);
+  if (!Array.isArray(anchorRows) || !anchorRows.length) invalid(`${label}"anchors" must be a non-empty array`);
   anchorRows.forEach((anchor, i) => {
     try { validateAnchor(anchor as Anchor); }
-    catch (e) { invalid(`${path}: anchors[${i}]: ${e instanceof Error ? e.message : String(e)}`); }
+    catch (e) { invalid(`${label}anchors[${i}]: ${e instanceof Error ? e.message : String(e)}`); }
   });
   const anchors = anchorRows as Anchor[];
   const known = (term: string) => anchors.some(a => a.term.trim().toLowerCase() === term.trim().toLowerCase())
     || BUILTIN_ANCHORS.some(a => a.term === term.trim().toLowerCase());
   if (row.windowAnchors !== undefined) {
-    if (!row.windowAnchors || typeof row.windowAnchors !== 'object' || Array.isArray(row.windowAnchors)) invalid(`${path}: "windowAnchors" must be an object`);
+    if (!row.windowAnchors || typeof row.windowAnchors !== 'object' || Array.isArray(row.windowAnchors)) invalid(`${label}"windowAnchors" must be an object`);
     const windows = row.windowAnchors as Record<string, unknown>;
-    for (const key of Object.keys(windows)) if (key !== 'short' && key !== 'long') invalid(`${path}: windowAnchors.${key} is not supported (use "short" or "long")`);
+    for (const key of Object.keys(windows)) if (key !== 'short' && key !== 'long') invalid(`${label}windowAnchors.${key} is not supported (use "short" or "long")`);
     for (const key of ['short', 'long'] as const) {
       const term = windows[key];
       if (term === undefined) continue;
-      if (typeof term !== 'string') invalid(`${path}: windowAnchors.${key} must be a non-empty term`);
+      if (typeof term !== 'string') invalid(`${label}windowAnchors.${key} must be a non-empty term`);
       const trimmed = term.trim();
-      if (!trimmed) invalid(`${path}: windowAnchors.${key} must be a non-empty term`);
-      if (!known(trimmed)) invalid(`${path}: windowAnchors.${key} "${trimmed}" is not in anchors or the built-in anchors`);
+      if (!trimmed) invalid(`${label}windowAnchors.${key} must be a non-empty term`);
+      if (!known(trimmed)) invalid(`${label}windowAnchors.${key} "${trimmed}" is not in anchors or the built-in anchors`);
     }
   }
   return { version: 2, anchors, ...(row.windowAnchors !== undefined ? { windowAnchors: row.windowAnchors as WindowAnchors } : {}) };
+}
+
+/** Load a version 2 baselines file; version 1 is rejected rather than translated. */
+export async function loadBaselines(path: string): Promise<Baselines> {
+  let parsed: unknown;
+  try { parsed = JSON.parse(await readFile(path, 'utf8')); }
+  catch (e) { invalid(`${path}: ${e instanceof Error ? e.message : String(e)}`); }
+  return parseBaselines(parsed, path);
 }
 /** Optional GTFA_BASELINES override used by the CLI, MCP server, and Actor. */
 export async function loadBaselinesFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<Baselines | undefined> {

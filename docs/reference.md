@@ -49,25 +49,23 @@ Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the 
 
 `dsh plugin --profile <name> add github:meka-im/google-trends-for-agent` mounts the bundle's `gtfa` row (`google-trends-for-agent/dsh`). It registers the same four tools as native in-process tools and a bundled `gtfa` skill. It does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`.
 
+Configure it in **dsh web → Plugins → Google Trends → Configure**. Settings are `.volatile()` and apply live. The Apify token has the dsh `secret` role: it is redacted from every client response and the profile YAML never needs the raw token.
+
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `apify` uses Apify Residential proxy directly from the core library. |
-| `apifyProxyCountry` | `US` | Residential proxy country for `egress: apify`. |
-| `snapshotDir` | `.gtfa/snapshots` | Snapshot store, resolved against the dsh process working directory. |
-| `chartDir` | `.gtfa/charts` | Chart output directory; set `null` to disable chart files. |
+| `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `apify` uses the Apify proxy directly from the core library. |
+| `apifyToken` | unset | Secret Apify API token. When empty, `APIFY_TOKEN` then `APIFY_PROXY_PASSWORD` are used. |
+| `apifyProxyGroups` | `["RESIDENTIAL"]` | Apify proxy groups. |
+| `apifyProxyCountry` | `US` | Apify proxy country code. |
 | `geo` | `US` | Default geo for `trends_ask`, `trends_compare`, and `trends_snapshot`. |
-| `anchor` | automatic | Optional anchor override for `validate` / `trends_snapshot`. |
+| `anchor` | automatic | Optional fixed anchor for `validate` / `trends_snapshot`; blank uses sudoku for short windows and gpts otherwise. |
+| `baselines` | built-in | Inline anchors `{ term, geo, dailySearches, tolerance? }` plus optional `windowAnchors.short` / `.long`; validated like a version 2 baselines file. |
+| `cache` | `true` | Reuse saved snapshots (up to 360 minutes); `false` always fetches fresh. |
+| `snapshotDir` | `.gtfa/snapshots` | Advanced: snapshot store, resolved against the dsh process working directory. |
+| `chartDir` | `.gtfa/charts` | Advanced: chart output directory. |
+| `charts` | `true` | Advanced: write SVG chart files; `false` returns null chart paths. |
 
-Override the row in `~/.dsh/profiles/<name>/cordis.patch.yml`; a patch replaces the row's whole config, so restate fields you keep:
-
-```yaml
-- id: gtfa
-  config:
-    egress: apify
-    apifyProxyCountry: US
-```
-
-`egress: apify` reads `APIFY_PROXY_PASSWORD` if set, otherwise fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me` with `APIFY_TOKEN` as a bearer token. Credentials are environment-only, never plugin YAML; do not interpolate them with `!!js process.env.APIFY_TOKEN`, because the plugin reads the environment itself. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply.
+`egress: apify` resolves credentials in order: the configured secret token, `APIFY_TOKEN`, then `APIFY_PROXY_PASSWORD`. With a token it fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me`; with only `APIFY_PROXY_PASSWORD` it uses that directly. Credentials never need to appear in plugin YAML, and `!!js process.env.APIFY_TOKEN` is unnecessary. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
 
 ## Output contract
 

@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import Schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
-import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
+import { loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
 import type { Transport } from './transport.js';
 
 /** Cordis plugin name. */
@@ -11,20 +12,72 @@ export const name = 'gtfa';
 /** Tools are the only required service; skills is attached opportunistically. */
 export const inject = ['tools'];
 
+/** Editable settings shape shown by dsh's Plugins → Configure page. */
 export interface GtfaConfig {
-  /** `local` sends Google requests from this machine; `apify` uses Apify Residential proxy. */
+  /** `local` sends Google requests from this machine; `apify` uses Apify proxy. */
   egress?: EgressMode;
-  /** Residential proxy country for apify egress (default US). */
+  /** Apify API token stored as a dsh secret; never echoed back to the client. */
+  apifyToken?: string;
+  /** Apify proxy groups used by `apify` egress (default RESIDENTIAL). */
+  apifyProxyGroups?: readonly string[];
+  /** Apify proxy country for apify egress (default US). */
   apifyProxyCountry?: string;
   /** Snapshot directory, resolved against the dsh process working directory. */
   snapshotDir?: string;
-  /** Chart directory, or null to disable chart files. */
+  /** Chart directory (advanced); null or `charts: false` disables chart files. */
   chartDir?: string | null;
+  /** Write chart files (default true). */
+  charts?: boolean;
   /** Default geo for trends_ask/trends_compare/trends_snapshot. */
   geo?: string;
   /** Optional anchor override for validate/snapshot. */
   anchor?: string;
+  /** Optional inline baselines override (same semantics as GTFA_BASELINES). */
+  baselines?: {
+    anchors?: Array<Partial<Anchor> & { term: string; dailySearches: number }>;
+    windowAnchors?: WindowAnchors;
+  };
+  /** Reuse saved snapshots (default true); false always fetches fresh. */
+  cache?: boolean;
 }
+
+const baselinesConfig = Schema.object({
+  anchors: Schema.array(Schema.object({
+    term: Schema.string().required().description('Anchor term, for example gpts or sudoku.'),
+    geo: Schema.string().default('US').description('Country code for this anchor.'),
+    dailySearches: Schema.number().required().description('Estimated daily searches for the anchor.'),
+    tolerance: Schema.number().min(0).max(1).description('Allowed ± fraction, for example 0.5.'),
+  })).default([]).description('Override or add anchors; an empty list keeps the built-in US baselines.'),
+  windowAnchors: Schema.object({
+    short: Schema.string().description('Anchor term for now 1-H, now 4-H, and now 1-d.'),
+    long: Schema.string().description('Anchor term for now 7-d and longer windows.'),
+  }).default({}).description('Optional automatic anchor term per window.'),
+}).description('Optional inline baselines override.');
+
+/** Host Config schema. Volatile fields apply live; the token role is redacted by dsh-settings. */
+export const Config = Schema.object({
+  egress: Schema.union(['local', 'apify']).default('local')
+    .description('local sends Google requests from the dsh machine; apify uses the Apify proxy.').volatile(),
+  apifyToken: Schema.string().role('secret')
+    .description('Apify API token. Stored as a dsh secret and never shown again; leave blank to use APIFY_TOKEN or APIFY_PROXY_PASSWORD.').volatile(),
+  apifyProxyGroups: Schema.array(Schema.string()).default(['RESIDENTIAL'])
+    .description('Apify proxy groups, for example RESIDENTIAL.').volatile(),
+  apifyProxyCountry: Schema.string().default('US')
+    .description('Apify proxy country code.').volatile(),
+  geo: Schema.string().default('US')
+    .description('Default country for trends_ask, trends_compare, and trends_snapshot.').volatile(),
+  anchor: Schema.string()
+    .description('Optional fixed anchor for validate and trends_snapshot; blank picks the window default.').volatile(),
+  baselines: baselinesConfig.volatile(),
+  cache: Schema.boolean().default(true)
+    .description('Reuse stored snapshots (up to 360 minutes); off always fetches fresh.').volatile(),
+  snapshotDir: Schema.string().default('.gtfa/snapshots')
+    .description('Advanced: snapshot store directory.').volatile(),
+  chartDir: Schema.string().default('.gtfa/charts')
+    .description('Advanced: chart output directory.').volatile(),
+  charts: Schema.boolean().default(true)
+    .description('Advanced: write SVG chart files.').volatile(),
+});
 
 interface SkillService {
   registerProvider(create: () => unknown): unknown;
@@ -45,6 +98,88 @@ export interface RegisterOverrides {
   baselines?: Baselines;
   /** Test seam: request spacing; production uses 1500 ms like MCP. */
   minIntervalMs?: number;
+}
+
+/** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
+export interface GtfaRuntimeSettings {
+  egress: EgressMode;
+  apifyToken?: string;
+  apifyProxyGroups: string[];
+  apifyProxyCountry: string;
+  geo: string;
+  anchor?: string;
+  baselines?: Baselines;
+  cache: boolean;
+  snapshotDir: string;
+  chartDir: string | null;
+}
+
+type VolatileRef<T> = { get(): T };
+
+/** Read a value that may be a dsh volatile ref. */
+function read<T>(value: T | VolatileRef<T> | undefined): T | undefined {
+  if (value && typeof value === 'object' && typeof (value as VolatileRef<T>).get === 'function') return (value as VolatileRef<T>).get();
+  return value as T | undefined;
+}
+
+/** Validate and normalize an inline baselines override from the settings schema. */
+export function baselinesFromConfig(value: unknown): Baselines | undefined {
+  if (value === undefined || value === null) return undefined;
+  const row = value as { anchors?: unknown; windowAnchors?: unknown };
+  const anchors = Array.isArray(row.anchors) ? row.anchors as Anchor[] : [];
+  const windows = row.windowAnchors && typeof row.windowAnchors === 'object' ? row.windowAnchors as WindowAnchors : undefined;
+  const hasWindow = Boolean(windows?.short?.trim() || windows?.long?.trim());
+  if (!anchors.length && !hasWindow) return undefined;
+  return parseBaselines({
+    version: 2,
+    anchors: anchors.map(anchor => ({ ...anchor, geo: anchor.geo?.trim() || 'US' })),
+    ...(hasWindow ? { windowAnchors: windows } : {}),
+  }, 'dsh baselines');
+}
+
+/** Normalize one config object (plain or volatile) into the values the tools read per call. */
+export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines): GtfaRuntimeSettings {
+  const egress = read(config.egress) ?? 'local';
+  if (egress !== 'local' && egress !== 'apify') throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local" or "apify"`);
+  const groups = (read(config.apifyProxyGroups) ?? ['RESIDENTIAL'])
+    .map(group => group.trim().toUpperCase())
+    .filter(Boolean);
+  const chartDirValue = read(config.chartDir);
+  const charts = read(config.charts) ?? chartDirValue !== null;
+  const baselines = baselinesFromConfig(read(config.baselines)) ?? envBaselines;
+  return {
+    egress,
+    ...(read(config.apifyToken)?.trim() ? { apifyToken: read(config.apifyToken)!.trim() } : {}),
+    apifyProxyGroups: groups.length ? [...new Set(groups)] : ['RESIDENTIAL'],
+    apifyProxyCountry: read(config.apifyProxyCountry)?.trim().toUpperCase() || 'US',
+    geo: read(config.geo)?.trim() || 'US',
+    ...(read(config.anchor)?.trim() ? { anchor: read(config.anchor)!.trim() } : {}),
+    ...(baselines ? { baselines } : {}),
+    cache: read(config.cache) ?? true,
+    snapshotDir: read(config.snapshotDir)?.trim() || '.gtfa/snapshots',
+    chartDir: charts === false || chartDirValue === null ? null : chartDirValue?.trim() || '.gtfa/charts',
+  };
+}
+
+/** Rebuild the egress transport only when its connection-relevant settings change. */
+function createLiveTransport(get: () => GtfaRuntimeSettings, overrides?: EgressOptions): Transport {
+  let current: Transport | undefined;
+  let key = '';
+  return async request => {
+    const settings = get();
+    const next = JSON.stringify([settings.egress, settings.apifyToken ?? null, settings.apifyProxyGroups, settings.apifyProxyCountry]);
+    if (!current || next !== key) {
+      current = createEgressTransport({
+        ...overrides,
+        egress: settings.egress,
+        apifyToken: settings.apifyToken,
+        apifyProxyGroups: settings.apifyProxyGroups,
+        apifyProxyCountry: settings.apifyProxyCountry,
+      });
+      key = next;
+    }
+    return current(request);
+  };
 }
 
 const SKILL_FILE = new URL('../dsh/skill.md', import.meta.url);
@@ -122,22 +257,25 @@ export function dshParameters(schema: z.ZodType<unknown>): Record<string, unknow
 
 /** Register the four native gtfa tools and the optional gtfa skill on one Cordis context. */
 export async function register(ctx: DshContext, config: GtfaConfig = {}, overrides: RegisterOverrides = {}) {
-  const egress = config.egress ?? 'local';
-  if (egress !== 'local' && egress !== 'apify') throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local" or "apify"`);
-  const country = config.apifyProxyCountry?.trim() || 'US';
-  const baselines = overrides.baselines !== undefined ? overrides.baselines : await loadBaselinesFromEnv();
-  const transport = overrides.transport ?? createEgressTransport({
-    ...overrides.egress,
-    egress,
-    apifyProxyCountry: country,
-  });
+  const envBaselines = overrides.baselines !== undefined ? overrides.baselines : await loadBaselinesFromEnv();
+  // Validate at boot; the same resolved values are read again on every tool call so
+  // dsh's volatile settings take effect without remounting the plugin.
+  resolveGtfaSettings(config, envBaselines);
+  const settings = () => resolveGtfaSettings(config, envBaselines);
+  const transport = overrides.transport ?? createLiveTransport(settings, overrides.egress);
   const tools = createTools({
     transport,
-    snapshotDir: config.snapshotDir?.trim() || '.gtfa/snapshots',
-    chartDir: config.chartDir === null ? null : config.chartDir?.trim() || '.gtfa/charts',
-    defaultGeo: config.geo?.trim() || undefined,
-    anchor: config.anchor?.trim() || undefined,
-    baselines,
+    settings: () => {
+      const snapshot = settings();
+      return {
+        defaultGeo: snapshot.geo,
+        anchor: snapshot.anchor,
+        baselines: snapshot.baselines,
+        cache: snapshot.cache,
+        snapshotDir: snapshot.snapshotDir,
+        chartDir: snapshot.chartDir,
+      };
+    },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
   for (const tool of tools) {

@@ -39,7 +39,7 @@ Restart the client, then call `trends_ask` with a single term. `trends_ask` and 
 dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
 ```
 
-This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. It does not start an MCP server, run the `gtfa` CLI, or call the Actor. Egress defaults to `local`; set `egress: apify` on the `gtfa` profile row to use Apify Residential proxy directly from the core library, with `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`) in the environment. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. It does not start an MCP server, run the `gtfa` CLI, or call the Actor. Configure it in dsh web → Plugins → Google Trends → Configure: egress defaults to `local`; choose `apify` to use the Apify proxy directly from the core library, and set the Apify token there (stored as a dsh secret) or leave it empty to use `APIFY_TOKEN` / `APIFY_PROXY_PASSWORD`. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
 
 ## Verify networking first
 

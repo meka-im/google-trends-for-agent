@@ -4,6 +4,7 @@
   "description": "Search-interest signals for AI agents — an unofficial Google Trends client",
   "type": "module",
   "license": "MIT",
+  "icon": "./icon.svg",
   "engines": {
     "node": ">=20",
     "dsh": ">=0.2.1-rc.3 <0.3.0"
@@ -18,7 +19,13 @@
     "./dsh": {
       "types": "./dist/dsh.d.ts",
       "import": "./dist/dsh.js"
-    }
+    },
+    "./client": "./dist/dsh-client.js",
+    "./dsh/locale/*.json": "./locale/*.json",
+    "./dsh/icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
   "bin": {
     "gtfa": "./dist/cli.js",
@@ -27,6 +34,8 @@
   "files": [
     "dist",
     "dsh",
+    "locale",
+    "icon.svg",
     "AGENTS.md",
     "README.md",
     "README.zh-CN.md",
@@ -39,9 +48,9 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "tsc && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
+    "build": "tsc && node scripts/build-client.mjs && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
     "start": "node dist/actor.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
     "trends": "tsx src/cli.ts",
     "prepare": "npm run build"
   },
@@ -52,8 +61,22 @@
     "undici": "^6.21.0",
     "zod": "^4.6.7"
   },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5",
     "@types/node": "^22.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.28.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.12"
@@ -74,6 +97,15 @@
   "dsh": {
     "bundle": {
       "patch": "./dsh/cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
     }
   },
   "repository": {

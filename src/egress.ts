@@ -5,10 +5,12 @@ import { createDefaultTransport, type Transport } from './transport.js';
 export type EgressMode = 'local' | 'apify';
 
 export interface ApifyProxyUrlProviderOptions {
-  /** Apify API token; defaults to APIFY_TOKEN. */
+  /** Apify API token; falls back to APIFY_TOKEN, then APIFY_PROXY_PASSWORD. */
   token?: string;
   /** Apify Proxy password; defaults to APIFY_PROXY_PASSWORD. */
   proxyPassword?: string;
+  /** Apify proxy groups (default RESIDENTIAL). */
+  groups?: readonly string[];
   /** Residential proxy country; defaults to US. */
   country?: string;
   /** Fetch implementation used for the one-time password lookup. */
@@ -16,21 +18,37 @@ export interface ApifyProxyUrlProviderOptions {
 }
 
 const APIFY_PROXY_HOST = 'proxy.apify.com:8000';
-const APIFY_PROXY_GROUPS = 'RESIDENTIAL';
+const APIFY_PROXY_GROUPS = ['RESIDENTIAL'] as const;
 const APIFY_ME_URL = 'https://api.apify.com/v2/users/me';
 
-/** Build the Apify Residential proxy URL without touching process.env. */
+/** Resolve Apify credentials in order: config token, APIFY_TOKEN, APIFY_PROXY_PASSWORD. */
+export function resolveApifyCredentials(options: { token?: string; proxyPassword?: string } = {}): { token?: string; proxyPassword?: string } {
+  const token = options.token?.trim() || process.env.APIFY_TOKEN?.trim() || '';
+  if (token) return { token };
+  const proxyPassword = options.proxyPassword?.trim() || process.env.APIFY_PROXY_PASSWORD?.trim() || '';
+  return proxyPassword ? { proxyPassword } : {};
+}
+
+/** Normalize configured Apify proxy groups into the URL's `groups-...` segment. */
+export function apifyProxyGroups(groups?: readonly string[]): string {
+  const cleaned = (groups ?? APIFY_PROXY_GROUPS)
+    .map(group => group.trim().toUpperCase())
+    .filter(Boolean);
+  const unique = [...new Set(cleaned.length ? cleaned : APIFY_PROXY_GROUPS)];
+  for (const group of unique) {
+    if (!/^[A-Z0-9_]+$/.test(group)) throw new GTrendsError('INVALID_INPUT', `Invalid Apify proxy group "${group}"; use letters, digits, or underscores`);
+  }
+  return unique.join('+');
+}
+
+/** Build the Apify proxy URL without touching process.env. */
 export class ApifyProxyUrlProvider implements ProxyUrlProvider {
   private passwordPromise: Promise<string> | undefined;
 
   constructor(private readonly options: ApifyProxyUrlProviderOptions = {}) {}
 
-  private token(): string {
-    return (this.options.token?.trim() || process.env.APIFY_TOKEN?.trim() || '');
-  }
-
-  private configuredPassword(): string {
-    return (this.options.proxyPassword?.trim() || process.env.APIFY_PROXY_PASSWORD?.trim() || '');
+  private credentials(): { token?: string; proxyPassword?: string } {
+    return resolveApifyCredentials({ token: this.options.token, proxyPassword: this.options.proxyPassword });
   }
 
   private get fetch(): typeof globalThis.fetch {
@@ -38,9 +56,9 @@ export class ApifyProxyUrlProvider implements ProxyUrlProvider {
   }
 
   private password(): Promise<string> {
-    const configured = this.configuredPassword();
-    if (configured) return Promise.resolve(configured);
-    this.passwordPromise ??= this.fetchPassword().catch(error => {
+    const credentials = this.credentials();
+    if (credentials.proxyPassword) return Promise.resolve(credentials.proxyPassword);
+    this.passwordPromise ??= this.fetchPassword(credentials.token!).catch(error => {
       // Do not cache a failure: a fixed token can succeed on the next rotation.
       this.passwordPromise = undefined;
       throw error;
@@ -48,10 +66,9 @@ export class ApifyProxyUrlProvider implements ProxyUrlProvider {
     return this.passwordPromise;
   }
 
-  private async fetchPassword(): Promise<string> {
-    const token = this.token();
+  private async fetchPassword(token: string): Promise<string> {
     if (!token) {
-      throw new GTrendsError('INVALID_INPUT', 'apify egress requires APIFY_PROXY_PASSWORD or APIFY_TOKEN. Set APIFY_TOKEN so gtfa can read the Apify proxy password, or switch egress to local.');
+      throw new GTrendsError('INVALID_INPUT', 'apify egress requires a token or APIFY_PROXY_PASSWORD. Set the Apify token in dsh settings or APIFY_TOKEN, or switch egress to local.');
     }
     let response: Response;
     try {
@@ -83,17 +100,19 @@ export class ApifyProxyUrlProvider implements ProxyUrlProvider {
     const session = sessionId === undefined || sessionId === null || String(sessionId).trim() === ''
       ? ''
       : `,session-${encodeURIComponent(String(sessionId).trim())}`;
-    return `http://groups-${APIFY_PROXY_GROUPS}${session},country-${encodeURIComponent(country)}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
+    return `http://groups-${apifyProxyGroups(this.options.groups)}${session},country-${encodeURIComponent(country)}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
   }
 }
 
 export interface EgressOptions {
   /** `local` sends requests from this machine (HTTPS_PROXY still honored); `apify` uses Apify Residential. */
   egress?: EgressMode;
-  /** Apify API token; defaults to APIFY_TOKEN. */
+  /** Apify API token; falls back to APIFY_TOKEN, then APIFY_PROXY_PASSWORD. */
   apifyToken?: string;
   /** Apify Proxy password; defaults to APIFY_PROXY_PASSWORD. */
   apifyProxyPassword?: string;
+  /** Apify proxy groups (default RESIDENTIAL). */
+  apifyProxyGroups?: readonly string[];
   /** Residential proxy country; defaults to US. */
   apifyProxyCountry?: string;
   /** Fetch implementation used for the one-time password lookup. */
@@ -117,6 +136,7 @@ export function createEgressTransport(options: EgressOptions = {}): Transport {
   const provider = new ApifyProxyUrlProvider({
     token: options.apifyToken,
     proxyPassword: options.apifyProxyPassword,
+    groups: options.apifyProxyGroups,
     country: options.apifyProxyCountry,
     fetch: options.fetch,
   });

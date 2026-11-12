@@ -92,16 +92,9 @@ dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
 
 The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library. There is no MCP server, no `gtfa` CLI subprocess, and no Actor endpoint. A bundled `gtfa` skill tells the agent when to use each tool and how to report `no_data` / `blocked` honestly.
 
-Egress defaults to `local` (requests leave from the machine running dsh; `HTTPS_PROXY` is still honored). To route through Apify Residential proxy without the Actor, override the plugin config in your profile patch:
+**Configure in dsh web → Plugins → Google Trends → Configure** for egress (`local` or `apify`), the Apify token, default geo, proxy groups/country, baselines, and snapshot cache. Changes apply live. The token is a redacted dsh secret field, never echoed back, and may be left empty to use `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`); the profile YAML never needs the raw token. See [docs/assets/dsh-config.png](docs/assets/dsh-config.png).
 
-```yaml
-# ~/.dsh/profiles/<name>/cordis.patch.yml
-- id: gtfa
-  config:
-    egress: apify
-```
-
-Then export `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`). The token is read only from the environment, never from YAML (no `!!js process.env.APIFY_TOKEN` needed); the plugin fetches the proxy password once from the Apify API and rotates the session on HTTP 429 or a Google challenge. Apify Residential traffic is billed per GB from your Apify credits.
+`local` sends requests from the machine running dsh (`HTTPS_PROXY` is still honored). `apify` uses the Apify proxy without the Actor, fetches the proxy password once from the Apify API, and rotates the session on HTTP 429 or a Google challenge. Apify traffic is billed per GB from your Apify credits.
 
 If pnpm blocks the git checkout's `prepare` build (pnpm 10/11), approve `google-trends-for-agent` in the dsh plugin manager prompt and retry, or add the exact spec pnpm prints to `onlyBuiltDependencies` in `~/.dsh/profiles/<name>/pnpm-workspace.yaml`.
 

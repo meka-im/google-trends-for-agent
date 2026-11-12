@@ -92,16 +92,9 @@ dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
 
 该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。没有 MCP 服务器、没有 `gtfa` CLI 子进程，也不经过 Actor 端点。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
 
-出口默认是 `local`（请求从运行 dsh 的机器发出，仍然支持 `HTTPS_PROXY`）。如需不经 Actor、直接通过 Apify 住宅代理出口，在 profile patch 中覆盖插件配置：
+**在 dsh web → Plugins → Google Trends → Configure 中配置** 出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存。修改即时生效。Token 是 dsh 的脱敏密钥字段，不会回显；留空则使用环境变量 `APIFY_TOKEN`（或 `APIFY_PROXY_PASSWORD`），profile YAML 永远不需要明文 Token。截图：[docs/assets/dsh-config.png](docs/assets/dsh-config.png)。
 
-```yaml
-# ~/.dsh/profiles/<name>/cordis.patch.yml
-- id: gtfa
-  config:
-    egress: apify
-```
-
-然后导出 `APIFY_TOKEN`（或 `APIFY_PROXY_PASSWORD`）。Token 只从环境变量读取，不写入 YAML（无需 `!!js process.env.APIFY_TOKEN`）；插件会通过 Apify API 获取一次代理密码，并在 HTTP 429 或 Google 验证页时轮换会话。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除。
+`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 不经 Actor、直接使用 Apify 代理，通过 Apify API 获取一次代理密码，并在 HTTP 429 或 Google 验证页时轮换会话。Apify 流量按 GB 从你的 Apify 额度中扣除。
 
 如果 pnpm 拦截了 git 检出的 `prepare` 构建（pnpm 10/11），请在 dsh 插件管理器提示中允许 `google-trends-for-agent` 后重试，或把 pnpm 打印的完整 spec 加入 `~/.dsh/profiles/<name>/pnpm-workspace.yaml` 的 `onlyBuiltDependencies`。
 
