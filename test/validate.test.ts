@@ -215,3 +215,11 @@ it('keeps retryAfterSec when the anchor comparison is rate limited', async () =>
   const [r] = await validateTerms(['x'], { store: await store(), query });
   expect(r).toMatchObject({ verdict: 'blocked', retryAfterSec: 42 });
 });
+it('calibrates a term that equals the anchor against itself instead of sending it twice', async () => {
+  const query = mock([20, 20, 20, 20, 0]);
+  const [r] = await validateTerms(['GPTs'], { store: await store(), filter: { time: 'now 7-d' }, query });
+  const comparisons = (query as unknown as { mock: { calls: [{ queries: string[]; dataTypes?: string[] }][] } }).mock.calls.map(([i]) => i).filter(i => i.dataTypes?.length === 1);
+  expect(comparisons.map(i => i.queries)).toEqual([['GPTs']]);
+  expect(r.anchor).toMatchObject({ term: 'gpts', dailySearches: 3500, ratio: 1 });
+  expect(r.anchor.traffic.average).toBe(3500);
+});

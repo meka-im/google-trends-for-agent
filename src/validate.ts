@@ -77,18 +77,22 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
   // term in a batch is scaled against the same anchor curve.
   for (let i = 0; i < pending.length && !blocked; i += 4) {
     const batch = pending.slice(i, i + 4);
-    const comparison = await query({ queries: [...batch.map(b => b.term), anchorTerm], ...filterInput(filter), dataTypes: ['interestOverTime'] });
+    // De-duplicate case-insensitively so a term that equals the anchor (e.g. gpts in a 7-day
+    // window) is compared with itself instead of sending the same keyword twice.
+    const queries: string[] = [];
+    const slot = (t: string) => { const i = queries.findIndex(q => q.trim().toLowerCase() === t.trim().toLowerCase()); if (i >= 0) return i; queries.push(t); return queries.length - 1; };
+    const termSlots = batch.map(b => slot(b.term)), anchorSlot = slot(anchorTerm);
+    const comparison = await query({ queries, ...filterInput(filter), dataTypes: ['interestOverTime'] });
     if (['BLOCKED', 'RATE_LIMITED'].includes(comparison.error?.code ?? '')) {
       for (const b of batch) { const r = rows.get(b.term)!; r.verdict = 'blocked'; r.confidence = 'low'; r.reasons.push(comparison.error!.code); b.anchor.note = comparison.error!.message; if (comparison.error!.retryAfterSec !== undefined) r.retryAfterSec = comparison.error!.retryAfterSec; delete r.freshSpike; }
       if (opts.stopOnBlocked !== false) blocked = true; continue;
     }
     const timeline = (comparison.data?.interestOverTime as InterestOverTime)?.timeline ?? [];
-    const k = batch.length;
-    const anchorPoints = timeline.map(p => ({ time: p.time, value: p.values[k] ?? 0 }));
+    const anchorPoints = timeline.map(p => ({ time: p.time, value: p.values[anchorSlot] ?? 0 }));
     batch.forEach((b, j) => {
       const anchor = b.anchor;
       if (comparison.status === 'error' || !timeline.length) return;
-      const termPoints = timeline.map(p => ({ time: p.time, value: p.values[j] ?? 0 }));
+      const termPoints = timeline.map(p => ({ time: p.time, value: p.values[termSlots[j]] ?? 0 }));
       // Same pure calibration helper as trends_snapshot: gap-aware means over the full
       // shared-scale comparison, so the ratio and daily band are directly comparable.
       const c = calibrateTraffic(termPoints, anchorPoints, { filter, dailySearches: daily, tolerance });
