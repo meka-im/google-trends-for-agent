@@ -280,18 +280,20 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
     const rawTimeout = typeof row.timeoutMs === 'number' && Number.isFinite(row.timeoutMs) ? row.timeoutMs : DEFAULT_TIMEOUT_MS;
     const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(1000, Math.round(rawTimeout)));
     options.log?.(`Relay ${method} ${url.pathname}`);
-    try {
-      const response = await options.transport({
-        url: url.toString(),
-        method,
-        headers,
-        ...(requestBody === undefined ? {} : { body: requestBody }),
-        timeoutMs,
-      });
-      writeJson(res, 200, { status: response.status, headers: response.headers, body: response.body });
-    } catch {
-      writeApiError(res, 502, 'NETWORK_ERROR', 'The Actor could not complete the request. Retry in a moment.');
+    const relayed = { url: url.toString(), method, headers, ...(requestBody === undefined ? {} : { body: requestBody }), timeoutMs };
+    // One retry: the proxy transport rotates its session after a failed connection.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const response = await options.transport(relayed);
+        writeJson(res, 200, { status: response.status, headers: response.headers, body: response.body });
+        return;
+      } catch (error) {
+        const code = error instanceof GTrendsError ? error.code : error instanceof Error ? error.name : 'Error';
+        options.log?.(`Relay ${method} ${url.pathname} failed (attempt ${attempt}, ${code})`);
+        if (attempt >= 2) break;
+      }
     }
+    writeApiError(res, 502, 'NETWORK_ERROR', 'The Actor could not complete the request. Retry in a moment.');
   };
 
   const handleTool = async (req: IncomingMessage, res: ServerResponse, name: string): Promise<void> => {

@@ -54,7 +54,7 @@ export interface RotatingTransportOptions {
   /** Build one proxy-aware transport from an explicit proxy URL. Defaults to createDefaultTransport. */
   createTransport?: (proxyUrl: string) => Transport;
   /** Called after a successful proxy-session rotation (no credentials passed). */
-  onRotate?: (reason: 'rate_limited' | 'challenge') => void;
+  onRotate?: (reason: 'rate_limited' | 'challenge' | 'network') => void;
   /** Called when rotation fails; the current transport stays in use. */
   onError?: (error: unknown) => void;
 }
@@ -74,23 +74,33 @@ export function createRotatingTransport(
   let current = makeTransport(session.currentUrl ?? '');
   let rotating: Promise<void> | null = null;
 
-  return async request => {
-    const response = await current(request);
-    const reason = isRateLimitResponse(response) ? 'rate_limited' : isChallengeResponse(response) ? 'challenge' : null;
-    if (reason) {
-      rotating ??= (async () => {
-        try {
-          const url = await session.rotate();
-          if (url) {
-            current = makeTransport(url);
-            options.onRotate?.(reason);
-          }
-        } catch (error) {
-          options.onError?.(error);
+  const rotate = async (reason: 'rate_limited' | 'challenge' | 'network') => {
+    rotating ??= (async () => {
+      try {
+        const url = await session.rotate();
+        if (url) {
+          current = makeTransport(url);
+          options.onRotate?.(reason);
         }
-      })().finally(() => { rotating = null; });
-      await rotating;
+      } catch (error) {
+        options.onError?.(error);
+      }
+    })().finally(() => { rotating = null; });
+    await rotating;
+  };
+
+  return async request => {
+    let response: Awaited<ReturnType<Transport>>;
+    try {
+      response = await current(request);
+    } catch (error) {
+      // A failed proxy connection (for example a dead residential exit) gets a
+      // fresh session before the caller retries.
+      if (!request.signal?.aborted) await rotate('network');
+      throw error;
     }
+    const reason = isRateLimitResponse(response) ? 'rate_limited' : isChallengeResponse(response) ? 'challenge' : null;
+    if (reason) await rotate(reason);
     return response;
   };
 }

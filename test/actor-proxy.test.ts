@@ -86,4 +86,24 @@ describe('Actor proxy wiring', () => {
     expect(reasons).toEqual(['challenge']);
     expect(provider.newUrl).toHaveBeenCalledTimes(2);
   });
+
+  it('rotates after a failed proxy connection and rethrows for the caller to retry', async () => {
+    const provider = { newUrl: vi.fn(async (id?: string | number) => `http://user:secret@proxy.example:8000?session=${id}`) };
+    const session = new ApifyProxySession(provider, counter => `gtfa_${counter}`);
+    await session.rotate();
+    const reasons: string[] = [];
+    let calls = 0;
+    const transport = createRotatingTransport(session, {
+      createTransport: () => async () => {
+        calls += 1;
+        if (calls === 1) throw new TypeError('fetch failed');
+        return { status: 200, headers: {}, body: 'ok' };
+      },
+      onRotate: reason => reasons.push(reason),
+    });
+    await expect(transport(request)).rejects.toThrow('fetch failed');
+    expect(reasons).toEqual(['network']);
+    expect(provider.newUrl).toHaveBeenCalledTimes(2);
+    expect((await transport(request)).status).toBe(200);
+  });
 });

@@ -126,6 +126,33 @@ describe('Streamable HTTP MCP transport', () => {
     }
   });
 
+  it('retries a failed relay once, then answers 502 without the error text', async () => {
+    let calls = 0;
+    let alwaysFail = false;
+    const flaky: Transport = async () => {
+      calls += 1;
+      if (alwaysFail || calls === 1) throw new TypeError('proxy secret-detail');
+      return { status: 200, headers: {}, body: 'ok' };
+    };
+    const logs: string[] = [];
+    const { http } = await start(flaky, { log: message => logs.push(message) });
+    const relay = () => realFetch(`http://127.0.0.1:${http.port}/egress/fetch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://trends.google.com/trends/', method: 'HEAD', headers: {} }),
+    });
+    const ok = await relay();
+    expect(ok.status).toBe(200);
+    expect(calls).toBe(2);
+
+    alwaysFail = true;
+    const failed = await relay();
+    expect(failed.status).toBe(502);
+    expect(calls).toBe(4);
+    expect(logs.join('\n')).toContain('failed (attempt 2, TypeError)');
+    expect(logs.join('\n')).not.toContain('secret-detail');
+  });
+
   it('runs shared tool definitions at POST /tools/{name}', async () => {
     const tool = {
       name: 'trends_now',

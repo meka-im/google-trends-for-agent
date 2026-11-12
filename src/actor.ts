@@ -40,7 +40,7 @@ try {
       if (url) {
         proxyTransport = createRotatingTransport(session, {
           createTransport: proxyUrl => createDefaultTransport({ HTTPS_PROXY: proxyUrl }),
-          onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : 'a Google challenge'}.`),
+          onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : reason === 'challenge' ? 'a Google challenge' : 'a failed proxy connection'}.`),
           onError: error => console.error(`Proxy rotation failed; keeping the current egress. ${error instanceof Error ? error.message : String(error)}`),
         });
         console.log('Egress: Apify proxy (rotates on HTTP 429 or a Google challenge).');
