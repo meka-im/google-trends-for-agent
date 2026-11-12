@@ -19,7 +19,7 @@
     "settledLatest": 60
   },
   "anchor": {
-    "term": "gpts",
+    "term": "sudoku",
     "points": [
       { "time": "2026-10-31T00:00:00.000Z", "value": 100 },
       { "time": "2026-10-31T01:00:00.000Z", "value": 0 },

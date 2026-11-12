@@ -31,7 +31,7 @@ Use this generic stdio configuration (swap `#v0.1.0` for no tag to follow main):
 }
 ```
 
-Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h.
+Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
 
 ## Verify networking first
 
@@ -67,10 +67,24 @@ Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryA
 | Tool | Use when | What you get |
 | --- | --- | --- |
 | `trends_ask` | First look at a term; check whether interest exists and what people search next to it. | Interest summary, Popular/Rising related queries, regions, optional `validate` verdict, diff vs the previous saved snapshot. |
+| `trends_snapshot` | You need a calibrated searches/day estimate, a traffic curve, or a chart. | Primary-window traffic plus an always-on `now 7-d` check, with `anchor` / `anchor7d` showing each window's baseline. |
 | `trends_compare` | You need relative scale: candidate vs an established term or competitor (2–5 keywords). | One shared 0–100 scale, with gap-aware latest and peak per keyword. |
 | `trends_now` | You need current demand: what is rising in a country today. | Ranked Trending Now items with volume bucket, growth, categories, related queries, and links. |
 
 Call `trends_ask` with `points: true` only when the full interest series is needed; it is omitted by default to save context. Do not claim search volume from these tools—they return relative interest.
+
+## Anchors and baselines
+
+`trends_snapshot` and `trends_ask --validate` calibrate relative interest into searches/day against an anchor chosen by window:
+
+| Window | Anchor | US baseline |
+| --- | --- | --- |
+| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | 9,900/day, ±50% |
+| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | 550/day, ±50% |
+
+The 9,900 baseline comes from the 7-day shared-scale ratio sudoku/gpts = 18.035: 18.035 × 550 ≈ 9,919. Cross-checking through thesaurus gives ≈9,857. Both round to ≈9,900, so short and long windows sit on the same `gpts = 550` ruler. The denser `sudoku` anchor avoids the sparse-24h failure that `gpts` often hits.
+
+`trends_snapshot` also fetches `now 7-d` (with `gpts` unless you force an anchor) and reports that window as `anchor7d`. Pass MCP `anchor` or CLI `--anchor` to force one term for both windows. `GTFA_BASELINES=/path/baselines.json` loads a version 2 baselines file (`anchors` plus optional `windowAnchors.short` / `.long`) for `gtfa`, `gtfa-mcp` (stdio and `--http`), and the Actor; version 1 and unknown `windowAnchors` terms are rejected with a clear error. These are estimates, not measured Google volume.
 
 ## New-term verification workflow
 

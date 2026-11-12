@@ -3,6 +3,7 @@ import { createServer } from './mcp.js';
 import { startHttpMcpServer, resolveStandbyPort } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
 import type { Transport } from './transport.js';
+import { loadBaselinesFromEnv } from './traffic.js';
 
 interface ActorInput {
   proxyConfiguration?: Record<string, unknown>;
@@ -17,7 +18,8 @@ await Actor.init();
 try {
   const input = (await Actor.getInput<ActorInput>()) ?? {};
   const geo = text(input.geo, 'US');
-  const anchor = text(input.anchor, 'gpts');
+  const anchor = text(input.anchor, '');
+  const baselines = await loadBaselinesFromEnv();
   const proxyInput = actorProxyInput(input.proxyConfiguration);
   const hasApifyCredentials = Boolean(process.env.APIFY_PROXY_PASSWORD || process.env.APIFY_TOKEN);
   const hasCustomProxy = Array.isArray(proxyInput.proxyUrls) && proxyInput.proxyUrls.length > 0;
@@ -59,7 +61,8 @@ try {
     log: message => console.log(message),
     createMcpServer: () => createServer({
       defaultGeo: geo,
-      defaultAnchor: anchor,
+      ...(anchor ? { anchor } : {}),
+      ...(baselines ? { baselines } : {}),
       snapshotDir,
       chartDir,
       ...(proxyTransport ? { transport: proxyTransport } : {}),
@@ -67,7 +70,7 @@ try {
   });
 
   // Never charge: this Actor only proxies MCP requests and has no PPE events.
-  console.log(`Standby MCP ready on port ${http.port} at /mcp (geo=${geo}, anchor=${anchor}).`);
+  console.log(`Standby MCP ready on port ${http.port} at /mcp (geo=${geo}, anchor=${anchor || 'auto'}).`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

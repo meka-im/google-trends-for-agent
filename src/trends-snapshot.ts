@@ -6,14 +6,16 @@ import { renderTrafficChart, type TrafficChartPoint } from './chart.js';
 import { filterInput, resolveFilter, settledPoints, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints } from './gaps.js';
 import { SnapshotStore, type TermSnapshot } from './snapshot.js';
-import { anchorDailySearches, DEFAULT_ANCHOR, findAnchor, type Baselines } from './traffic.js';
+import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, round2 } from './calibration.js';
 import type { InterestOverTime, RelatedQueries } from './core.js';
 import { resolveTimeZone } from './timezone.js';
 
 export interface TrafficSnapshotOptions {
   filter?: Partial<TrendsFilter>;
+  /** Explicit anchor override; when unset the window default (sudoku or gpts) is used. */
   anchor?: string;
+  baselines?: Baselines;
   store?: SnapshotStore;
   maxAgeMin?: number;
   refresh?: 'if-stale' | 'never' | 'always';
@@ -40,6 +42,8 @@ export interface TrafficEnvelopeOptions {
   week?: TermSnapshot;
   /** Non-fatal failure of the extra 7-day fetch (adds a warning). */
   weekError?: string;
+  /** Explicit anchor used for the 7-day fetch; only needed when that snapshot is missing. */
+  weekAnchor?: string;
   /** Embed inline SVG text (default false: chart/chart7d keep `svg: ""` and `path`). */
   svg?: boolean;
   /** IANA time zone for chart labels; defaults to GTFA_TZ, then UTC. */
@@ -70,7 +74,7 @@ function detectSpike(values: number[], filter: Pick<TrendsFilter, 'time'>): { ra
 /** Fetch the shared-scale term+anchor comparison and the term's related queries in one logical query. */
 export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOptions = {}): Promise<TermSnapshot> {
   resolveTimeZone(opts.timeZone);
-  const filter = resolveFilter(opts.filter), query = opts.query ?? queryTrends, anchorTerm = opts.anchor?.trim() || DEFAULT_ANCHOR.term;
+  const filter = resolveFilter(opts.filter), query = opts.query ?? queryTrends, anchorTerm = opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
   const same = term.trim() === anchorTerm.trim();
   let r: TrendsResponse;
   try { r = await query({ queries: same ? [term] : [term, anchorTerm], ...filterInput(filter), dataTypes: ['interestOverTime', 'relatedQueries'] }); }
@@ -109,26 +113,44 @@ async function fetchOne(term: string, opts: TrafficSnapshotOptions, store: Snaps
  * Also loads a now 7-d comparison in parallel unless the primary window already is now 7-d. */
 export async function fetchTrafficSnapshot(term: string, opts: TrafficSnapshotOptions = {}): Promise<TrafficSnapshotResult> {
   resolveTimeZone(opts.timeZone);
-  const store = opts.store ?? new SnapshotStore(), filter = resolveFilter(opts.filter), anchorTerm = opts.anchor?.trim() || DEFAULT_ANCHOR.term;
+  const store = opts.store ?? new SnapshotStore(), filter = resolveFilter(opts.filter);
+  const explicit = opts.anchor?.trim();
+  const anchorTerm = explicit || defaultAnchorFor(filter.time, opts.baselines);
+  const weekAnchor = explicit || defaultAnchorFor('now 7-d', opts.baselines);
   const primary = fetchOne(term, opts, store, filter, anchorTerm);
   if (filter.time === 'now 7-d') {
     const result = await primary;
     return { ...result, week: result.snapshot };
   }
   let weekError: string | undefined;
-  const week = fetchOne(term, opts, store, { ...filter, time: 'now 7-d' }, anchorTerm)
+  const week = fetchOne(term, opts, store, { ...filter, time: 'now 7-d' }, weekAnchor)
     .catch(e => { weekError = e instanceof Error ? e.message : String(e); return undefined; });
   const [result, weekResult] = await Promise.all([primary, week]);
   return { ...result, ...(weekResult ? { week: weekResult.snapshot } : {}), ...(weekError ? { weekError } : {}) };
 }
 
+/** Baseline block for a window that has no snapshot (e.g. the extra 7-day fetch failed). */
+function baselineAnchor(term: string, geo: string, baselines?: Baselines) {
+  const calibration = findAnchor(baselines, term, geo);
+  const daily = calibration ? anchorDailySearches(calibration) : null;
+  return {
+    term,
+    dailySearches: daily === null ? null : round(daily),
+    tolerance: daily === null ? null : calibration?.tolerance ?? .5,
+    level: null,
+    ratio: null,
+    source: 'baseline' as const,
+    note: 'No now 7-d snapshot; baseline only',
+  };
+}
+
 /** Calibrate one shared-scale snapshot into traffic, series points and an inline SVG. */
 function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
   const filter = snap.filter;
-  const anchorTerm = snap.anchor?.term ?? DEFAULT_ANCHOR.term;
+  const anchorTerm = snap.anchor?.term ?? defaultAnchorFor(filter.time, opts.baselines);
   const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
   const daily = calibration ? anchorDailySearches(calibration) : null;
-  const tolerance = daily === null ? null : calibration?.tolerance ?? DEFAULT_ANCHOR.tolerance ?? .5;
+  const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
   const c = calibrateTraffic(snap.interest.points, snap.anchor?.points ?? [], { filter, dailySearches: daily, tolerance });
   const anchor = {
     term: anchorTerm,
@@ -141,7 +163,7 @@ function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
   };
   const chartPoints: TrafficChartPoint[] = c.termMarked.map((p, i) => ({ t: p.time, traffic: c.seriesTraffic[i], ...(p.gap ? { gap: true } : {}) }));
   const anchorChartPoints: TrafficChartPoint[] = c.anchorMarked.map((p, i) => ({ t: p.time, traffic: p.gap ? null : c.anchorTraffic[i], ...(p.gap ? { gap: true } : {}) }));
-  const svg = renderTrafficChart({ term: snap.term, points: chartPoints, anchorPoints: anchorChartPoints, ...(opts.timeZone !== undefined ? { timeZone: opts.timeZone } : {}) });
+  const svg = renderTrafficChart({ term: snap.term, points: chartPoints, anchorPoints: anchorChartPoints, anchorTerm, ...(opts.timeZone !== undefined ? { timeZone: opts.timeZone } : {}) });
   return {
     filter, anchorTerm, daily, tolerance, termMarked: c.termMarked, anchorMarked: c.anchorMarked,
     anchorKept: c.anchorKept, anchorLevel: c.anchorLevel, kept: c.kept, factor: c.factor,
@@ -182,6 +204,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const weekSnap = snap.filter.time === 'now 7-d' ? snap : opts.week;
   const week = weekSnap ? (weekSnap === snap ? primary : calibrate(weekSnap, chartOptions)) : undefined;
   const filter = snap.filter, anchorTerm = primary.anchorTerm, traffic = primary.traffic;
+  const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter.geo, opts.baselines);
   if (primary.gapCount) warnings.push(`${primary.gapCount} low-sample gap point${primary.gapCount === 1 ? '' : 's'} in interest series (zero values between nonzero points) excluded from aggregates and verdict`);
   if (primary.daily === null) warnings.push(`No anchor calibration for geo ${filter.geo}; traffic fields are null`);
   else if (primary.warning) warnings.push(primary.warning);
@@ -233,7 +256,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   return {
     ok, schemaVersion: 1 as const, status: snap.status, term: snap.term, summary,
     filter: { geo: filter.geo, time: filter.time, category: filter.category, property: filter.property || 'web' },
-    anchor: primary.anchor, traffic,
+    anchor: primary.anchor, anchor7d, traffic,
     series: {
       points: primary.termMarked.map((p, i) => ({ t: p.time, score: p.value, traffic: primary.seriesTraffic[i], ...(p.gap ? { gap: true } : {}) })),
       anchorPoints: primary.anchorMarked.map(p => ({ t: p.time, score: p.value })),

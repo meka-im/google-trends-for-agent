@@ -47,6 +47,8 @@ Examples:
   gtfa doctor --json
   gtfa help now
 
+  GTFA_BASELINES=/path/baselines.json overrides anchor baselines for ask --validate and snapshot.
+
 Exit codes: 0 success, 1 upstream failure, 2 partial, 3 blocked/rate limited, 4 invalid input`;
 function exitCode(results: TrendsResponse[]): number {
   if (results.some(r => ['BLOCKED', 'RATE_LIMITED'].includes(r.error?.code ?? ''))) return 3;

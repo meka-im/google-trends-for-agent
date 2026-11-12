@@ -6,7 +6,7 @@ It returns **relative search interest** and **anchor-calibrated searches/day est
 
 ## Why use anchored traffic?
 
-Google Trends reports a 0–100 relative scale, not search volume. The `trends_snapshot` tool compares a term with an anchor (`gpts` by default) on the same scale, then applies a calibrated baseline to estimate **searches/day**. Numerical traffic stays `null` when the anchor is too sparse or when no calibration exists, instead of inventing a number.
+Google Trends reports a 0–100 relative scale, not search volume. The `trends_snapshot` tool compares a term with a window-aware anchor on the same scale, then applies a calibrated baseline to estimate **searches/day**: `sudoku` (US 9,900/day) for 1-hour/4-hour/1-day windows, `gpts` (US 550/day) for 7-day-and-longer windows. Numerical traffic stays `null` when the anchor is too sparse or when no calibration exists, instead of inventing a number.
 
 This makes the output useful for comparing an emerging term with an established one, checking whether interest is rising, or adding a search-interest signal to an agent workflow. Light, interactive use only: this is an unofficial client for undocumented endpoints and has no SLA.
 
@@ -49,14 +49,14 @@ The hostname uses your Apify username with dots replaced by hyphens (for example
 | `trends_ask` | Interest summary, Popular/Rising related queries, regions, optional verdict and diff. |
 | `trends_compare` | Relative 0–100 interest for 2–5 keywords on one shared scale. |
 | `trends_now` | Trending Now by country, with rank, growth, categories and links. |
-| `trends_snapshot` | Calibrated searches/day, anchor/traffic blocks, verdict and chart paths. |
+| `trends_snapshot` | Calibrated searches/day, `anchor` / `anchor7d` and traffic blocks, verdict and chart paths. |
 
 Defaults are US, past 24 hours, web search and all categories. Use `trends_now` for the separate Trending Now window. On `BLOCKED`, stop and report; on `RATE_LIMITED`, wait `retryAfterSec` and retry once at most.
 
 ## Input
 
 - **Proxy configuration** — defaults to Apify Residential proxy, country US. Keep residential egress if Google rate-limits data-center IPs. The Actor rotates the proxy session when Google returns HTTP 429 or a challenge.
-- **Calibration anchor** — default `gpts`; used by validation and snapshot traffic estimates.
+- **Calibration anchor** — leave empty for automatic: `sudoku` for 1-hour/4-hour/1-day windows, `gpts` for 7 days and longer. An explicit term forces both the requested and 7-day windows. Set `GTFA_BASELINES=/path/baselines.json` to load a version 2 baselines file.
 - **Default country** — default `US`; used when a tool call omits `geo`.
 
 ## Cost

@@ -2,6 +2,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './mcp.js';
 import { DEFAULT_HTTP_PORT, parsePort, startHttpMcpServer } from './http.js';
+import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 
 const args = process.argv.slice(2);
 const valueAfter = (name: string): string | undefined => {
@@ -9,13 +10,16 @@ const valueAfter = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
+let baselines: Baselines | undefined;
 const serverOptions = () => ({
+  ...(baselines ? { baselines } : {}),
   // Let read-only installs keep caches/charts outside the current working directory.
   ...(process.env.GTFA_SNAPSHOT_DIR ? { snapshotDir: process.env.GTFA_SNAPSHOT_DIR } : {}),
   ...(process.env.GTFA_CHART_DIR ? { chartDir: process.env.GTFA_CHART_DIR } : {}),
 });
 
 try {
+  baselines = await loadBaselinesFromEnv();
   if (args.includes('--http')) {
     const port = parsePort(valueAfter('--port') ?? process.env.PORT ?? undefined, DEFAULT_HTTP_PORT);
     const http = await startHttpMcpServer({

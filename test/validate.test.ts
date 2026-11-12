@@ -44,9 +44,13 @@ it('uses the full shared-scale comparison window and calibrates only matching ge
   for (const geo of ['US', 'JP']) {
     const [r] = await validateTerms(['x'], { store: await store(), filter: { geo }, query: mock([20, 20, 20, 20, 100]) });
     expect(r.anchor.ratio).toBe(3.6);
+    expect(r.anchor.term).toBe('sudoku');
     if (geo === 'US') {
-      expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 1980, low: 990, high: 2970 });
+      expect(r.anchor.dailySearches).toBe(9900);
+      expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'sudoku', dailySearches: 9900 });
+      expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 35640, low: 17820, high: 53460 });
     } else {
+      expect(r.anchor.dailySearches).toBeNull();
       expect(r.anchor.traffic.average).toBeNull();
       expect(r.anchor.note).toContain('无法估');
     }
@@ -120,7 +124,10 @@ it('runs CLI JSON validation offline and warns without failing on blocks', async
 });
 it('loads daily baselines for anchor calibration', async () => {
   const b = await loadBaselines('examples/baselines.json');
+  expect(b.version).toBe(2);
   expect(b.anchors[0]).toMatchObject({ term: 'gpts', dailySearches: 550, geo: 'US', tolerance: 0.5 });
+  expect(b.anchors[1]).toMatchObject({ term: 'sudoku', dailySearches: 9900, geo: 'US', tolerance: 0.5 });
+  expect(b.windowAnchors).toEqual({ short: 'sudoku', long: 'gpts' });
 });
 it('never serves a blocked snapshot from cache', async () => {
   const s = await store();
@@ -143,8 +150,17 @@ it('does not flag spikes for small bumps, long windows or short series', () => {
 it('shares one anchor comparison across up to four terms per run', async () => {
   const query = mock(Array(20).fill(10));
   await validateTerms(['a', 'b', 'c'], { store: await store(), query });
-  const compareCalls = (query as any).mock.calls.filter((c: any[]) => c[0].queries.includes('gpts'));
-  expect(compareCalls).toHaveLength(1); expect(compareCalls[0][0].queries).toEqual(['a', 'b', 'c', 'gpts']);
+  const compareCalls = (query as any).mock.calls.filter((c: any[]) => c[0].queries.includes('sudoku'));
+  expect(compareCalls).toHaveLength(1); expect(compareCalls[0][0].queries).toEqual(['a', 'b', 'c', 'sudoku']);
+});
+it('uses gpts for 7-day validation and exposes its daily baseline', async () => {
+  const query = mock([20, 20, 20, 20, 100]);
+  const [r] = await validateTerms(['x'], { store: await store(), filter: { geo: 'US', time: 'now 7-d' }, query });
+  expect(r.anchor.term).toBe('gpts');
+  expect(r.anchor.dailySearches).toBe(550);
+  expect(r.anchor.traffic).toMatchObject({ average: 1980, low: 990, high: 2970 });
+  expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'gpts', dailySearches: 550 });
+  expect((query as any).mock.calls.some((c: any[]) => c[0].queries.includes('gpts'))).toBe(true);
 });
 it('ask CLI maps blocked/rate-limited to exit 3, other upstream errors to 1, and partial to 2', async () => {
   const s = await store();

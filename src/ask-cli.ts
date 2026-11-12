@@ -6,12 +6,13 @@ import { resolveFilter } from './filter.js';
 import { SnapshotStore, askTerm, diffSnapshots } from './snapshot.js';
 import type { queryTrends } from './api.js';
 import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './mcp.js';
+import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 
 export const askHelp = `Usage: gtfa ask <term> [options]
   Returns interest, popular (Top) and rising related queries, and regions for one term.
   --validate          Add a calibrated verdict (spiking, rising, steady, flat, no_data, blocked)
   --from FILE|-       With --validate: read JSON leads (batch)
-  --anchor TERM       Anchor for calibration (default gpts); --no-anchor to skip
+  --anchor TERM       Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+; --no-anchor to skip
   --trending          With --validate: also check Trending Now
   --diff              Add changes vs the previous saved snapshot (output is always JSON with --diff)
   --points            Include the full interest series (omitted by default to keep agent context small)
@@ -19,7 +20,8 @@ export const askHelp = `Usage: gtfa ask <term> [options]
   --max-age MIN       Reuse saved snapshots younger than MIN minutes (default 360)
   --geo US --time "now 1-d" --category N --property ""
   --store DIR         Snapshot storage (default .gtfa/snapshots)
-  --json              Agent envelope JSON (ask/validate; --diff implies JSON; --validate without --json prints a table)`;
+  --json              Agent envelope JSON (ask/validate; --diff implies JSON; --validate without --json prints a table)
+  Environment: GTFA_BASELINES=/path/baselines.json overrides anchor baselines`;
 
 /** Map an ask/validation envelope to the documented CLI exit code. */
 function envelopeExitCode(e: { ok?: boolean; status?: string; error?: { code?: string } }): number {
@@ -32,7 +34,7 @@ function envelopeExitCode(e: { ok?: boolean; status?: string; error?: { code?: s
 }
 
 /** `ask` command: snapshot reuse/fetch, optional verdict (--validate) and diff vs previous (--diff). */
-export async function runAskCli(args: string[], options: { query?: typeof queryTrends; stdin?: string } = {}) {
+export async function runAskCli(args: string[], options: { query?: typeof queryTrends; stdin?: string; baselines?: Baselines } = {}) {
   try {
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       from: { type: 'string' }, geo: { type: 'string' }, time: { type: 'string' }, category: { type: 'string' }, property: { type: 'string' },
@@ -52,7 +54,8 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
       const leads: (string | LeadInput)[] = positionals.length ? [positionals.join(' ')] : [];
       if (v.from) leads.push(...parseLeadInput(JSON.parse(v.from === '-' ? options.stdin ?? readFileSync(0, 'utf8') : await readFile(v.from, 'utf8'))));
       if (!leads.length) throw new Error('provide a term or --from');
-      const rows = await validateTerms(leads, { filter, store, maxAgeMin, query: options.query, anchor: v['no-anchor'] ? false : v.anchor, trending: v.trending, refresh });
+      const baselines = options.baselines ?? await loadBaselinesFromEnv();
+      const rows = await validateTerms(leads, { filter, store, maxAgeMin, query: options.query, anchor: v['no-anchor'] ? false : v.anchor, baselines, trending: v.trending, refresh });
       if (rows.some(r => r.verdict === 'blocked')) stderr = 'Warning: BLOCKED/RATE_LIMITED; validation stopped. No volumes invented.';
       const snapshots = await Promise.all(rows.map(r => store.latest(r.term, r.filter)));
       const out = await Promise.all(rows.map(async (r, i) => {

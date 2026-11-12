@@ -37,13 +37,13 @@ The stdio server exposes exactly four tools.
 | Tool | Inputs | What it returns |
 | --- | --- | --- |
 | `trends_ask` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `fresh` (`false`); `validate` (`false`); `points` (`false`) | Interest, Popular/Rising queries, regions, optional verdict, diff vs the previous saved snapshot. `points: true` includes the full series. |
-| `trends_snapshot` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `anchor` (`gpts`); `fresh` (`false`); `svg` (`false`); `tz` (`GTFA_TZ`, then `UTC`) | Calibrated searches/day, anchor and traffic blocks, series, verdict, related queries, `chart` and always-on `chart7d` / `traffic7d`. |
+| `trends_snapshot` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `anchor` (optional; automatic when omitted); `fresh` (`false`); `svg` (`false`); `tz` (`GTFA_TZ`, then `UTC`) | Calibrated searches/day, `anchor` / `anchor7d` and traffic blocks, series, verdict, related queries, `chart` and always-on `chart7d` / `traffic7d`. |
 | `trends_compare` | `keywords` (2–5, required); `geo` (`US`); `time` (`now 1-d`) | Relative 0–100 interest for each keyword on one shared scale, with gap-aware latest/peak. Duplicate keywords return `INVALID_INPUT`. |
 | `trends_now` | `geos` (array, `"default"`, or `"all"`; default `"default"` = 30 countries); `hours` (`4`, `24`, `48`, or `168`; default `24`); `limit` (integer ≥ 0; default `10`) | Trending Now items per country, with rank, traffic bucket, growth, categories, related queries, and links. |
 
-`time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live.
+`time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live. Anchors are automatic by window: `sudoku` for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` for `now 7-d` and longer. An explicit MCP `anchor` or CLI `--anchor` overrides both the requested and the extra 7-day window.
 
-Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
+Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
 ## Output contract
 
@@ -52,7 +52,7 @@ The MCP results and the CLI agent envelopes (`ask`, `snapshot --json`, and compa
 Tool bodies:
 
 - `trends_ask`: `term`, `summary`, `filter`, `interest`, `tables`, `regions`, optional `verdict`, `diff`, optional `diffReason`, `meta`.
-- `trends_snapshot`: `term`, `summary`, `filter`, `anchor`, `traffic`, `series`, `chart`, `chart7d`, `traffic7d`, `tables`, `verdict`, `meta`.
+- `trends_snapshot`: `term`, `summary`, `filter`, `anchor`, `anchor7d`, `traffic`, `series`, `chart`, `chart7d`, `traffic7d`, `tables`, `verdict`, `meta`.
 - `trends_compare`: `filter`, `summary`, `series`, `meta`.
 - `trends_now`: `hours`, `geos`, `summary`, `byGeo`, `meta`.
 
@@ -84,11 +84,29 @@ Batch exit precedence for compare/default mode and `now` is blocked/rate-limited
 traffic = round(score ÷ anchorLevel × dailySearches)
 ```
 
-`anchorLevel` is the mean of the anchor's non-gap points in the same shared-scale comparison. The built-in baseline is in [examples/baselines.json](../examples/baselines.json):
+`anchorLevel` is the mean of the anchor's non-gap points in the same shared-scale comparison. Anchors are automatic by window:
 
-| Anchor | Geo | Daily searches | Tolerance |
-| --- | --- | --- | --- |
-| `gpts` | `US` | **550/day** (about 16.5k/month) | ±50% |
+| Window | Anchor | Geo | Daily searches | Tolerance | How derived |
+| --- | --- | --- | --- | --- | --- |
+| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | `US` | **9,900/day** | ±50% | 18.035 × 550 ≈ 9,919 (7-day sudoku/gpts ratio); thesaurus cross-check ≈9,857. |
+| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | `US` | **550/day** (≈16.5k/month) | ±50% | Long-window ruler; the baseline the short-window number is derived from. |
+
+Derivation of 9,900: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 550 ≈ 9,919. Cross-check through thesaurus: thesaurus/gpts 7.341 × 550 ≈ 4,038, then sudoku/thesaurus 2.441 × 4,038 ≈ 9,857. Both round to ≈9,900, so 1-day and 7-day estimates sit on the same ruler (`gpts = 550`). Alternates worth noting: thesaurus ≈4,000/day is closer to small AI terms but has zero points at night; chairs ≈22,500/day is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
+
+The built-in baselines are in [examples/baselines.json](../examples/baselines.json). A version 2 file can replace or add anchors; `windowAnchors` remaps the automatic short/long defaults:
+
+```json
+{
+  "version": 2,
+  "anchors": [
+    { "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 },
+    { "term": "gpts", "geo": "US", "dailySearches": 550, "tolerance": 0.5 }
+  ],
+  "windowAnchors": { "short": "sudoku", "long": "gpts" }
+}
+```
+
+Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot), `gtfa-mcp` (stdio or `--http`), and the Actor; library callers pass `baselines`. User anchors win by term + geo, then the built-ins apply. Every `windowAnchors` term must exist in `anchors` or the built-ins. Version 1 is rejected, and an invalid file fails with a clear error instead of falling back. An explicit `--anchor` / MCP `anchor` / Actor anchor override wins for every window; otherwise the primary window chooses its automatic anchor and the extra `now 7-d` fetch uses the 7-day anchor. `anchor` and `anchor7d` report each window's term and baseline.
 
 `traffic.low` / `traffic.high` apply that tolerance to the average. Numeric traffic is `null` when no matching geo + anchor baseline exists, or when the anchor reliability gate fails:
 
@@ -96,9 +114,9 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 - gap-aware `anchorLevel ≥ 1` on Trends' integer scale;
 - at least 25% of non-gap anchor points nonzero.
 
-A real 24-hour Sora run (US, 2026-11-02 UTC) failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. So `anchor.ratio` and numeric `traffic` fields were `null`, the chart said "No calibrated traffic", and `anchor.note` explained why. This is expected, not a rendering bug; use a denser window or anchor. The verdict still used related-query and series-shape signals. A 7-day Sora run on the same date calibrated normally: average **5,782**, latest **6,166** (6.2k), peak **8,684** (8.7k) searches/day.
+A real 24-hour Sora run with the old `gpts` anchor failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. That is why short windows now use `sudoku`: in a US 24-hour check it was 99.4% nonzero (CV 0.21), and small AI terms such as `gemini 4 carbon`, `pika h3`, and `genie 4` stayed nonzero next to it. A 7-day Sora run with `gpts` calibrated normally: average **5,782**, latest **6,166** (6.2k), peak **8,684** (8.7k) searches/day.
 
-These numbers are **estimates from an anchor**, not measured Google search volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from a separate 7-day fetch and give you a second check. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent.
+These numbers are **estimates from an anchor**, not measured Google search volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from a separate 7-day fetch and give you a second check; that fetch uses `gpts` unless an explicit anchor was given. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent. Cache keys include the filter window and anchor term, so a 1-day `sudoku` snapshot and a 7-day `gpts` snapshot never collide.
 
 ## Rate limits, retries, and timeouts
 

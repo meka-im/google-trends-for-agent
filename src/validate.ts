@@ -4,7 +4,7 @@ import { resolveFilter, filterInput, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints, summarizeInterest } from './gaps.js';
 import { askTerm, SnapshotStore, type TermSnapshot } from './snapshot.js';
 import { fetchTrending, type TrendingItem } from './trending.js';
-import { anchorDailySearches, DEFAULT_ANCHOR, findAnchor, type Baselines } from './traffic.js';
+import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, type TrafficEstimate } from './calibration.js';
 export interface LeadInput { name: string; variants?: string[]; source?: string; url?: string; firstSeen?: string }
 export function parseLeadInput(json: unknown): LeadInput[] {
@@ -21,7 +21,7 @@ export interface TermVerdict {
   confidence: 'high' | 'mid' | 'low'; reasons: string[]; interest: TermSnapshot['interest'];
   popular: TermSnapshot['popular']; rising: TermSnapshot['rising']; regions: TermSnapshot['regions'];
   /** `traffic` is searches/day (shared snapshot formula). */
-  anchor: { term: string; ratio: number | null; band: 'high' | 'mid' | 'low' | null; traffic: TrafficEstimate; note: string; warning?: string };
+  anchor: { term: string; dailySearches: number | null; ratio: number | null; band: 'high' | 'mid' | 'low' | null; traffic: TrafficEstimate; note: string; warning?: string };
   trendingNow?: TrendingItem; retryAfterSec?: number; snapshotId: string; fetchedAt: string; source: 'live' | 'cache'; exploreUrl: string;
 }
 export interface ValidateOptions {
@@ -41,7 +41,10 @@ const mean = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 export async function validateTerms(input: (string | LeadInput)[], opts: ValidateOptions = {}): Promise<TermVerdict[]> {
   if (opts.concurrency !== undefined && opts.concurrency !== 1) throw new Error('validation concurrency must be 1');
   const filter = resolveFilter(opts.filter), store = opts.store ?? new SnapshotStore(), query = opts.query ?? queryTrends;
-  const anchorTerm = opts.anchor === false ? '' : opts.anchor ?? 'gpts';
+  const anchorTerm = opts.anchor === false ? '' : opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
+  const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
+  const daily = calibration ? anchorDailySearches(calibration) : null;
+  const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
   const results: TermVerdict[] = [], rows = new Map<string, TermVerdict>(); let blocked = false;
   const pending: { term: string; anchor: TermVerdict['anchor'] }[] = [];
   const trending = opts.trending ? await (opts.trendingFetch ?? fetchTrending)({ geo: filter.geo, hours: 24 }) : undefined;
@@ -61,7 +64,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     else if (values.length >= 2 && ratio >= 1.5 || s.rising.some(r => r.breakout)) { verdict = 'rising'; reasons.push(s.rising.some(r => r.breakout) ? 'Breakout related queries' : 'Settled tail mean >= 1.5 × earlier mean'); }
     else if (Math.max(...values) >= 10 && tail >= early) { verdict = 'steady'; reasons.push('Settled peak >= 10 with no decline'); }
     else reasons.push('Insufficient sustained rise or declining interest');
-    const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'gpts', ratio: null, band: null, traffic: nullTraffic(), note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
+    const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'none', dailySearches: daily === null ? null : Math.round(daily), ratio: null, band: null, traffic: nullTraffic(), note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
     if (anchorTerm && verdict !== 'blocked' && verdict !== 'no_data' && !blocked) pending.push({ term, anchor });
     if (!anchor.traffic.average && filter.geo !== 'US') anchor.note = `无法估 (no calibration for geo ${filter.geo})`;
     const match = trending?.items.find(i => i.title.toLowerCase().includes(term.toLowerCase()) || i.query.toLowerCase().includes(term.toLowerCase()));
@@ -82,9 +85,6 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     const timeline = (comparison.data?.interestOverTime as InterestOverTime)?.timeline ?? [];
     const k = batch.length;
     const anchorPoints = timeline.map(p => ({ time: p.time, value: p.values[k] ?? 0 }));
-    const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
-    const daily = calibration ? anchorDailySearches(calibration) : null;
-    const tolerance = daily === null ? null : calibration?.tolerance ?? DEFAULT_ANCHOR.tolerance ?? .5;
     batch.forEach((b, j) => {
       const anchor = b.anchor;
       if (comparison.status === 'error' || !timeline.length) return;

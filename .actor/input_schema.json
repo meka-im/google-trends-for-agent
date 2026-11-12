@@ -10,16 +10,17 @@
       "editor": "proxy",
       "prefill": {
         "useApifyProxy": true,
-        "apifyProxyGroups": ["RESIDENTIAL"],
+        "apifyProxyGroups": [
+          "RESIDENTIAL"
+        ],
         "apifyProxyCountry": "US"
       }
     },
     "anchor": {
-      "title": "Calibration anchor",
+      "title": "Anchor override",
       "type": "string",
-      "description": "Anchor term used for calibrated searches/day estimates. The built-in US baseline is gpts.",
-      "editor": "textfield",
-      "default": "gpts"
+      "description": "Leave empty for automatic: sudoku for 1-hour/4-hour/1-day windows, gpts for 7 days and longer.",
+      "editor": "textfield"
     },
     "geo": {
       "title": "Default country",

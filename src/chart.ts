@@ -5,6 +5,8 @@ export interface TrafficChartOptions {
   term: string;
   points: readonly TrafficChartPoint[];
   anchorPoints?: readonly TrafficChartPoint[];
+  /** Anchor term shown in the legend, e.g. sudoku for short windows. */
+  anchorTerm?: string;
   width?: number;
   height?: number;
   /** IANA time zone for axis labels and callouts; defaults to GTFA_TZ, then UTC. */
@@ -234,7 +236,7 @@ export function renderTrafficChart(opts: TrafficChartOptions): string {
   const empty = !values.length ? `<text x="${width / 2}" y="${TOP + plotH / 2}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#6b7280">No calibrated traffic</text>` : '';
   const legend = `<g font-family="system-ui,sans-serif" font-size="11" fill="#374151">` +
     `<line x1="${LEFT}" y1="${height - 16}" x2="${LEFT + 24}" y2="${height - 16}" stroke="#2563eb" stroke-width="2"/><text x="${LEFT + 30}" y="${height - 9}">${esc(opts.term)}</text>` +
-    (anchor.length ? `<line x1="${LEFT + 170}" y1="${height - 16}" x2="${LEFT + 194}" y2="${height - 16}" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/><text x="${LEFT + 200}" y="${height - 9}">anchor</text>` : '') +
+    (anchor.length ? `<line x1="${LEFT + 170}" y1="${height - 16}" x2="${LEFT + 194}" y2="${height - 16}" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/><text x="${LEFT + 200}" y="${height - 9}">${esc(opts.anchorTerm ? `anchor (${opts.anchorTerm})` : 'anchor')}</text>` : '') +
     `</g>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(opts.term)} traffic chart (${esc(timeZone)})">` +
     `<title>${esc(opts.term)} searches/day (${esc(timeZone)})</title>` +

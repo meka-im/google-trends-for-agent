@@ -3,7 +3,7 @@ import { resolveFilter } from './filter.js';
 import { SnapshotStore } from './snapshot.js';
 import { fetchTrafficSnapshot, trafficSnapshotEnvelope, trafficSnapshotError } from './trends-snapshot.js';
 import type { queryTrends } from './api.js';
-import type { Baselines } from './traffic.js';
+import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { resolveTimeZone } from './timezone.js';
 
 export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
@@ -11,7 +11,7 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   traffic series, related queries, verdict, and chart file paths for the requested
   window plus an always-on now 7-d curve (chart7d / traffic7d); --svg embeds SVG text.
   --geo US --time "now 1-d"          Explore filter (all categories, web)
-  --anchor gpts                     Anchor term (default gpts)
+  --anchor TERM                     Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+
   --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
@@ -20,6 +20,7 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   --svg                             Embed inline SVG text (default: svg is "", path is kept)
   --json                            Agent envelope JSON (same as trends_snapshot)
   --pretty                          Indent JSON
+  Environment: GTFA_BASELINES=/path/baselines.json overrides anchor baselines
   --help`;
 
 /** `snapshot` command: calibrated traffic estimate, chart, and related queries. */
@@ -41,14 +42,15 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
     const store = new SnapshotStore(v.store);
     const maxAge = maxAgeMin === undefined ? 360 : Number(maxAgeMin);
     if (!Number.isFinite(maxAge) || maxAge < 0) throw new Error('invalid max-age');
+    const baselines = options.baselines ?? await loadBaselinesFromEnv();
     const result = await fetchTrafficSnapshot(term, {
-      filter, store, anchor: v.anchor, maxAgeMin: maxAge, query: options.query, timeZone,
+      filter, store, anchor: v.anchor, baselines, maxAgeMin: maxAge, query: options.query, timeZone,
       refresh: v.fresh ? 'always' : undefined,
     });
     const chartDir = v['chart-dir'] ?? options.chartDir;
     const envelope = await trafficSnapshotEnvelope(result.snapshot, {
-      cached: result.source === 'cache', ageMin: result.ageMin, baselines: options.baselines,
-      week: result.week, timeZone, ...(result.weekError ? { weekError: result.weekError } : {}),
+      cached: result.source === 'cache', ageMin: result.ageMin, baselines,
+      week: result.week, timeZone, ...(result.weekError ? { weekError: result.weekError } : {}), ...(v.anchor ? { weekAnchor: v.anchor } : {}),
       ...(chartDir !== undefined ? { chartDir } : {}), svg: v.svg === true,
     });
     const code = !envelope.ok ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1) : 0;
@@ -63,6 +65,7 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
       `traffic: avg ${envelope.traffic.average ?? 'n/a'} / latest ${envelope.traffic.latest ?? 'n/a'} / settled ${envelope.traffic.settledLatest ?? 'n/a'} / peak ${envelope.traffic.peak ?? 'n/a'} / low-high ${envelope.traffic.low ?? 'n/a'}-${envelope.traffic.high ?? 'n/a'}`,
       `verdict: ${envelope.verdict.label} (${envelope.verdict.confidence}) — ${envelope.verdict.reasons.join('; ')}`,
       `chart: ${envelope.chart.path ?? (envelope.chart.svg ? 'inline only' : 'unavailable')}`,
+      `anchor7d: ${envelope.anchor7d.term} = ${envelope.anchor7d.dailySearches ?? 'n/a'} searches/day (level ${envelope.anchor7d.level ?? 'n/a'}, ${envelope.anchor7d.ratio ?? 'n/a'}×)`,
       `traffic7d: avg ${weekTraffic.average ?? 'n/a'} / latest ${weekTraffic.latest ?? 'n/a'} / settled ${weekTraffic.settledLatest ?? 'n/a'} / peak ${weekTraffic.peak ?? 'n/a'} / low-high ${weekTraffic.low ?? 'n/a'}-${weekTraffic.high ?? 'n/a'}`,
       `chart7d: ${weekChart.path ?? (weekChart.svg ? 'inline only' : 'unavailable')}`,
       ...envelope.tables.popular.slice(0, 5).map(r => `popular #${r.rank} ${r.query}: ${r.formattedValue}${r.estDaily === null ? '' : ` (~${r.estDaily}/day)`}`),
