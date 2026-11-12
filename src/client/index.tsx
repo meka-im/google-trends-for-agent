@@ -495,12 +495,13 @@ const styles: Record<string, CSSProperties> = {
   },
   signupBar: {
     display: 'grid', gap: 6, padding: '10px 12px', borderRadius: 10,
-    border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
-    background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.08))',
+    // Translucent info blue reads in both light and dark themes.
+    border: '0.5px solid rgba(47,111,237,.28)',
+    background: 'rgba(47,111,237,.07)',
   },
   signupText: { margin: 0, fontSize: 12, lineHeight: 1.5 },
   signupLinks: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 12 },
-  signupPrimary: { color: 'var(--dsw-alias-brand-primary, #2f6fed)', fontWeight: 600, textDecoration: 'none' },
+  signupPrimary: { color: '#2f6fed', fontWeight: 600, textDecoration: 'none' },
   signupSecondary: { color: 'var(--dsw-alias-label-tertiary, inherit)', textDecoration: 'underline' },
   usageBlock: { display: 'grid', gap: 6 },
   freePlanHint: { margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-state-warning-primary, #b7791f)' },
