@@ -3,7 +3,7 @@
   "name": "google-trends-for-agent",
   "title": "Google Trends MCP for AI Agents",
   "description": "Remote MCP server for Google Trends search-interest signals, with calibrated searches/day estimates and explicit error codes. Streamable HTTP, Standby mode, US residential egress.",
-  "version": "0.1.0",
+  "version": "0.1",
   "meta": {
     "generatedBy": "DeepSeek Harness with deepseek-v4.1-flash"
   },
