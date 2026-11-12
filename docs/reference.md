@@ -55,7 +55,7 @@ Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (s
 | --- | --- | --- |
 | `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `apify` uses the Apify proxy directly from the core library. |
 | `apifyToken` | unset | Apify API token saved in the profile's `cordis.patch.yml` (hidden in the UI, never logged or returned). When empty, `APIFY_TOKEN` then `APIFY_PROXY_PASSWORD` are used. |
-| `apifyProxyGroup` | `RESIDENTIAL` | `RESIDENTIAL` for residential IPs, or `auto` for Apify's automatic datacenter selection. Auto uses the proxy username `auto` with no group. |
+| `apifyProxyGroup` | `RESIDENTIAL` | `RESIDENTIAL` for residential IPs, or `auto` for Apify's automatic datacenter selection. Auto omits the `groups` parameter. |
 | `apifyProxyCountry` | `US` | Apify proxy country from the built-in list. |
 | `geo` | `US` | Default geo for `trends_ask`, `trends_compare`, and `trends_snapshot`; empty string means Worldwide, which has no built-in calibration and returns null traffic. |
 | `anchor` | automatic | Optional fixed anchor for `validate` / `trends_snapshot`; blank uses sudoku for short windows and gpts otherwise. |
@@ -67,7 +67,7 @@ Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (s
 
 Every setting with a fixed set of values is a select, segmented control, or switch; only the token, a new anchor term, `dailySearches`, and the two directories are typed inputs.
 
-`egress: apify` resolves credentials in order: the configured token, `APIFY_TOKEN`, then `APIFY_PROXY_PASSWORD`. With a token it fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me`; with only `APIFY_PROXY_PASSWORD` it uses that directly. `apifyProxyGroup: auto` builds `http://auto:<password>@proxy.apify.com:8000` (session and country parameters are still appended); `RESIDENTIAL` builds `groups-RESIDENTIAL`. Setting `APIFY_TOKEN` and leaving the UI token blank keeps the token out of the profile, and `!!js process.env.APIFY_TOKEN` is unnecessary. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
+`egress: apify` resolves credentials in order: the configured token, `APIFY_TOKEN`, then `APIFY_PROXY_PASSWORD`. With a token it fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me`; with only `APIFY_PROXY_PASSWORD` it uses that directly. `RESIDENTIAL` builds the username `groups-RESIDENTIAL,session-<id>,country-<CC>`; `auto` omits `groups` (`session-<id>,country-<CC>`), per Apify's username parameters. Setting `APIFY_TOKEN` and leaving the UI token blank keeps the token out of the profile, and `!!js process.env.APIFY_TOKEN` is unnecessary. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
 
 ## Output contract
 

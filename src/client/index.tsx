@@ -161,6 +161,7 @@ export const EN: Record<string, string> = {
   anchorGeo: 'Geo',
   anchorDaily: 'Searches/day',
   anchorTolerance: 'Tolerance',
+  toleranceDefault: 'Default (±50%)',
   tolerance10: '±10%',
   tolerance25: '±25%',
   tolerance50: '±50%',
@@ -232,6 +233,7 @@ export const ZH: Record<string, string> = {
   anchorGeo: '地区',
   anchorDaily: '每日搜索量',
   anchorTolerance: '容差',
+  toleranceDefault: '默认（±50%）',
   tolerance10: '±10%',
   tolerance25: '±25%',
   tolerance50: '±50%',
@@ -331,7 +333,6 @@ const TOLERANCE_OPTIONS = [
   { value: '0.75', label: 'tolerance75' },
   { value: '1', label: 'tolerance100' },
 ] as const;
-const TOLERANCE_VALUES = TOLERANCE_OPTIONS.map(option => option.value);
 const GEO_SET = new Set<string>(GEO_CODES);
 const COUNTRY_SET = new Set<string>(PROXY_COUNTRY_CODES);
 
@@ -345,11 +346,12 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+/** Keep the stored tolerance exactly; '' means omitted (the built-in ±50% default). */
 function normalizeTolerance(value: unknown): string {
-  const numeric = Number(text(value));
-  if (!Number.isFinite(numeric)) return '0.5';
-  return TOLERANCE_VALUES.reduce((best, candidate) =>
-    Math.abs(Number(candidate) - numeric) < Math.abs(Number(best) - numeric) ? candidate : best, '0.5');
+  const raw = text(value).trim();
+  if (!raw) return '';
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1 ? String(numeric) : '';
 }
 
 function blankAnchor(geo = DEFAULT_GEO): AnchorDraft {
@@ -426,11 +428,11 @@ function opsFor(draft: Draft, t: Translate): PathOp[] | string {
   const anchors = draft.anchors.map(row => {
     const term = row.term.trim();
     const dailySearches = Number(row.dailySearches);
-    const tolerance = Number(row.tolerance);
+    const tolerance = row.tolerance.trim() === '' ? undefined : Number(row.tolerance);
     if (!term || !Number.isFinite(dailySearches) || dailySearches <= 0) throw new Error(t('invalidAnchor'));
-    if (!TOLERANCE_VALUES.includes(row.tolerance as typeof TOLERANCE_VALUES[number])) throw new Error(t('invalidTolerance'));
-    if (!GEO_SET.has(row.geo)) throw new Error(t('invalidGeo'));
-    return { term, geo: row.geo, dailySearches, tolerance };
+    if (tolerance !== undefined && !(Number.isFinite(tolerance) && tolerance >= 0 && tolerance <= 1)) throw new Error(t('invalidTolerance'));
+    if (!row.geo || !GEO_SET.has(row.geo)) throw new Error(t('invalidGeo'));
+    return { term, geo: row.geo, dailySearches, ...(tolerance === undefined ? {} : { tolerance }) };
   });
   const windowAnchors = {
     ...(draft.windowShort.trim() ? { short: draft.windowShort.trim() } : {}),
@@ -581,7 +583,8 @@ export function ConfigPage({ ctx, t }: { ctx: ClientContext; t: Translate }) {
       setFailure(t('invalidAnchor'));
       return;
     }
-    if (draft.anchors.some(anchor => anchor.term.trim().toLowerCase() === term.toLowerCase())) {
+    // Calibration identifies anchors by term + geo, so the same term may exist for another country.
+    if (draft.anchors.some(anchor => anchor.term.trim().toLowerCase() === term.toLowerCase() && anchor.geo === draft.newAnchor.geo)) {
       setFailure(t('duplicateAnchor'));
       return;
     }
@@ -661,7 +664,13 @@ export function ConfigPage({ ctx, t }: { ctx: ClientContext; t: Translate }) {
     return options;
   }, [draft.geo, intlLocale, t]);
   const toleranceOptions = useMemo(() =>
-    TOLERANCE_OPTIONS.map(option => ({ value: option.value, label: t(option.label) })), [t]);
+    [{ value: '', label: t('toleranceDefault') }, ...TOLERANCE_OPTIONS.map(option => ({ value: option.value, label: t(option.label) }))], [t]);
+  // A stored value outside the presets stays selectable so saving other settings never rewrites it.
+  const toleranceChoices = (current: string) => current === '' || toleranceOptions.some(option => option.value === current)
+    ? toleranceOptions
+    : [...toleranceOptions, { value: current, label: `±${Math.round(Number(current) * 100)}%` }];
+  // Anchors calibrate one country; Worldwide is not an anchor geo.
+  const anchorGeoOptions = useMemo(() => geoOptions.filter(option => option.value !== ''), [geoOptions]);
 
   if (snapshot.status === 'loading') return <p style={styles.status}>{t('loading')}</p>;
   if (snapshot.status === 'unavailable') return <p style={styles.status}>{t('unavailable')}</p>;
@@ -736,14 +745,14 @@ export function ConfigPage({ ctx, t }: { ctx: ClientContext; t: Translate }) {
           <span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span>
           <select style={styles.select} aria-label={`${t('anchorGeo')} ${anchor.term}`} value={anchor.geo} disabled={!editable}
             onChange={event => editAnchor(index, { geo: event.target.value })}>
-            {geoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
+            {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
           </select>
           <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
             value={anchor.dailySearches} disabled={!editable}
             onChange={event => editAnchor(index, { dailySearches: event.target.value })} />
           <select style={styles.select} aria-label={`${t('anchorTolerance')} ${anchor.term}`} value={anchor.tolerance} disabled={!editable}
             onChange={event => editAnchor(index, { tolerance: event.target.value })}>
-            {toleranceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {toleranceChoices(anchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <button type="button" style={styles.button} disabled={!editable}
             onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}>{t('remove')}</button>
@@ -754,14 +763,14 @@ export function ConfigPage({ ctx, t }: { ctx: ClientContext; t: Translate }) {
             onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} />
           <select style={styles.select} aria-label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} value={draft.newAnchor.geo} disabled={!editable}
             onChange={event => edit({ newAnchor: { ...draft.newAnchor, geo: event.target.value } })}>
-            {geoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
+            {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
           </select>
           <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
             value={draft.newAnchor.dailySearches} disabled={!editable}
             onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} />
           <select style={styles.select} aria-label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`} value={draft.newAnchor.tolerance} disabled={!editable}
             onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
-            {toleranceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <button type="button" style={styles.button} disabled={!editable} onClick={addAnchor}>{t('addAnchor')}</button>
         </div>

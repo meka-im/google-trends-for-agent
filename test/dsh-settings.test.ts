@@ -90,10 +90,21 @@ describe('dsh settings form', () => {
 
   it('shows Worldwide as the empty geo option and tolerances as selects', () => {
     const html = render({ geo: '' });
-    expect(html).toContain('<option value="">Worldwide</option>');
+    expect(html).toContain('<option value="" selected="">Worldwide</option>');
     expect(html).toContain('aria-label="Default geo"');
+    // Anchors calibrate one country, so Worldwide appears only in the default-geo select.
+    expect(html.match(/>Worldwide</g)).toHaveLength(1);
     expect(html.match(/aria-label="Tolerance /g)).toHaveLength(2);
     expect(html).toContain('<option value="0.1">±10%</option>');
     expect(html).toContain('<option value="1">±100%</option>');
+  });
+
+  it('keeps stored tolerances exactly instead of rounding them to a preset', () => {
+    const html = render({ baselines: { anchors: [
+      { term: 'chacha', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
+      { term: 'pizza', geo: 'GB', dailySearches: 9000 },
+    ] } });
+    expect(html).toContain('<option value="0.2" selected="">±20%</option>');
+    expect(html).toMatch(/aria-label="Tolerance pizza"><option value="" selected="">Default \(±50%\)<\/option>/);
   });
 });

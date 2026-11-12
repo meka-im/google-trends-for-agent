@@ -164,9 +164,9 @@ describe('Apify token resolution', () => {
     const residential = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'RESIDENTIAL', country: 'gb' });
     expect(await residential.newUrl('s1')).toBe('http://groups-RESIDENTIAL,session-s1,country-GB:secret@proxy.apify.com:8000');
     const automatic = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto', country: 'us' });
-    expect(await automatic.newUrl('s2')).toBe('http://auto,session-s2,country-US:secret@proxy.apify.com:8000');
+    expect(await automatic.newUrl('s2')).toBe('http://session-s2,country-US:secret@proxy.apify.com:8000');
     expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto' }).newUrl())
-      .toBe('http://auto,country-US:secret@proxy.apify.com:8000');
+      .toBe('http://country-US:secret@proxy.apify.com:8000');
   });
 
   it('never puts the configured token in a tool envelope or an error message', async () => {

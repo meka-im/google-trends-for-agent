@@ -29,10 +29,14 @@ export function resolveApifyCredentials(options: { token?: string; proxyPassword
   return proxyPassword ? { proxyPassword } : {};
 }
 
-/** Apify proxy username: `groups-RESIDENTIAL`, or `auto` for automatic datacenter selection. */
-export function apifyProxyUsername(group?: ApifyProxyGroup): string {
+/**
+ * Apify proxy username parameters: `groups-RESIDENTIAL,…`; automatic datacenter selection omits `groups`
+ * (Apify uses the bare `auto` placeholder only when no other parameter is set).
+ */
+export function apifyProxyUsername(group?: ApifyProxyGroup, params: readonly string[] = []): string {
   const normalized = normalizeApifyProxyGroup(group ?? DEFAULT_APIFY_PROXY_GROUP);
-  return normalized === 'auto' ? 'auto' : `groups-${normalized}`;
+  const parts = [...(normalized === 'auto' ? [] : [`groups-${normalized}`]), ...params];
+  return parts.length ? parts.join(',') : 'auto';
 }
 
 /** Build the Apify proxy URL without touching process.env. */
@@ -92,9 +96,10 @@ export class ApifyProxyUrlProvider implements ProxyUrlProvider {
     const password = await this.password();
     const country = (this.options.country ?? 'US').trim().toUpperCase() || 'US';
     const session = sessionId === undefined || sessionId === null || String(sessionId).trim() === ''
-      ? ''
-      : `,session-${encodeURIComponent(String(sessionId).trim())}`;
-    return `http://${apifyProxyUsername(this.options.group)}${session},country-${encodeURIComponent(country)}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
+      ? []
+      : [`session-${encodeURIComponent(String(sessionId).trim())}`];
+    const username = apifyProxyUsername(this.options.group, [...session, `country-${encodeURIComponent(country)}`]);
+    return `http://${username}:${encodeURIComponent(password)}@${APIFY_PROXY_HOST}`;
   }
 }
 

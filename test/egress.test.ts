@@ -20,9 +20,9 @@ describe('Apify egress transport', () => {
     expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', country: 'gb' }).newUrl('s2'))
       .toBe('http://groups-RESIDENTIAL,session-s2,country-GB:secret@proxy.apify.com:8000');
     expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto', country: 'gb' }).newUrl('s3'))
-      .toBe('http://auto,session-s3,country-GB:secret@proxy.apify.com:8000');
+      .toBe('http://session-s3,country-GB:secret@proxy.apify.com:8000');
     expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto' }).newUrl())
-      .toBe('http://auto,country-US:secret@proxy.apify.com:8000');
+      .toBe('http://country-US:secret@proxy.apify.com:8000');
   });
 
   it('uses auto for the datacenter URL and keeps session/country params', async () => {
@@ -35,7 +35,7 @@ describe('Apify egress transport', () => {
       createTransport: url => { urls.push(url); return async () => ({ status: 200, headers: {}, body: 'ok' }); },
     });
     expect((await egress(request)).status).toBe(200);
-    expect(urls).toEqual(['http://auto,session-sess_1,country-GB:pw@proxy.apify.com:8000']);
+    expect(urls).toEqual(['http://session-sess_1,country-GB:pw@proxy.apify.com:8000']);
   });
 
   it('fetches data.proxy.password once with the API token and never logs it', async () => {
