@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConfigPage, EN, loadApifyUsage, type ApifyUsageView, type Draft } from '../src/client/index.js';
+import { ConfigPage, EN, loadApifyUsage, withPendingAnchor, type ApifyUsageView, type Draft } from '../src/client/index.js';
 
 const t = (key: string) => EN[key] ?? key;
 
@@ -205,6 +205,17 @@ describe('dsh settings form', () => {
     ] } } });
     expect(html).toContain('<option value="0.2" selected="">±20%</option>');
     expect(html).toMatch(/aria-label="Tolerance pizza"><option value="" selected="">Default \(±50%\)<\/option>/);
+  });
+});
+
+describe('saving the new-anchor row', () => {
+  it('includes a filled-in new anchor instead of dropping it', () => {
+    const base = { baselineOverride: true, anchors: [], newAnchor: { term: ' genie ', geo: 'GB', dailySearches: '120', tolerance: '' } } as unknown as Draft;
+    const saved = withPendingAnchor(base);
+    expect(saved.anchors).toEqual([{ term: 'genie', geo: 'GB', dailySearches: '120', tolerance: '' }]);
+    expect(saved.newAnchor.term).toBe('');
+    const off = { ...base, baselineOverride: false };
+    expect(withPendingAnchor(off)).toBe(off);
   });
 });
 

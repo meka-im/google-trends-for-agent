@@ -145,6 +145,8 @@ export interface ApifyUsageData {
   residentialGb: number | null;
   residentialGbLimit: number | null;
   fetchedAt: string;
+  /** Where the Host found the token: saved settings or the APIFY_TOKEN environment variable. */
+  source: 'config' | 'env' | null;
 }
 
 export type ApifyUsageView =
@@ -166,11 +168,11 @@ export interface TestConnectionView {
 
 export const EN: Record<string, string> = {
   summary: 'Configure egress, the Apify token, usage, default geo, anchors, and snapshot cache.',
-  intro: 'Changes apply without restarting dsh. The token you enter is saved in plaintext in the profile\'s cordis.patch.yml (mode 0600), hidden here and never logged or returned. The usage card and Test connection run on the Host, so the browser never sees the token. Leave it blank and set APIFY_TOKEN to keep it out of the profile.',
+  intro: 'Changes apply live, no restart needed. Usage and Test connection run on the dsh host, so the token never reaches the browser.',
   connection: 'Connection',
   connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
   egress: 'Egress',
-  egressHint: 'Local sends Google requests from the machine running dsh. Apify proxy uses the Apify proxy.',
+  egressHint: 'Local: requests leave from the machine running dsh. Apify proxy: requests go out through Apify proxy IPs.',
   egressLocal: 'Local (this machine)',
   egressApify: 'Apify proxy',
   testConnection: 'Test connection',
@@ -182,7 +184,9 @@ export const EN: Record<string, string> = {
   testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to test the Apify proxy.',
   testInvalidToken: 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.',
   testProxyAuth: 'Apify proxy rejected the credentials (407). Check the token and proxy access.',
-  testNetwork: 'Could not reach the target. Check connectivity and the saved settings.',
+  testNetworkLocal: 'Could not reach Google Trends from this machine.',
+  testDetail: ' Details: {detail}',
+  testNetworkApify: 'Could not reach the Apify proxy (proxy.apify.com:8000) from this machine.',
   testHttp: 'Target returned HTTP {status}.',
   testBusy: 'A test is already running. Try again in a moment.',
   apify: 'Apify',
@@ -278,15 +282,16 @@ export const EN: Record<string, string> = {
   windowUnknown: 'A window anchor must be a term from the anchors list or a built-in anchor.',
   tokenStateSet: 'Stored',
   tokenStateUnset: 'Not set',
+  tokenStateEnv: 'Not saved here; using APIFY_TOKEN from the environment.',
 };
 
 export const ZH: Record<string, string> = {
   summary: '配置出口、Apify Token 与用量、默认地区、基线和快照缓存。',
-  intro: '修改无需重启 dsh。输入的 Token 会以明文保存在 profile 的 cordis.patch.yml（权限 0600），此界面不回显，也不会写入日志或返回给客户端。用量卡片和测试连接都在 Host 运行，浏览器看不到 Token。留空并设置 APIFY_TOKEN 可让它不进入 profile。',
+  intro: '修改即时生效，无需重启。用量和测试连接在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
   connection: '连接',
   connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
   egress: '出口',
-  egressHint: 'local 从运行 dsh 的机器直接请求 Google；apify 使用 Apify 代理。',
+  egressHint: '本机直连：请求从运行 dsh 的机器发出；Apify 代理：请求经 Apify 代理 IP 发出。',
   egressLocal: '本机直连',
   egressApify: 'Apify 代理',
   testConnection: '测试连接',
@@ -298,7 +303,9 @@ export const ZH: Record<string, string> = {
   testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可测试 Apify 代理。',
   testInvalidToken: 'Apify 拒绝了该 Token。请在 Apify Console → Settings → API & Integrations 中检查。',
   testProxyAuth: 'Apify 代理拒绝了凭据（407）。请检查 Token 和代理权限。',
-  testNetwork: '无法连接目标。请检查网络和已保存的设置。',
+  testNetworkLocal: '本机无法连接 Google Trends。',
+  testDetail: '详情：{detail}',
+  testNetworkApify: '本机无法连接 Apify 代理（proxy.apify.com:8000）。',
   testHttp: '目标返回 HTTP {status}。',
   testBusy: '已有测试正在进行，请稍后再试。',
   apify: 'Apify',
@@ -394,6 +401,7 @@ export const ZH: Record<string, string> = {
   windowUnknown: '窗口锚点必须来自锚点列表或内置锚点。',
   tokenStateSet: '已保存',
   tokenStateUnset: '未设置',
+  tokenStateEnv: '此处未保存；正在使用环境变量 APIFY_TOKEN。',
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -571,7 +579,15 @@ function draftKey(draft: Draft): string {
   return JSON.stringify(draft);
 }
 
-function opsFor(draft: Draft, t: Translate): PathOp[] | string {
+/** A filled-in "new anchor" row counts as added, so Save never drops it. */
+export function withPendingAnchor(draft: Draft): Draft {
+  const term = draft.baselineOverride ? draft.newAnchor.term.trim() : '';
+  if (!term) return draft;
+  const anchor = { ...draft.newAnchor, term, dailySearches: String(Number(draft.newAnchor.dailySearches)) };
+  return { ...draft, anchors: [...draft.anchors, anchor], newAnchor: blankAnchor() };
+}
+
+export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
   const ops: PathOp[] = [];
   const set = (path: string[], value: unknown) => ops.push({ op: 'set', path, value });
   const unset = (path: string[]) => ops.push({ op: 'unset', path });
@@ -648,7 +664,7 @@ export function validateDraft(draft: Draft, t: Translate): DraftValidation {
   if (draft.token.trim() && !draft.token.trim().startsWith('apify_api_')) validation.tokenWarning = t('tokenPrefixWarning');
 
   if (draft.baselineOverride) {
-    if (draft.anchors.length === 0) validation.baselines = t('baselinesEmpty');
+    if (draft.anchors.length === 0 && !draft.newAnchor.term.trim()) validation.baselines = t('baselinesEmpty');
     draft.anchors.forEach((anchor, index) => {
       if (!isPositiveNumber(anchor.dailySearches)) validation.anchorRows[index] = t('invalidDaily');
     });
@@ -691,8 +707,18 @@ export function hasBlockingValidation(validation: DraftValidation): boolean {
   );
 }
 
+/** Disabled buttons read as disabled (inline styles bypass :disabled). */
+function dim(style: CSSProperties, disabled: boolean): CSSProperties {
+  return disabled ? { ...style, opacity: 0.45, cursor: 'default' } : style;
+}
+
 function money(value: number | null): string {
   return value === null ? '—' : `$${value.toFixed(2)}`;
+}
+
+/** Usage rounds down to the cent, as Apify Console shows it. */
+function usageMoney(value: number | null): string {
+  return value === null ? '—' : money(Math.floor(value * 100 + 1e-9) / 100);
 }
 
 function compactMoney(value: number | null): string {
@@ -728,13 +754,15 @@ function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text
     }
     return { ok: true, text: template(t('testLocalOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
   }
-  let key = 'testNetwork';
+  let key = result.egress === 'apify' ? 'testNetworkApify' : 'testNetworkLocal';
   if (result.code === 'no-token') key = 'testNoToken';
   else if (result.code === 'invalid-token') key = 'testInvalidToken';
   else if (result.code === 'proxy-auth') key = 'testProxyAuth';
   else if (result.code === 'http') key = 'testHttp';
   else if (result.code === 'busy') key = 'testBusy';
-  return { ok: false, text: key === 'testHttp' ? template(t(key), { status: statusLabel(result.status) }) : t(key) };
+  const base = key === 'testHttp' ? template(t(key), { status: statusLabel(result.status) }) : t(key);
+  const detail = result.code === 'network' && result.message ? template(t('testDetail'), { detail: result.message }) : '';
+  return { ok: false, text: base + detail };
 }
 
 function normalizeUsage(value: Record<string, unknown>): ApifyUsageData {
@@ -752,6 +780,7 @@ function normalizeUsage(value: Record<string, unknown>): ApifyUsageData {
     residentialGb: numberOrNull(value.residentialGb),
     residentialGbLimit: numberOrNull(value.residentialGbLimit),
     fetchedAt: text(value.fetchedAt),
+    source: value.source === 'config' || value.source === 'env' ? value.source : null,
   };
 }
 
@@ -877,7 +906,7 @@ function UsageDetails({ data, t, locale }: { data: ApifyUsageData; t: Translate;
     : null;
 
   return <>
-    <div style={styles.usageAmount}>{money(data.usageUsd)} / {money(data.limitUsd)}</div>
+    <div style={styles.usageAmount}>{usageMoney(data.usageUsd)} / {money(data.limitUsd)}</div>
     <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} style={styles.progressTrack}>
       <div style={{ ...styles.progressFill, width: `${percent}%`, background: color }} />
     </div>
@@ -1010,6 +1039,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
   const [draft, setDraft] = useState<Draft>(() => ({ ...fromSnapshot(snapshot.value), ...initialDraft }));
   const [baseline, setBaseline] = useState<string>(() => draftKey(fromSnapshot(snapshot.value)));
   const [busy, setBusy] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [usage, setUsage] = useState<ApifyUsageView>(initialUsage ?? { status: 'idle' });
@@ -1090,8 +1120,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
       setFailure(validation.snapshotDir ?? validation.chartDir ?? validation.anchorRows[0] ?? validation.newAnchorTerm ?? validation.newAnchorDaily ?? validation.baselines ?? validation.window ?? t('failed'));
       return;
     }
+    const toSave = withPendingAnchor(draft);
     let ops: PathOp[] | string;
-    try { ops = opsFor(draft, t); }
+    try { ops = opsFor(toSave, t); }
     catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
       return;
@@ -1105,7 +1136,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
       const accepted = await form.mutate(ops, snapshot.revision);
       if (!accepted) setFailure(t('failed'));
       else {
-        const cleaned = { ...draft, token: '', clearToken: false, newAnchor: blankAnchor() };
+        const cleaned = { ...toSave, token: '', clearToken: false, newAnchor: blankAnchor() };
         setDraft(cleaned);
         setBaseline(draftKey(cleaned));
         setNotice(t('saved'));
@@ -1201,7 +1232,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
       </Field>
       <div style={styles.field}>
         <div style={styles.switchRow}>
-          <button type="button" style={styles.button} disabled={!editable || testing} onClick={() => { void test(); }}>
+          <button type="button" style={dim(styles.button, !editable || testing)} disabled={!editable || testing} onClick={() => { void test(); }}>
             {testing ? t('testing') : t('testConnection')}
           </button>
           {dirty ? <span style={styles.hint}>{t('testSavedNote')}</span> : null}
@@ -1220,7 +1251,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
         <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
           placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}
           onChange={event => edit({ token: event.target.value })} />
-        <p style={styles.hint}>{tokenSet ? t('tokenStateSet') : t('tokenStateUnset')}</p>
+        <p style={styles.hint}>{tokenSet
+          ? t('tokenStateSet')
+          : usage.status === 'ready' && usage.data.source === 'env' ? t('tokenStateEnv') : t('tokenStateUnset')}</p>
         {validation.tokenWarning ? <p style={styles.warning}>{validation.tokenWarning}</p> : null}
         {tokenSet ? <div style={styles.switchRow}>
           <span>{t('clearToken')}</span>
@@ -1253,8 +1286,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
 
     <section style={styles.section}>
       <SectionHeader title={t('baselines')} description={t('baselinesDescription')} />
-      <p style={styles.hint}>{t('baselinesHint')}</p>
-      <Toggle label={t('overrideBaselines')} checked={draft.baselineOverride} disabled={!editable}
+      <Toggle label={t('overrideBaselines')} hint={t('baselinesHint')} checked={draft.baselineOverride} disabled={!editable}
         onChange={checked => edit({
           baselineOverride: checked,
           anchors: checked && draft.anchors.length === 0
@@ -1304,7 +1336,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
               onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
               {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
-            <button type="button" style={styles.button} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
+            <button type="button" style={dim(styles.button, !editable || !newAnchorReady)} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
           </div>
           {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
           {validation.newAnchorDaily ? <p style={styles.fieldError} role="alert">{validation.newAnchorDaily}</p> : null}
@@ -1322,9 +1354,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
       </> : null}
     </section>
 
-    <details style={styles.section}>
+    <details style={styles.section} onToggle={event => setAdvancedOpen((event.currentTarget as HTMLDetailsElement).open)}>
       <summary style={styles.summary}>
-        <span style={styles.sectionTitle}>{t('advanced')}</span>
+        <span style={styles.sectionTitle}><span aria-hidden="true" style={{ display: 'inline-block', width: 14, opacity: 0.6 }}>{advancedOpen ? '▾' : '▸'}</span>{t('advanced')}</span>
         <span style={styles.sectionDescription}>{t('advancedDescription')}</span>
       </summary>
       <Toggle label={t('charts')} hint={t('chartsHint')} checked={draft.charts} disabled={!editable}
@@ -1344,10 +1376,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
     </details>
 
     <div style={styles.saveBar}>
-      <button type="submit" style={{ ...styles.button, ...styles.primary }} disabled={!canSave}>
+      <button type="submit" style={dim({ ...styles.button, ...styles.primary }, !canSave)} disabled={!canSave}>
         {busy ? t('saving') : t('save')}
       </button>
-      <button type="button" style={styles.button} disabled={!editable || !dirty} onClick={discard}>{t('discard')}</button>
+      <button type="button" style={dim(styles.button, !editable || !dirty)} disabled={!editable || !dirty} onClick={discard}>{t('discard')}</button>
       {dirty ? <span style={styles.pill}>{t('unsaved')}</span> : null}
       {!dirty && notice ? <p style={styles.status} role="status">{notice}</p> : null}
       {failure ? <p style={styles.error} role="alert">{failure}</p> : null}

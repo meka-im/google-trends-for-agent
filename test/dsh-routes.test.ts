@@ -181,6 +181,32 @@ describe('dsh host routes', () => {
     expect(JSON.stringify(body)).not.toContain('proxy-secret');
   });
 
+  it('looks up the proxy password once, so repeated tests make only the proxy request', async () => {
+    const proxyFetch = vi.fn(async () => json({ data: { proxy: { password: 'proxy-secret' } } }));
+    const target = vi.fn(async () => ({ status: 200, headers: {}, body: '{}' }));
+    let current = settings();
+    const harness = routeHarness(() => current, {
+      egress: { fetch: proxyFetch as unknown as typeof fetch, createTransport: () => target as Transport },
+    });
+    harness.connect();
+    const click = () => harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
+    await click();
+    await click();
+    expect(proxyFetch).toHaveBeenCalledTimes(1);
+    expect(target).toHaveBeenCalledTimes(2);
+    current = settings({ apifyProxyCountry: 'GB' });
+    await click();
+    expect(proxyFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the network cause hidden behind "fetch failed"', async () => {
+    const failing = (async () => { throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } }); }) as unknown as Transport;
+    const result = await testConnection({ egress: 'local', localTransport: failing });
+    expect(result).toMatchObject({ ok: false, code: 'network', message: 'fetch failed: ECONNREFUSED' });
+    const tunnel = (async () => { throw new TypeError('fetch failed', { cause: { code: 0, message: 'Request was cancelled.', cause: { message: 'Proxy response (403) !== 200 when HTTP Tunneling' } } }); }) as unknown as Transport;
+    expect((await testConnection({ egress: 'local', localTransport: tunnel })).message).toBe('fetch failed: Proxy response (403) !== 200 when HTTP Tunneling');
+  });
+
   it('maps proxy 407 to proxy-auth and scrubs proxy credentials from failures', async () => {
     const proxyFetch = vi.fn(async () => json({ data: { proxy: { password: 'proxy-secret' } } }));
     const rejected = routeHarness(() => settings(), {

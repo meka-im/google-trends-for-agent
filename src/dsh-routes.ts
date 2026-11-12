@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
 import { createApifyAccountClient, type ApifyUsageResult, type ApifyUsageSource } from './apify-account.js';
 import { abortError, createDefaultTransport, raceAbort, type Transport } from './transport.js';
@@ -74,6 +75,20 @@ export function scrubSecrets(message: string, token?: string): string {
   return text;
 }
 
+/** Error text plus its innermost cause (undici hides it behind "fetch failed"). */
+function errorText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  let detail = '';
+  let cause: unknown = (error as { cause?: unknown }).cause;
+  for (let depth = 0; cause && typeof cause === 'object' && depth < 5; depth++) {
+    const row = cause as { code?: unknown; message?: unknown; cause?: unknown };
+    const text = typeof row.message === 'string' && row.message ? row.message : typeof row.code === 'string' ? row.code : '';
+    if (text) detail = text;
+    cause = row.cause;
+  }
+  return detail && !error.message.includes(detail) ? `${error.message}: ${detail}` : error.message;
+}
+
 function failure(egress: EgressMode, code: TestConnectionCode, message: string, latencyMs: number, status: number | null = null): TestConnectionResult {
   return { ok: false, egress, status, latencyMs, code, message };
 }
@@ -100,7 +115,10 @@ function parseBrowserInfo(body: string): { ip?: string; country?: string } {
   }
 }
 
-/** One reachability check for the saved egress. Exactly one target request per call. */
+/**
+ * One reachability check for the saved egress: one target request per call. The first
+ * Apify check per token also looks up the proxy password (GET /v2/users/me), as the tools do.
+ */
 export async function testConnection(options: {
   egress: EgressMode;
   apifyToken?: string;
@@ -108,6 +126,8 @@ export async function testConnection(options: {
   apifyProxyCountry?: string;
   localTransport?: Transport;
   apifyOptions?: EgressOptions;
+  /** Reuse a transport across clicks so the proxy password lookup happens once per token/group/country. */
+  apifyTransport?: (token: string, build: () => Transport) => Transport;
   signal?: AbortSignal;
   timeoutMs?: number;
   now?: () => number;
@@ -134,7 +154,7 @@ export async function testConnection(options: {
       return { ok: true, egress: 'local', status: response.status, latencyMs };
     } catch (error) {
       if (options.signal?.aborted) throw abortError(options.signal);
-      const message = scrubSecrets(error instanceof Error ? error.message : String(error));
+      const message = scrubSecrets(errorText(error));
       return failure('local', 'network', message || 'Could not reach Google Trends. Check connectivity and the saved settings.', elapsed(clock, startedAt));
     }
   }
@@ -150,16 +170,17 @@ export async function testConnection(options: {
   const startedAt = clock();
   let transport: Transport;
   try {
-    transport = createEgressTransport({
+    const build = () => createEgressTransport({
       ...options.apifyOptions,
       egress: 'apify',
       apifyToken: resolved.token,
       apifyProxyGroup: options.apifyProxyGroup,
       apifyProxyCountry: options.apifyProxyCountry,
     });
+    transport = options.apifyTransport ? options.apifyTransport(resolved.token, build) : build();
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
-    const message = scrubSecrets(error instanceof Error ? error.message : String(error), resolved.token);
+    const message = scrubSecrets(errorText(error), resolved.token);
     return failure('apify', 'invalid-token', message || 'Could not build the Apify proxy transport.', 0);
   }
 
@@ -190,7 +211,7 @@ export async function testConnection(options: {
     };
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
-    const message = scrubSecrets(error instanceof Error ? error.message : String(error), resolved.token);
+    const message = scrubSecrets(errorText(error), resolved.token);
     const code: TestConnectionCode = /407|proxy authentication|proxy auth/i.test(message)
       ? 'proxy-auth'
       : /HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
@@ -208,6 +229,9 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     ...(overrides.now ? { now: overrides.now } : {}),
   });
   let testing = false;
+  // The Apify transport looks up the proxy password once (GET /v2/users/me); keep it per
+  // token hash + group + country so repeated tests make only the proxy request.
+  let cachedTransport: { key: string; transport: Transport } | undefined;
   const disposers: Array<() => Promise<void>> = [];
 
   disposers.push(service.fetch.register({
@@ -251,6 +275,11 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           apifyProxyCountry: settings.apifyProxyCountry,
           localTransport: overrides.localTransport,
           apifyOptions: overrides.egress,
+          apifyTransport: (token, build) => {
+            const key = `${createHash('sha256').update(token).digest('hex')}|${settings.apifyProxyGroup}|${settings.apifyProxyCountry}`;
+            if (cachedTransport?.key !== key) cachedTransport = { key, transport: build() };
+            return cachedTransport.transport;
+          },
           signal: request.signal,
           now: overrides.now,
         });
