@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-291%20passed-22c55e?style=flat-square" alt="291 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-318%20passed-22c55e?style=flat-square" alt="318 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -94,7 +94,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**；如果 bundle 显示 Off，请先开启。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。没有 MCP 服务器、没有 `gtfa` CLI 子进程，也不经过 Actor 端点。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
 
-可配置出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN`（或 `APIFY_PROXY_PASSWORD`）可让它不进入 profile。
+可配置出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。选择 Apify 后，设置页会显示本计费周期的用量（套餐、美元、住宅流量）和**测试连接**按钮，二者都在 Host 运行，浏览器看不到 Token。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
 
 `local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 不经 Actor、直接使用 Apify 代理，通过 Apify API 获取一次代理密码，并在 HTTP 429 或 Google 验证页时轮换会话。Apify 流量按 GB 从你的 Apify 额度中扣除。
 
@@ -196,7 +196,7 @@ GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读
 
 ```sh
 npm install
-npm test          # 291 个测试
+npm test          # 318 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

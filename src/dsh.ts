@@ -9,6 +9,7 @@ import {
   normalizeApifyProxyGroup, normalizeGeo, normalizeProxyCountry, type ApifyProxyGroup,
 } from './options.js';
 import { throwIfAborted, type Transport } from './transport.js';
+import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
 // The library and CLI must work without the optional dsh peer dependency.
@@ -131,6 +132,8 @@ export interface RegisterOverrides {
   baselines?: Baselines;
   /** Test seam: request spacing; production uses 1500 ms like MCP. */
   minIntervalMs?: number;
+  /** Test seam: usage and test-connection route clients. */
+  routes?: RouteOverrides;
 }
 
 /** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
@@ -330,6 +333,14 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     });
   }
   registerSkill(ctx);
+  const localTransport = overrides.routes?.localTransport ?? overrides.transport;
+  const egressOptions = overrides.routes?.egress ?? overrides.egress;
+  registerRoutes(ctx, settings, {
+    ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
+    ...(localTransport ? { localTransport } : {}),
+    ...(egressOptions ? { egress: egressOptions } : {}),
+    ...(overrides.routes?.now ? { now: overrides.routes.now } : {}),
+  });
 }
 
 /** Cordis entrypoint. */

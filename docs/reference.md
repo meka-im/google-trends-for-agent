@@ -67,6 +67,15 @@ Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (s
 
 Every setting with a fixed set of values is a select, segmented control, or switch; only the token, a new anchor term, `dailySearches`, and the two directories are typed inputs.
 
+The settings page also calls two owner-authenticated Host routes through dsh's Connection service; the browser never receives the Apify token:
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. The saved config token wins, then `APIFY_TOKEN` (`APIFY_PROXY_PASSWORD` is a proxy password, not an API token). |
+| `/api/gtfa.test-connection` | `POST` | Makes one reachability request for the saved egress: Google Trends for `local`, or `http://api.apify.com/v2/browser-info` through the saved Apify proxy settings. |
+
+Both routes require dsh's authenticated browser session and are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, status/latency, and at most the proxy's public IP/country; account identity, the raw `/users/me` object, and the token are dropped Host-side.
+
 `egress: apify` resolves credentials in order: the configured token, `APIFY_TOKEN`, then `APIFY_PROXY_PASSWORD`. With a token it fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me`; with only `APIFY_PROXY_PASSWORD` it uses that directly. `RESIDENTIAL` builds the username `groups-RESIDENTIAL,session-<id>,country-<CC>`; `auto` omits `groups` (`session-<id>,country-<CC>`), per Apify's username parameters. Setting `APIFY_TOKEN` and leaving the UI token blank keeps the token out of the profile, and `!!js process.env.APIFY_TOKEN` is unnecessary. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
 
 ## Output contract
