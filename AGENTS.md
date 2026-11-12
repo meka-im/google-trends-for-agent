@@ -52,7 +52,7 @@ Google Trends answers the same IPs it sees as ordinary browsers more often than 
 
 1. **Your own machine IP (preferred).** Run the stdio server locally, or run `gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
-3. **Apify Residential proxy.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN`. The Actor sets `HTTPS_PROXY` from Apify Proxy and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits.
+3. **Apify Residential proxy.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The Actor sets `HTTPS_PROXY` from Apify Proxy and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits.
 
 | Agent environment | Egress it uses | Can it reach a local server? | Recommended path |
 | --- | --- | --- | --- |

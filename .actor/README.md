@@ -38,6 +38,8 @@ Example client configuration:
 }
 ```
 
+The hostname uses your Apify username with dots replaced by hyphens (for example, `meka.im` becomes `meka-im`, so `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The Actor console also shows the exact Standby URL.
+
 `GET /` is a readiness endpoint; MCP requests go to `/mcp`.
 
 ## Tools

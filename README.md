@@ -114,6 +114,8 @@ Authorization: Bearer APIFY_TOKEN
 }
 ```
 
+The hostname uses your Apify username with dots replaced by hyphens (for example, `meka.im` becomes `meka-im`, so `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The Actor console also shows the exact Standby URL.
+
 The Actor charges nothing. Apify Residential proxy traffic is billed per GB from your Apify credits at your plan's proxy rate; see the Apify Console for current pricing. Keep calls light: `trends_now` over many countries consumes more proxy traffic than a single `trends_ask`. Actor configuration and Store notes live in [`.actor/README.md`](.actor/README.md).
 
 ## MCP tools

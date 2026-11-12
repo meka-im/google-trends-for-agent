@@ -114,6 +114,8 @@ Authorization: Bearer APIFY_TOKEN
 }
 ```
 
+主机名里的用户名会把点号换成连字符（例如 `meka.im` 变为 `meka-im`，即 `https://meka-im--google-trends-for-agent.apify.actor/mcp`）。也可在 Actor 控制台复制准确的 Standby URL。
+
 Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除，费率以你的套餐和 Apify 控制台为准。请保持轻量调用：`trends_now` 查询多个国家比单次 `trends_ask` 消耗更多代理流量。Actor 配置和商店说明见 [`.actor/README.md`](.actor/README.md)。
 
 ## MCP 工具
