@@ -8,7 +8,7 @@ import { queryTrends, compareTrends } from './api.js';
 import { TIME_RANGES } from './core.js';
 import { fetchTrending, listTrending, type TrendingHours, type TrendingResponse } from './trending.js';
 import { TRENDING_GEOS, DEFAULT_TRENDING_GEOS } from './geos.js';
-import { createDefaultTransport, RateLimiter, type Transport } from './transport.js';
+import { createDefaultTransport, RateLimiter, throwIfAborted, type Transport } from './transport.js';
 import { detectGaps, summarizeInterest } from './gaps.js';
 import { fetchTrafficSnapshot, trafficSnapshotEnvelope, trafficSnapshotError } from './trends-snapshot.js';
 import type { Baselines } from './traffic.js';
@@ -188,13 +188,14 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   const geoField = options.settings ? z.string().trim().optional() : z.string().default(defaultGeo);
   const storeFor = () => new SnapshotStore(live().snapshotDir);
   const scoped = (context?: ToolCallContext) => {
-    context?.signal?.throwIfAborted();
-    const scopedTransport: Transport = context?.signal
-      ? request => transport({ ...request, signal: context.signal })
+    throwIfAborted(context?.signal);
+    const signal = context?.signal ?? options.signal;
+    const scopedTransport: Transport = signal
+      ? request => transport({ ...request, signal })
       : transport;
-    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter });
-    const query = (input: unknown) => queryTrends(input, { client });
-    return { client, query, shared: { ...options, transport: scopedTransport, limiter } };
+    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter, signal });
+    const query = (input: unknown) => queryTrends(input, { client, signal });
+    return { client, query, shared: { ...options, transport: scopedTransport, limiter, signal } };
   };
 
   const ask: GtfaTool = {
@@ -280,7 +281,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const { client } = scoped(context);
       const seen = new Set<string>(), dup = keywords.find(k => { const n = k.trim().toLowerCase().replace(/\s+/g, ' '); return seen.has(n) || !seen.add(n); });
       if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
-      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client } as never);
+      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal } as never);
       return response(compareEnvelope(keywords, r, { geo: geoValue, time: range }));
     },
   };

@@ -3,8 +3,9 @@
  *
  * dsh's Plugins page renders a plugin's own page from `plugins.row.config`.
  * The page reads the Host's Config-derived form (only `.volatile()` fields are
- * exposed) and writes path operations; the Apify token stays write-only because
- * dsh-settings redacts `role('secret')` values before they cross the wire.
+ * exposed) and writes path operations. `role('secret')` redacts the Apify token
+ * on reads; a submitted token is persisted by dsh in the profile's
+ * `cordis.patch.yml`, so the UI says that instead of calling it a vault.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -117,14 +118,14 @@ interface Draft {
 
 const EN: Record<string, string> = {
   summary: 'Configure egress, the Apify token, default geo, baselines, and snapshot cache.',
-  intro: 'Changes apply without restarting dsh. The Apify token is stored as a dsh secret and is never shown again.',
+  intro: 'Changes apply without restarting dsh. The token you enter is saved in plaintext in the profile\'s cordis.patch.yml (mode 0600), hidden here and never logged or returned. Leave it blank and set APIFY_TOKEN to keep it out of the profile.',
   egress: 'Egress',
   egressHint: 'local sends Google requests from the machine running dsh. apify uses the Apify proxy.',
   egressLocal: 'Local (this machine)',
   egressApify: 'Apify proxy',
   apify: 'Apify proxy',
   token: 'Apify token',
-  tokenHint: 'Leave blank to keep the current token, or to use APIFY_TOKEN / APIFY_PROXY_PASSWORD from the environment.',
+  tokenHint: 'Leave blank to keep the current token or use APIFY_TOKEN / APIFY_PROXY_PASSWORD. A saved token is written to the profile\'s cordis.patch.yml (mode 0600).',
   tokenStored: 'A token is stored. Type a new one to replace it.',
   tokenEmpty: 'No token stored.',
   clearToken: 'Clear the stored token',
@@ -169,20 +170,20 @@ const EN: Record<string, string> = {
   tokenConflict: 'Type a new token or clear the stored one, not both.',
   baselinesEmpty: 'Add at least one anchor, or turn off the override.',
   windowUnknown: 'A window anchor must be a term from the anchors list or a built-in anchor.',
-  secretSet: 'Stored',
-  secretUnset: 'Not set',
+  tokenStateSet: 'Stored',
+  tokenStateUnset: 'Not set',
 };
 
 const ZH: Record<string, string> = {
   summary: '配置出口、Apify Token、默认地区、基线与快照缓存。',
-  intro: '修改无需重启 dsh。Apify Token 以 dsh 密钥保存，之后不会再显示。',
+  intro: '修改无需重启 dsh。输入的 Token 会以明文保存在 profile 的 cordis.patch.yml（权限 0600），此界面不回显，也不会写入日志或返回给客户端。留空并设置 APIFY_TOKEN 可让它不进入 profile。',
   egress: '出口',
   egressHint: 'local 从运行 dsh 的机器直接请求 Google；apify 使用 Apify 代理。',
   egressLocal: '本机直连',
   egressApify: 'Apify 代理',
   apify: 'Apify 代理',
   token: 'Apify Token',
-  tokenHint: '留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN / APIFY_PROXY_PASSWORD。',
+  tokenHint: '留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN / APIFY_PROXY_PASSWORD。保存的 Token 会写入 profile 的 cordis.patch.yml（权限 0600）。',
   tokenStored: '已保存 Token；输入新值可替换。',
   tokenEmpty: '未保存 Token。',
   clearToken: '清除已保存的 Token',
@@ -227,8 +228,8 @@ const ZH: Record<string, string> = {
   tokenConflict: '只能输入新 Token 或清除已保存的 Token，二者选其一。',
   baselinesEmpty: '请至少添加一个锚点，或关闭基线覆盖。',
   windowUnknown: '窗口锚点必须来自锚点列表或内置锚点。',
-  secretSet: '已保存',
-  secretUnset: '未设置',
+  tokenStateSet: '已保存',
+  tokenStateUnset: '未设置',
 };
 
 const styles: Record<string, CSSProperties> = {
@@ -452,7 +453,7 @@ function ConfigPage({ ctx, t }: { ctx: ClientContext; t: Translate }) {
         <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
           placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}
           onChange={event => edit({ token: event.target.value })} />
-        <p style={styles.hint}>{tokenSet ? t('secretSet') : t('secretUnset')}</p>
+        <p style={styles.hint}>{tokenSet ? t('tokenStateSet') : t('tokenStateUnset')}</p>
         {tokenSet ? <label style={styles.checkboxRow}>
           <input type="checkbox" checked={draft.clearToken} disabled={!editable}
             onChange={event => edit({ clearToken: event.target.checked })} />

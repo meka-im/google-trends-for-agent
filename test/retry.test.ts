@@ -61,6 +61,17 @@ describe('bounded retries', () => {
     expect(transport).toHaveBeenCalledTimes(1);
     expect(r.error?.message).toContain('HTTPS_PROXY/HTTP_PROXY');
   });
+  it('cancels a retry sleep when the caller aborts', async () => {
+    const controller = new AbortController();
+    const transport = vi.fn<Transport>().mockResolvedValue(response('', 429, { 'retry-after': '2' }));
+    const client = new TrendsClient({
+      transport, minIntervalMs: 0, signal: controller.signal,
+      sleep: async () => { controller.abort(); await new Promise<void>(() => {}); },
+    });
+    await expect(client.query({ queries: ['bitcoin'], dataTypes: ['interestOverTime'], maxRetries: 2 }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
   it('keeps protocol errors actionable', async () => {
     let calls = 0;
     const transport: Transport = async req => {

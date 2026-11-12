@@ -16,13 +16,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./dsh": {
-      "types": "./dist/dsh.d.ts",
-      "import": "./dist/dsh.js"
-    },
     "./client": "./dist/dsh-client.js",
-    "./dsh/locale/*.json": "./locale/*.json",
-    "./dsh/icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
     "./package.json": "./package.json"

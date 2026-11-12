@@ -42,8 +42,8 @@ function tempDir() {
 
 describe('dsh Config schema', () => {
   it('exposes defaults and the secret role on the Apify token', () => {
-    const schema = Config as unknown as { dict: Record<string, { meta: Record<string, unknown> }> };
-    const values = Config({}) as Record<string, { get(): unknown }>;
+    const schema = Config! as unknown as { dict: Record<string, { meta: Record<string, unknown> }> };
+    const values = Config!({}) as Record<string, { get(): unknown }>;
     expect(schema.dict.egress.meta.default).toBe('local');
     expect(schema.dict.apifyToken.meta.role).toBe('secret');
     expect(schema.dict.apifyToken.meta.default).toBeUndefined();
@@ -57,7 +57,7 @@ describe('dsh Config schema', () => {
   });
 
   it('rejects an unsupported egress value', () => {
-    expect(() => Config({ egress: 'mcp' } as never)).toThrow(/"local" \| "apify"/);
+    expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "apify"/);
   });
 
   it('validates inline baselines with the shared traffic rules', () => {
@@ -70,12 +70,22 @@ describe('dsh Config schema', () => {
       .toThrow(/tolerance must be a number from 0 to 1/);
     expect(() => baselinesFromConfig({ anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }], windowAnchors: { short: 'chairs' } }))
       .toThrow(/not in anchors or the built-in anchors/);
-    expect(() => resolveGtfaSettings(Config({ baselines: { anchors: [{ term: 'x', geo: 'US', dailySearches: 0 }] } }) as never))
-      .toThrow(/invalid baseline anchor/);
+    expect(Config!({ baselines: { anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }], windowAnchors: { short: 'gpts' } } }))
+      .toBeTruthy();
+  });
+
+  it('rejects invalid baseline edits at Config time', () => {
+    for (const dailySearches of [0, -1]) {
+      expect(() => Config!({ baselines: { anchors: [{ term: 'gpts', geo: 'US', dailySearches }] } }))
+        .toThrow(/dailySearches must be a positive number/);
+    }
+    expect(() => Config!({ baselines: { anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }], windowAnchors: { short: 'unknown' } } }))
+      .toThrow(/not in anchors or the built-in anchors/);
+    expect(() => resolveGtfaSettings(Config!({}) as never)).not.toThrow();
   });
 
   it('unwraps volatile values into runtime defaults', () => {
-    expect(resolveGtfaSettings(Config({}) as never)).toEqual({
+    expect(resolveGtfaSettings(Config!({}) as never)).toEqual({
       egress: 'local',
       apifyProxyGroups: ['RESIDENTIAL'],
       apifyProxyCountry: 'US',

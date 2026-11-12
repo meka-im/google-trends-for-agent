@@ -1,5 +1,6 @@
 import { TrendsClient, type ClientOptions } from './client.js';
 import { GTrendsError, type GTrendsInput } from './core.js';
+import { abortError, isAbortError, throwIfAborted } from './transport.js';
 
 export type TrendsErrorCode = 'INVALID_INPUT' | 'INVALID_COMBINATION' | 'REQUEST_TOO_LARGE' | 'BLOCKED' | 'RATE_LIMITED' | 'TRENDS_TIMEOUT' | 'TRENDS_PROTOCOL_CHANGED' | 'TRENDS_TEMPORARILY_UNAVAILABLE' | 'NETWORK_ERROR';
 export interface TrendsResponse {
@@ -20,12 +21,14 @@ export async function queryTrends(input: unknown, options: QueryOptions = {}): P
     const result = await (options.client ?? new TrendsClient(options)).query(input);
     return { ...result, input: result.input ?? input, error: result.error as TrendsResponse['error'], meta: { ...result.meta, fetchedAt: new Date().toISOString() } };
   } catch (error) {
+    if (options.signal?.aborted) throw abortError(options.signal);
+    if (isAbortError(error)) throw error;
     return errorResponse(input, error instanceof GTrendsError ? error.code : error instanceof RangeError ? 'INVALID_INPUT' : 'NETWORK_ERROR', error instanceof Error ? error.message : 'query failed');
   }
 }
 export function compareTrends(keywords: string[], opts: Omit<TrendsInput, 'queries'> & QueryOptions = {}): Promise<TrendsResponse> {
-  const { transport, minIntervalMs, now, sleep, client, limiter, ...input } = opts;
-  return queryTrends({ ...input, queries: keywords }, { transport, minIntervalMs, now, sleep, client, limiter });
+  const { transport, minIntervalMs, now, sleep, client, limiter, signal, ...input } = opts;
+  return queryTrends({ ...input, queries: keywords }, { transport, minIntervalMs, now, sleep, client, limiter, signal });
 }
 export interface BatchOptions extends QueryOptions { stopOnBlocked?: boolean }
 export async function batchTrends(items: readonly unknown[], opts: BatchOptions = {}): Promise<{ status: TrendsResponse['status']; results: (TrendsResponse & { index: number })[] }> {
@@ -35,7 +38,8 @@ export async function batchTrends(items: readonly unknown[], opts: BatchOptions 
   try { client = opts.client ?? new TrendsClient(opts); }
   catch (e) { return { status: 'error', results: items.map((input, index) => ({ ...errorResponse(input, 'INVALID_INPUT', e instanceof Error ? e.message : 'invalid options'), index })) }; }
   for (const [index, input] of items.entries()) {
-    const result = blocked ? errorResponse(input, 'BLOCKED', 'skipped after upstream block') : await queryTrends(input, { client });
+    throwIfAborted(opts.signal);
+    const result = blocked ? errorResponse(input, 'BLOCKED', 'skipped after upstream block') : await queryTrends(input, { client, signal: opts.signal });
     results.push({ ...result, index });
     if (opts.stopOnBlocked !== false && result.error?.code === 'BLOCKED') blocked = true;
   }

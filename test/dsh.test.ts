@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -95,6 +95,11 @@ describe('dsh plugin registration', () => {
     await apply(ctx, config());
     const listed = await provider()!.list();
     expect(listed.map(skill => skill.name)).toEqual(['gtfa']);
+    const skill = listed[0] as unknown as { path: string; resourceBase: { kind: string; path: string } };
+    expect(skill.path.endsWith('/dsh/skill.md')).toBe(true);
+    expect(existsSync(skill.path)).toBe(true);
+    expect(skill.resourceBase).toMatchObject({ kind: 'directory' });
+    expect(existsSync(skill.resourceBase.path)).toBe(true);
     expect((await provider()!.get()).content).toMatch(/trends_ask/);
     expect((await provider()!.get()).content).toMatch(/63,000|gpts/);
   });
@@ -140,7 +145,23 @@ describe('dsh plugin execution', () => {
     await register(ctx, config(), { transport: compareTransport(), minIntervalMs: 0 });
     const controller = new AbortController();
     controller.abort(new Error('cancelled'));
-    await expect(tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: controller.signal })).rejects.toThrow('cancelled');
+    await expect(tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError', message: 'cancelled' });
+  });
+
+  it('stops trends_now during the first country when the caller aborts', async () => {
+    const { ctx, tools } = fakeCtx();
+    const controller = new AbortController();
+    let calls = 0;
+    const transport: Transport = async () => {
+      calls++;
+      controller.abort();
+      return { status: 200, headers: {}, body: fixture('trending/US-24.txt') };
+    };
+    await register(ctx, config(), { transport, minIntervalMs: 0 });
+    await expect(tools.get('trends_now')!.execute({ geos: ['US', 'GB', 'JP'] }, { signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(calls).toBe(1);
   });
 
   it('rejects unsupported egress at registration', async () => {

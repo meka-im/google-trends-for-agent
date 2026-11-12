@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { queryTrends, type TrendsResponse } from './api.js';
+import { isAbortError } from './transport.js';
 import { renderTrafficChart, type TrafficChartPoint } from './chart.js';
 import { filterInput, resolveFilter, settledPoints, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints } from './gaps.js';
@@ -78,7 +79,10 @@ export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOpt
   const same = term.trim() === anchorTerm.trim();
   let r: TrendsResponse;
   try { r = await query({ queries: same ? [term] : [term, anchorTerm], ...filterInput(filter), dataTypes: ['interestOverTime', 'relatedQueries'] }); }
-  catch (e) { r = { status: 'error', input: term, error: { code: 'NETWORK_ERROR', message: String(e) }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } }; }
+  catch (e) {
+    if (isAbortError(e)) throw e;
+    r = { status: 'error', input: term, error: { code: 'NETWORK_ERROR', message: String(e) }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } };
+  }
   const timeline = (r.data?.interestOverTime as InterestOverTime | undefined)?.timeline ?? [];
   const anchorIndex = same ? 0 : 1;
   const points = timeline.map(p => ({ time: p.time, value: p.values[0] ?? 0 }));
@@ -124,7 +128,7 @@ export async function fetchTrafficSnapshot(term: string, opts: TrafficSnapshotOp
   }
   let weekError: string | undefined;
   const week = fetchOne(term, opts, store, { ...filter, time: 'now 7-d' }, weekAnchor)
-    .catch(e => { weekError = e instanceof Error ? e.message : String(e); return undefined; });
+    .catch(e => { if (isAbortError(e)) throw e; weekError = e instanceof Error ? e.message : String(e); return undefined; });
   const [result, weekResult] = await Promise.all([primary, week]);
   return { ...result, ...(weekResult ? { week: weekResult.snapshot } : {}), ...(weekError ? { weekError } : {}) };
 }

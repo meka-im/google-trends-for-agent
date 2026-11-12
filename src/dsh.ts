@@ -1,11 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import Schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
 import { loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
-import type { Transport } from './transport.js';
+import { throwIfAborted, type Transport } from './transport.js';
+
+type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
+// The library and CLI must work without the optional dsh peer dependency.
+const Schema: SchemaFactory | undefined = await import('@deepseek-ai/schemastery')
+  .then(module => module.default)
+  .catch(() => undefined);
 
 /** Cordis plugin name. */
 export const name = 'gtfa';
@@ -16,7 +21,7 @@ export const inject = ['tools'];
 export interface GtfaConfig {
   /** `local` sends Google requests from this machine; `apify` uses Apify proxy. */
   egress?: EgressMode;
-  /** Apify API token stored as a dsh secret; never echoed back to the client. */
+  /** Apify API token; saved in the profile's cordis.patch.yml and hidden from reads. */
   apifyToken?: string;
   /** Apify proxy groups used by `apify` egress (default RESIDENTIAL). */
   apifyProxyGroups?: readonly string[];
@@ -41,43 +46,57 @@ export interface GtfaConfig {
   cache?: boolean;
 }
 
-const baselinesConfig = Schema.object({
-  anchors: Schema.array(Schema.object({
-    term: Schema.string().required().description('Anchor term, for example gpts or sudoku.'),
-    geo: Schema.string().default('US').description('Country code for this anchor.'),
-    dailySearches: Schema.number().required().description('Estimated daily searches for the anchor.'),
-    tolerance: Schema.number().min(0).max(1).description('Allowed ± fraction, for example 0.5.'),
-  })).default([]).description('Override or add anchors; an empty list keeps the built-in US baselines.'),
-  windowAnchors: Schema.object({
-    short: Schema.string().description('Anchor term for now 1-H, now 4-H, and now 1-d.'),
-    long: Schema.string().description('Anchor term for now 7-d and longer windows.'),
-  }).default({}).description('Optional automatic anchor term per window.'),
-}).description('Optional inline baselines override.');
+function createConfig(Schema: SchemaFactory) {
+  const baselines = Schema.transform(Schema.object({
+    anchors: Schema.array(Schema.object({
+      term: Schema.string().required().description('Anchor term, for example gpts or sudoku.'),
+      geo: Schema.string().default('US').description('Country code for this anchor.'),
+      dailySearches: Schema.transform(Schema.number().required(), (value: number) => {
+        if (!(value > 0)) throw new Error('dailySearches must be a positive number');
+        return value;
+      }).description('Estimated daily searches for the anchor; must be positive.'),
+      tolerance: Schema.number().min(0).max(1).description('Allowed ± fraction, for example 0.5.'),
+    })).default([]).description('Override or add anchors; an empty list keeps the built-in US baselines.'),
+    windowAnchors: Schema.object({
+      short: Schema.string().description('Anchor term for now 1-H, now 4-H, and now 1-d.'),
+      long: Schema.string().description('Anchor term for now 7-d and longer windows.'),
+    }).default({}).description('Optional automatic anchor term per window.'),
+  }), (value: unknown) => {
+    const row = value as { anchors?: Anchor[] | null; windowAnchors?: WindowAnchors | null };
+    if (row.anchors?.length || row.windowAnchors?.short?.trim() || row.windowAnchors?.long?.trim()) {
+      baselinesFromConfig(value);
+    }
+    return value;
+  }).description('Optional inline baselines override.');
 
-/** Host Config schema. Volatile fields apply live; the token role is redacted by dsh-settings. */
-export const Config = Schema.object({
-  egress: Schema.union(['local', 'apify']).default('local')
-    .description('local sends Google requests from the dsh machine; apify uses the Apify proxy.').volatile(),
-  apifyToken: Schema.string().role('secret')
-    .description('Apify API token. Stored as a dsh secret and never shown again; leave blank to use APIFY_TOKEN or APIFY_PROXY_PASSWORD.').volatile(),
-  apifyProxyGroups: Schema.array(Schema.string()).default(['RESIDENTIAL'])
-    .description('Apify proxy groups, for example RESIDENTIAL.').volatile(),
-  apifyProxyCountry: Schema.string().default('US')
-    .description('Apify proxy country code.').volatile(),
-  geo: Schema.string().default('US')
-    .description('Default country for trends_ask, trends_compare, and trends_snapshot.').volatile(),
-  anchor: Schema.string()
-    .description('Optional fixed anchor for validate and trends_snapshot; blank picks the window default.').volatile(),
-  baselines: baselinesConfig.volatile(),
-  cache: Schema.boolean().default(true)
-    .description('Reuse stored snapshots (up to 360 minutes); off always fetches fresh.').volatile(),
-  snapshotDir: Schema.string().default('.gtfa/snapshots')
-    .description('Advanced: snapshot store directory.').volatile(),
-  chartDir: Schema.string().default('.gtfa/charts')
-    .description('Advanced: chart output directory.').volatile(),
-  charts: Schema.boolean().default(true)
-    .description('Advanced: write SVG chart files.').volatile(),
-});
+  /** Host Config schema. Volatile fields apply live; dsh-settings redacts token reads. */
+  return Schema.object({
+    egress: Schema.union(['local', 'apify']).default('local')
+      .description('local sends Google requests from the dsh machine; apify uses the Apify proxy.').volatile(),
+    apifyToken: Schema.string().role('secret')
+      .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
+    apifyProxyGroups: Schema.array(Schema.string()).default(['RESIDENTIAL'])
+      .description('Apify proxy groups, for example RESIDENTIAL.').volatile(),
+    apifyProxyCountry: Schema.string().default('US')
+      .description('Apify proxy country code.').volatile(),
+    geo: Schema.string().default('US')
+      .description('Default country for trends_ask, trends_compare, and trends_snapshot.').volatile(),
+    anchor: Schema.string()
+      .description('Optional fixed anchor for validate and trends_snapshot; blank picks the window default.').volatile(),
+    baselines: baselines.volatile(),
+    cache: Schema.boolean().default(true)
+      .description('Reuse stored snapshots (up to 360 minutes); off always fetches fresh.').volatile(),
+    snapshotDir: Schema.string().default('.gtfa/snapshots')
+      .description('Advanced: snapshot store directory.').volatile(),
+    chartDir: Schema.string().default('.gtfa/charts')
+      .description('Advanced: chart output directory.').volatile(),
+    charts: Schema.boolean().default(true)
+      .description('Advanced: write SVG chart files.').volatile(),
+  });
+}
+
+/** Host Config schema, present only when the optional dsh peer is installed. */
+export const Config = Schema ? createConfig(Schema) : undefined;
 
 interface SkillService {
   registerProvider(create: () => unknown): unknown;
@@ -288,9 +307,9 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
         render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) ?? '{}' }],
       },
       async execute(args: unknown, exec: { signal?: AbortSignal }) {
-        exec.signal?.throwIfAborted();
+        throwIfAborted(exec.signal);
         const result = await tool.execute(args, { signal: exec.signal });
-        exec.signal?.throwIfAborted();
+        throwIfAborted(exec.signal);
         return result;
       },
     });

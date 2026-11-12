@@ -119,6 +119,16 @@ describe('offline client sessions', () => {
     expect(r.error?.code).toBe('TRENDS_TEMPORARILY_UNAVAILABLE');
     expect(transport).toHaveBeenCalledTimes(3);
   });
+  it('does not retry after the caller aborts', async () => {
+    const controller = new AbortController();
+    const transport = vi.fn<Transport>().mockImplementation(async () => {
+      controller.abort();
+      return response('', 429, { 'retry-after': '1' });
+    });
+    await expect(new TrendsClient({ transport, minIntervalMs: 0, signal: controller.signal })
+      .query({ queries: ['coffee'], maxRetries: 2 })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('transport and request spacing', () => {
@@ -171,6 +181,37 @@ describe('transport and request spacing', () => {
   it('maps aborted transport requests to timeout errors', async () => {
     const session = new Session(async () => { throw new DOMException('aborted', 'TimeoutError'); }, new RateLimiter({ minIntervalMs: 0 }));
     await expect(session.request({ url: 'https://trends.google.com/trends/', headers: {}, timeoutMs: 1000 })).rejects.toMatchObject({ code: 'TRENDS_TIMEOUT' });
+  });
+  it('propagates a caller abort instead of a retryable timeout', async () => {
+    const controller = new AbortController();
+    const session = new Session(async () => {
+      controller.abort();
+      return response('late');
+    }, new RateLimiter({ minIntervalMs: 0 }));
+    await expect(session.request({ url: 'https://trends.google.com/trends/', headers: {}, timeoutMs: 1000, signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+  });
+  it('rejects promptly even when the transport ignores the abort signal', async () => {
+    const controller = new AbortController();
+    const transport = vi.fn<Transport>(async () => {
+      controller.abort();
+      await new Promise<void>(() => {});
+      return response();
+    });
+    const session = new Session(transport, new RateLimiter({ minIntervalMs: 0 }));
+    await expect(session.request({ url: 'https://trends.google.com/trends/', headers: {}, timeoutMs: 1000, signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it('cancels a queued limiter wait without running its request', async () => {
+    const limiter = new RateLimiter({ minIntervalMs: 1000, now: () => 0, sleep: () => new Promise<void>(() => {}) });
+    await limiter.run(async () => {});
+    const controller = new AbortController();
+    const run = vi.fn(async () => {});
+    const queued = limiter.run(run, controller.signal);
+    controller.abort();
+    await expect(queued).rejects.toMatchObject({ name: 'AbortError' });
+    expect(run).not.toHaveBeenCalled();
   });
   it('uses global fetch with manual redirects and preserves Set-Cookie headers', async () => {
     const upper = process.env.HTTPS_PROXY, lower = process.env.https_proxy;

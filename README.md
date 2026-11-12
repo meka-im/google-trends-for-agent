@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-262%20passed-22c55e?style=flat-square" alt="262 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-280%20passed-22c55e?style=flat-square" alt="280 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -87,16 +87,17 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 ## dsh plugin
 
 ```sh
-dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
+# Pinned tag keeps the allowBuilds key stable.
+dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+# The first run prints pnpm's exact allowBuilds key and fails. Add that key under
+# allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```
 
-The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library. There is no MCP server, no `gtfa` CLI subprocess, and no Actor endpoint. A bundled `gtfa` skill tells the agent when to use each tool and how to report `no_data` / `blocked` honestly.
+After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**; if the bundle shows Off, switch it on. The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library. There is no MCP server, no `gtfa` CLI subprocess, and no Actor endpoint. A bundled `gtfa` skill tells the agent when to use each tool and how to report `no_data` / `blocked` honestly.
 
-**Configure in dsh web → Plugins → Google Trends → Configure** for egress (`local` or `apify`), the Apify token, default geo, proxy groups/country, baselines, and snapshot cache. Changes apply live. The token is a redacted dsh secret field, never echoed back, and may be left empty to use `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`); the profile YAML never needs the raw token. See [docs/assets/dsh-config.png](docs/assets/dsh-config.png).
+Configure egress (`local` or `apify`), the Apify token, default geo, proxy groups/country, baselines, and snapshot cache; changes apply live. The token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`) to keep it out of the profile.
 
 `local` sends requests from the machine running dsh (`HTTPS_PROXY` is still honored). `apify` uses the Apify proxy without the Actor, fetches the proxy password once from the Apify API, and rotates the session on HTTP 429 or a Google challenge. Apify traffic is billed per GB from your Apify credits.
-
-If pnpm blocks the git checkout's `prepare` build (pnpm 10/11), approve `google-trends-for-agent` in the dsh plugin manager prompt and retry, or add the exact spec pnpm prints to `onlyBuiltDependencies` in `~/.dsh/profiles/<name>/pnpm-workspace.yaml`.
 
 ## Deploy to Apify
 
@@ -196,7 +197,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 262 tests
+npm test          # 280 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

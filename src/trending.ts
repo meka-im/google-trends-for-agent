@@ -1,7 +1,7 @@
 import { GTrendsError } from './core.js';
 import type { TrendsErrorCode } from './api.js';
 import { TRENDING_GEOS } from './geos.js';
-import { createDefaultTransport, RateLimiter, Session, withRetry, type Transport, type RateLimitOptions } from './transport.js';
+import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type Transport, type RateLimitOptions } from './transport.js';
 
 export const TRENDING_CATEGORIES: Record<number, string> = {
   1: 'Autos and Vehicles', 2: 'Beauty and Fashion', 3: 'Business and Finance', 4: 'Entertainment',
@@ -21,7 +21,7 @@ export interface TrendingResponse {
   error?: { code: TrendsErrorCode; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number };
 }
-export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; maxRetries?: number; stopOnBlocked?: boolean }
+export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; maxRetries?: number; stopOnBlocked?: boolean; signal?: AbortSignal }
 export function trendingVolumeLabel(volume: number): string {
   return `${volume >= 1e6 ? `${volume / 1e6}M` : volume >= 1000 ? `${volume / 1000}K` : volume}+`;
 }
@@ -63,6 +63,7 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
   const now = options.now ?? Date.now;
   const start = now();
   try {
+    throwIfAborted(options.signal);
     if (!TRENDING_GEOS.some(g => g.code === result.geo) || ![4, 24, 48, 168].includes(result.hours) ||
       (input.lang !== undefined && (typeof input.lang !== 'string' || !/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]+)*$/.test(input.lang))) ||
       [input.minVolume, input.limit].some(n => n !== undefined && (!Number.isSafeInteger(n) || n < 0)) ||
@@ -75,14 +76,16 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
     session = new Session(options.transport ?? createDefaultTransport(), limiter);
     const req = [[['i0OFE', JSON.stringify([null, null, result.geo, 0, input.lang ?? 'en', result.hours, 1]), null, 'generic']]];
     const body = await withRetry(() => session!.request({ url: 'https://trends.google.com/_/TrendsUi/data/batchexecute', method: 'POST',
-      body: `f.req=${encodeURIComponent(JSON.stringify(req))}`, timeoutMs: options.timeoutMs ?? 8000,
+      body: `f.req=${encodeURIComponent(JSON.stringify(req))}`, timeoutMs: options.timeoutMs ?? 8000, signal: options.signal,
       headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'Mozilla/5.0', accept: '*/*' } }),
-    { maxRetries: options.maxRetries ?? 1, sleep: limiter.sleep });
+    { maxRetries: options.maxRetries ?? 1, sleep: limiter.sleep, signal: options.signal });
     result.items = parseTrendingResponse(body).filter(item => item.volume >= (input.minVolume ?? 0) &&
       (!input.categories?.length || item.categoryIds.some(id => input.categories!.includes(id))));
     if (input.limit !== undefined) result.items = result.items.slice(0, input.limit);
     result.status = 'ok'; delete result.error;
   } catch (e) {
+    if (options.signal?.aborted) throw abortError(options.signal);
+    if (isAbortError(e)) throw e;
     result.error = e instanceof GTrendsError ? { code: e.code, message: e.message, ...(e.retryAfterSec !== undefined ? { retryAfterSec: e.retryAfterSec } : {}) } :
       { code: e instanceof RangeError && !session ? 'INVALID_INPUT' : 'TRENDS_PROTOCOL_CHANGED', message: 'Google Trends returned an unexpected Trending Now response; the public endpoint may have changed. Retry later, and check for a newer gtfa if it persists.' };
   }
@@ -100,7 +103,9 @@ export async function listTrending(input: ListTrendingInput, options: TrendingOp
   try { shared = { ...options, transport: options.transport ?? createDefaultTransport(), limiter: options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 }) }; }
   catch { shared = options; }
   for (const geo of geos) {
+    throwIfAborted(options.signal);
     const result = blocked ? failure({ ...input, geo }, 'BLOCKED', 'skipped after upstream block') : await fetchTrending({ ...input, geo }, shared);
+    throwIfAborted(options.signal);
     results.push(result);
     if (options.stopOnBlocked !== false && result.error?.code === 'BLOCKED') blocked = true;
   }

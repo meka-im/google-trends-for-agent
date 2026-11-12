@@ -6,6 +6,39 @@ export interface TransportRequest { url: string; method?: string; body?: string;
 export interface TransportResponse { status: number; headers: Record<string, string>; body: string }
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
 
+/** Normalize any caller abort reason to an `AbortError` while preserving its message. */
+export function abortError(signal?: AbortSignal): Error {
+  const reason = signal?.reason;
+  if (reason instanceof Error && reason.name === 'AbortError') return reason;
+  const error = new Error(reason instanceof Error && reason.message ? reason.message : 'The operation was aborted');
+  error.name = 'AbortError';
+  if (reason !== undefined) (error as Error & { cause?: unknown }).cause = reason;
+  return error;
+}
+
+/** Throw the caller's abort reason instead of retrying an upstream error. */
+export function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError(signal);
+}
+
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+/** Race a promise against a caller abort signal so waits and sleeps stop promptly. */
+export function raceAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => { signal.removeEventListener('abort', onAbort); reject(abortError(signal)); };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      error => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+}
+
 const PROXY_ENV = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'] as const;
 export type ProxySource = (typeof PROXY_ENV)[number] | 'none';
 export interface ProxyConfig { source: ProxySource; url: string | null }
@@ -73,7 +106,7 @@ export function createDefaultTransport(env: NodeJS.ProcessEnv = process.env): Tr
 }
 
 export const RETRYABLE_ERROR_CODES = ['RATE_LIMITED', 'TRENDS_TIMEOUT', 'TRENDS_TEMPORARILY_UNAVAILABLE', 'NETWORK_ERROR'] as const;
-export interface RetryOptions { maxRetries: number; sleep: (ms: number) => Promise<void>; maxRateLimitWaitMs?: number }
+export interface RetryOptions { maxRetries: number; sleep: (ms: number) => Promise<void>; maxRateLimitWaitMs?: number; signal?: AbortSignal }
 const DEFAULT_MAX_RATE_LIMIT_WAIT_MS = 10_000;
 
 /** RATE_LIMITED honors Retry-After when it fits the bounded wait; other transient failures retry immediately. */
@@ -88,12 +121,18 @@ export function retryDelayMs(error: GTrendsError, attempt: number, maxWaitMs = D
 /** Bounded retry wrapper shared by Explore and Trending Now requests. */
 export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    try { return await fn(); }
-    catch (error) {
+    throwIfAborted(options.signal);
+    try {
+      const value = await fn();
+      throwIfAborted(options.signal);
+      return value;
+    } catch (error) {
+      if (options.signal?.aborted) throw abortError(options.signal);
       if (!(error instanceof GTrendsError) || attempt >= options.maxRetries) throw error;
       const delay = retryDelayMs(error, attempt, options.maxRateLimitWaitMs);
       if (delay === null) throw error;
-      if (delay > 0) await options.sleep(delay);
+      if (delay > 0) await raceAbort(options.sleep(delay), options.signal);
+      throwIfAborted(options.signal);
     }
   }
 }
@@ -117,14 +156,17 @@ export class RateLimiter {
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
   }
-  async run<T>(fn: () => Promise<T>): Promise<T> {
+  async run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    throwIfAborted(signal);
     const previous = this.tail;
     let release!: () => void;
     this.tail = new Promise(resolve => { release = resolve; });
-    await previous;
     try {
+      await raceAbort(previous, signal);
+      throwIfAborted(signal);
       const wait = this.nextAt - this.now();
-      if (wait > 0) await this.sleep(wait);
+      if (wait > 0) await raceAbort(this.sleep(wait), signal);
+      throwIfAborted(signal);
       this.nextAt = this.now() + this.interval;
       return await fn();
     } finally { release(); }
@@ -141,12 +183,16 @@ export class Session {
   upstreamRequests = 0;
   constructor(private transport: Transport, private limiter: RateLimiter) {}
   async request(req: TransportRequest): Promise<string> {
+    throwIfAborted(req.signal);
     return this.limiter.run(async () => {
+      throwIfAborted(req.signal);
       const cookie = await this.jar.getCookieString(req.url);
+      throwIfAborted(req.signal);
       let res: TransportResponse;
       this.upstreamRequests++;
-      try { res = await this.transport({ ...req, headers: { ...req.headers, ...(cookie ? { cookie } : {}) } }); }
+      try { res = await raceAbort(this.transport({ ...req, headers: { ...req.headers, ...(cookie ? { cookie } : {}) } }), req.signal); }
       catch (error) {
+        if (req.signal?.aborted) throw abortError(req.signal);
         if (error instanceof GTrendsError) throw error;
         const timeout = error instanceof Error && /timeout|abort/i.test(error.name);
         const message = timeout
@@ -154,6 +200,7 @@ export class Session {
           : 'Could not reach Google Trends (network, DNS, TLS, or proxy failure). Check connectivity/firewall; if a proxy is required, set HTTPS_PROXY or HTTP_PROXY.';
         throw new GTrendsError(timeout ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', message);
       }
+      throwIfAborted(req.signal);
       const headers = Object.fromEntries(Object.entries(res.headers).map(([k,v]) => [k.toLowerCase(),v]));
       // Split combined headers without splitting an Expires date's comma.
       for (const cookie of (headers['set-cookie'] ?? '').split(/\n|,(?=\s*[^;,=\s]+\s*=)/)) {
@@ -178,6 +225,6 @@ export class Session {
       }
       this.limiter.recover();
       return res.body;
-    });
+    }, req.signal);
   }
 }

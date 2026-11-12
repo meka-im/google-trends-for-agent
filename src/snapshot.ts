@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { queryTrends, type TrendsResponse } from './api.js';
+import { isAbortError } from './transport.js';
 import type { InterestOverTime, RelatedQueries, GeoResult, GeoRow } from './core.js';
 import { resolveFilter, filterInput, settledPoints, type TrendsFilter } from './filter.js';
 export interface TermSnapshot {
@@ -21,7 +22,10 @@ export async function snapshotTerm(term: string, filter: Partial<TrendsFilter> =
   const f = resolveFilter(filter), query = opts.query ?? queryTrends;
   let r: TrendsResponse;
   try { r = await query({ queries: [term], ...filterInput(f), dataTypes: ['interestOverTime', 'relatedQueries', 'interestBySubregion'] }); }
-  catch (e) { r = { status: 'error', input: term, error: { code: 'NETWORK_ERROR', message: String(e) }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } }; }
+  catch (e) {
+    if (isAbortError(e)) throw e;
+    r = { status: 'error', input: term, error: { code: 'NETWORK_ERROR', message: String(e) }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } };
+  }
   const points = ((r.data?.interestOverTime as InterestOverTime)?.timeline ?? []).map(p => ({ time: p.time, value: p.values[0] }));
   const related = r.data?.relatedQueries as RelatedQueries | undefined;
   const rows = (r.data?.interestBySubregion as GeoResult<GeoRow>)?.rows ?? [];

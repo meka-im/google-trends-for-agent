@@ -1,5 +1,5 @@
 import * as core from './core.js';
-import { createDefaultTransport, RateLimiter, Session, withRetry, type RateLimitOptions, type Transport } from './transport.js';
+import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type RateLimitOptions, type Transport } from './transport.js';
 export interface TrendsResult {
   status: 'ok' | 'partial' | 'error';
   input?: Record<string, unknown>;
@@ -7,15 +7,18 @@ export interface TrendsResult {
   error?: { code: string; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number; warnings: string[] };
 }
-export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter }
+export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; signal?: AbortSignal }
 export class TrendsClient {
   private readonly transport: Transport;
   private readonly limiter: RateLimiter;
+  private readonly signal: AbortSignal | undefined;
   constructor(options: ClientOptions = {}) {
     this.transport = options.transport ?? createDefaultTransport();
     this.limiter = options.limiter ?? new RateLimiter(options);
+    this.signal = options.signal;
   }
   async query(raw: unknown): Promise<TrendsResult> {
+    throwIfAborted(this.signal);
     const started = this.limiter.now();
     const session = new Session(this.transport, this.limiter);
     const data: Record<string, unknown> = {};
@@ -26,11 +29,11 @@ export class TrendsClient {
       input = core.parseGTrendsInput(raw);
       const i = input;
       const request = (url: string, method = 'GET'): Promise<string> => withRetry(
-        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? 8000, headers: {
+        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? 8000, signal: this.signal, headers: {
           accept: 'application/json, text/plain, */*', 'accept-language': core.acceptLanguage(i.locale),
           'user-agent': 'Mozilla/5.0', referer: core.refererUrl(i),
         } }),
-        { maxRetries: i.maxRetries, sleep: this.limiter.sleep },
+        { maxRetries: i.maxRetries, sleep: this.limiter.sleep, signal: this.signal },
       );
       const explore = async (v: core.GTrendsInput) => core.selectWidgets(core.stripXssi(await request(core.exploreUrl(v))), v);
       await request(core.BOOTSTRAP_URL, 'HEAD');
@@ -80,6 +83,8 @@ export class TrendsClient {
       if (firstFailure && Object.values(data).every(v => v === null || Array.isArray(v) && v.every(entry => entry.top === null))) throw firstFailure;
       return { status: warnings.length ? 'partial' : 'ok', input: core.publicInput(i), data, meta: meta() };
     } catch (e) {
+      if (this.signal?.aborted) throw abortError(this.signal);
+      if (isAbortError(e)) throw e;
       const error = e instanceof core.GTrendsError ? e : new core.GTrendsError('TRENDS_PROTOCOL_CHANGED', 'Google Trends returned an unexpected response shape; the public endpoints may have changed. Retry later, and check for a newer gtfa if it persists.');
       return { status: 'error', ...(input ? { input: core.publicInput(input) } : {}), data, error: { code: error.code, message: error.message, ...(error.retryAfterSec != null ? { retryAfterSec: error.retryAfterSec } : {}) }, meta: meta() };
     }

@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-262%20passed-22c55e?style=flat-square" alt="262 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-280%20passed-22c55e?style=flat-square" alt="280 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -87,16 +87,17 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 ## dsh 插件
 
 ```sh
-dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
+# 固定 tag 可让 allowBuilds 的 key 保持稳定。
+dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+# 首次运行会打印 pnpm 给出的完整 allowBuilds key 并失败。把该 key 加到
+# ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑同一条命令。
 ```
 
-该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。没有 MCP 服务器、没有 `gtfa` CLI 子进程，也不经过 Actor 端点。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
+安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**；如果 bundle 显示 Off，请先开启。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。没有 MCP 服务器、没有 `gtfa` CLI 子进程，也不经过 Actor 端点。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
 
-**在 dsh web → Plugins → Google Trends → Configure 中配置** 出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存。修改即时生效。Token 是 dsh 的脱敏密钥字段，不会回显；留空则使用环境变量 `APIFY_TOKEN`（或 `APIFY_PROXY_PASSWORD`），profile YAML 永远不需要明文 Token。截图：[docs/assets/dsh-config.png](docs/assets/dsh-config.png)。
+可配置出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存；修改即时生效。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN`（或 `APIFY_PROXY_PASSWORD`）可让它不进入 profile。
 
 `local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 不经 Actor、直接使用 Apify 代理，通过 Apify API 获取一次代理密码，并在 HTTP 429 或 Google 验证页时轮换会话。Apify 流量按 GB 从你的 Apify 额度中扣除。
-
-如果 pnpm 拦截了 git 检出的 `prepare` 构建（pnpm 10/11），请在 dsh 插件管理器提示中允许 `google-trends-for-agent` 后重试，或把 pnpm 打印的完整 spec 加入 `~/.dsh/profiles/<name>/pnpm-workspace.yaml` 的 `onlyBuiltDependencies`。
 
 ## 部署到 Apify（Deploy to Apify）
 
@@ -196,7 +197,7 @@ GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读
 
 ```sh
 npm install
-npm test          # 262 个测试
+npm test          # 280 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

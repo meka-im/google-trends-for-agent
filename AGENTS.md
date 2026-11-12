@@ -36,10 +36,12 @@ Restart the client, then call `trends_ask` with a single term. `trends_ask` and 
 ## dsh plugin
 
 ```sh
-dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
+dsh plugin --profile web add github:meka-im/google-trends-for-agent#v0.1.0
+# First run prints pnpm's exact allowBuilds key; add it under allowBuilds: in
+# ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```
 
-This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. It does not start an MCP server, run the `gtfa` CLI, or call the Actor. Configure it in dsh web → Plugins → Google Trends → Configure: egress defaults to `local`; choose `apify` to use the Apify proxy directly from the core library, and set the Apify token there (stored as a dsh secret) or leave it empty to use `APIFY_TOKEN` / `APIFY_PROXY_PASSWORD`. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. It does not start an MCP server, run the `gtfa` CLI, or call the Actor. After install, enable and configure it in dsh web → Plugins → Google Trends → gtfa → Configure (switch the bundle on if it shows Off): egress defaults to `local`; choose `apify` to use the Apify proxy directly from the core library, and set the Apify token there or leave it empty to use `APIFY_TOKEN` / `APIFY_PROXY_PASSWORD`. A token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leaving it blank with `APIFY_TOKEN` keeps it out of the profile. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
 
 ## Verify networking first
 
