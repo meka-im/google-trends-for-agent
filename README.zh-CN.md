@@ -27,19 +27,19 @@
 <table>
   <tr><th align="center">已成熟词</th><th align="center">新词与上升词</th></tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion 美国 7 天每日搜索量图：峰值 12.0k，最新 7.8k" width="400"><br><sub><b>notion</b> · 峰值 12.0k · 最新 7.8k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon 美国 7 天每日搜索量图：峰值 4.4k，最新 0" width="400"><br><sub><b>gemini 4 carbon</b> · 峰值 4.4k · 最新 0 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion 美国 7 天每日搜索量图：峰值 45.9k，最新 30.3k" width="400"><br><sub><b>notion</b> · 峰值 45.9k · 最新 30.3k 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon 美国 7 天每日搜索量图：峰值 18.0k，最新 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · 峰值 18.0k · 最新 7.7k 次搜索/天</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney 美国 7 天每日搜索量图：峰值 4.8k，最新 3.1k" width="400"><br><sub><b>midjourney</b> · 峰值 4.8k · 最新 3.1k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 美国 7 天每日搜索量图：峰值 3.6k，最新 0" width="400"><br><sub><b>genie 4</b> · 峰值 3.6k · 最新 0 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney 美国 7 天每日搜索量图：峰值 17.9k，最新 8.1k" width="400"><br><sub><b>midjourney</b> · 峰值 17.9k · 最新 8.1k 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 美国 7 天每日搜索量图：峰值 786，最新 0" width="400"><br><sub><b>genie 4</b> · 峰值 786 · 最新 0 次搜索/天</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity 美国 7 天每日搜索量图：峰值 11.4k，最新 6.6k" width="400"><br><sub><b>perplexity</b> · 峰值 11.4k · 最新 6.6k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 美国 7 天每日搜索量图：峰值 359，最新 0" width="400"><br><sub><b>pika h3</b> · 峰值 359 · 最新 0 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity 美国 7 天每日搜索量图：峰值 31.8k，最新 25.4k" width="400"><br><sub><b>perplexity</b> · 峰值 31.8k · 最新 25.4k 次搜索/天</sub></td>
+    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 美国 7 天每日搜索量图：峰值 786，最新 0" width="400"><br><sub><b>pika h3</b> · 峰值 786 · 最新 0 次搜索/天</sub></td>
   </tr>
 </table>
-<p align="center"><sub>估算以 <code>gpts</code> 锚点 ≈ 550 次搜索/天校准；美国、近 7 天，标签使用 UTC，抓取于 2026-11-02 UTC。</sub></p>
+<p align="center"><sub>估算以 <code>gpts</code> 锚点 ≈ 3,500 次搜索/天校准；美国、近 7 天，标签使用 UTC，抓取于 2026-11-12 UTC。</sub></p>
 
 ## 从 GitHub 安装（Install from GitHub）
 

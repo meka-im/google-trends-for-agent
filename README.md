@@ -27,19 +27,19 @@
 <table>
   <tr><th align="center">Established terms</th><th align="center">New &amp; rising terms</th></tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion US 7-day searches/day chart: peak 12.0k, latest 7.8k" width="400"><br><sub><b>notion</b> · peak 12.0k · latest 7.8k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon US 7-day searches/day chart: peak 4.4k, latest 0" width="400"><br><sub><b>gemini 4 carbon</b> · peak 4.4k · latest 0 searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion US 7-day searches/day chart: peak 45.9k, latest 30.3k" width="400"><br><sub><b>notion</b> · peak 45.9k · latest 30.3k searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon US 7-day searches/day chart: peak 18.0k, latest 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · peak 18.0k · latest 7.7k searches/day</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney US 7-day searches/day chart: peak 4.8k, latest 3.1k" width="400"><br><sub><b>midjourney</b> · peak 4.8k · latest 3.1k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 US 7-day searches/day chart: peak 3.6k, latest 0" width="400"><br><sub><b>genie 4</b> · peak 3.6k · latest 0 searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney US 7-day searches/day chart: peak 17.9k, latest 8.1k" width="400"><br><sub><b>midjourney</b> · peak 17.9k · latest 8.1k searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 US 7-day searches/day chart: peak 786, latest 0" width="400"><br><sub><b>genie 4</b> · peak 786 · latest 0 searches/day</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity US 7-day searches/day chart: peak 11.4k, latest 6.6k" width="400"><br><sub><b>perplexity</b> · peak 11.4k · latest 6.6k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 US 7-day searches/day chart: peak 359, latest 0" width="400"><br><sub><b>pika h3</b> · peak 359 · latest 0 searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity US 7-day searches/day chart: peak 31.8k, latest 25.4k" width="400"><br><sub><b>perplexity</b> · peak 31.8k · latest 25.4k searches/day</sub></td>
+    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 US 7-day searches/day chart: peak 786, latest 0" width="400"><br><sub><b>pika h3</b> · peak 786 · latest 0 searches/day</sub></td>
   </tr>
 </table>
-<p align="center"><sub>Estimates calibrated to the <code>gpts</code> anchor ≈ 550 searches/day; US, last 7 days, labels in UTC, fetched 2026-11-02 UTC.</sub></p>
+<p align="center"><sub>Estimates calibrated to the <code>gpts</code> anchor ≈ 3,500 searches/day; US, last 7 days, labels in UTC, fetched 2026-11-12 UTC.</sub></p>
 
 ## Install from GitHub
 

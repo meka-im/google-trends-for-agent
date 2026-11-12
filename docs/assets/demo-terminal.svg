@@ -4,21 +4,21 @@
 </defs>
 <rect width="820" height="380" rx="14" fill="#0b1220"/>
 <circle cx="24" cy="22" r="6" fill="#f87171"/><circle cx="44" cy="22" r="6" fill="#fbbf24"/><circle cx="64" cy="22" r="6" fill="#34d399"/>
-<text x="410" y="27" text-anchor="middle" fill="#64748b" font-size="12">gtfa snapshot · real output · 2026-11-02 UTC</text>
+<text x="410" y="27" text-anchor="middle" fill="#64748b" font-size="12">gtfa snapshot · real output · 2026-11-12 UTC</text>
 <g clip-path="url(#typed)"><text x="24" y="64"><tspan fill="#34d399">$ </tspan><tspan fill="#22d3ee">gtfa snapshot Sora --geo US --json --pretty</tspan></text></g>
 <rect x="24" y="51" width="7" height="15" rx="1" fill="#22d3ee"><animate attributeName="x" values="24.0;31.5;39.0;46.5;54.0;61.5;69.0;76.5;84.0;91.5;99.0;106.5;114.0;121.5;129.0;136.5;144.0;151.5;159.0;166.5;174.0;181.5;189.0;196.5;204.0;211.5;219.0;226.5;234.0;241.5;249.0;256.5;264.0;271.5;279.0;286.5;294.0;301.5;309.0;316.5;324.0;331.5;339.0;346.5;354.0;361.5;369.0;376.5;384.0;391.5" keyTimes="0.0000;0.0204;0.0408;0.0612;0.0816;0.1020;0.1224;0.1429;0.1633;0.1837;0.2041;0.2245;0.2449;0.2653;0.2857;0.3061;0.3265;0.3469;0.3673;0.3878;0.4082;0.4286;0.4490;0.4694;0.4898;0.5102;0.5306;0.5510;0.5714;0.5918;0.6122;0.6327;0.6531;0.6735;0.6939;0.7143;0.7347;0.7551;0.7755;0.7959;0.8163;0.8367;0.8571;0.8776;0.8980;0.9184;0.9388;0.9592;0.9796;1.0000" calcMode="discrete" begin="0.35s" dur="2s" fill="freeze"/><animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.5;0.51;1" dur="1s" begin="0.35s" repeatCount="indefinite"/></rect>
 <text x="24" y="98" fill="#94a3b8" opacity="0">{<animate attributeName="opacity" from="0" to="1" begin="2.65s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="117" fill="#e2e8f0" opacity="0">"ok": true, "status": "ok", "term": "Sora",<animate attributeName="opacity" from="0" to="1" begin="2.90s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="136" fill="#e2e8f0" opacity="0">"summary": "Sora no calibrated traffic (US·24h); rising",<animate attributeName="opacity" from="0" to="1" begin="3.15s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="155" fill="#e2e8f0" opacity="0">"anchor": { "term": "gpts", "dailySearches": 3500, "source": "baseline",<animate attributeName="opacity" from="0" to="1" begin="3.40s" dur="0.2s" fill="freeze"/></text>
-<text x="54" y="174" fill="#e2e8f0" opacity="0">"note": "anchor too sparse/weak for calibration; traffic omitted (27/180 non-gap anchor…" },<animate attributeName="opacity" from="0" to="1" begin="3.65s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="193" fill="#e2e8f0" opacity="0">"traffic7d": { "average": 36795, "latest": 39238, "peak": 55262 },<animate attributeName="opacity" from="0" to="1" begin="3.90s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="212" fill="#e2e8f0" opacity="0">"verdict": { "label": "rising", "confidence": "high" },<animate attributeName="opacity" from="0" to="1" begin="4.15s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="136" fill="#e2e8f0" opacity="0">"summary": "Sora ≈ 23.4k searches/day (US·24h), 0.37× sudoku; steady",<animate attributeName="opacity" from="0" to="1" begin="3.15s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="155" fill="#e2e8f0" opacity="0">"anchor": { "term": "sudoku", "dailySearches": 63000, "source": "baseline",<animate attributeName="opacity" from="0" to="1" begin="3.40s" dur="0.2s" fill="freeze"/></text>
+<text x="54" y="174" fill="#e2e8f0" opacity="0">"level": 63.7, "ratio": 0.37, "note": "Anchor calibration estimate; not measured volume" },<animate attributeName="opacity" from="0" to="1" begin="3.65s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="193" fill="#e2e8f0" opacity="0">"traffic7d": { "average": 22093, "latest": 25748, "peak": 33879 },<animate attributeName="opacity" from="0" to="1" begin="3.90s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="212" fill="#e2e8f0" opacity="0">"verdict": { "label": "steady", "confidence": "high" },<animate attributeName="opacity" from="0" to="1" begin="4.15s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="231" fill="#e2e8f0" opacity="0">"tables": {<animate attributeName="opacity" from="0" to="1" begin="4.40s" dur="0.2s" fill="freeze"/></text>
 <text x="54" y="250" fill="#e2e8f0" opacity="0">"popular": [{ "query": "sora ai", "formattedValue": "100" }],<animate attributeName="opacity" from="0" to="1" begin="4.65s" dur="0.2s" fill="freeze"/></text>
-<text x="54" y="269" fill="#e2e8f0" opacity="0">"rising": [{ "query": "sora niwa terrace kyoto", "formattedValue": "+500%" }]<animate attributeName="opacity" from="0" to="1" begin="4.90s" dur="0.2s" fill="freeze"/></text>
+<text x="54" y="269" fill="#e2e8f0" opacity="0">"rising": [{ "query": "sora choi", "formattedValue": "+350%" }]<animate attributeName="opacity" from="0" to="1" begin="4.90s" dur="0.2s" fill="freeze"/></text>
 <text x="39" y="288" fill="#e2e8f0" opacity="0">},<animate attributeName="opacity" from="0" to="1" begin="5.15s" dur="0.2s" fill="freeze"/></text>
-<text x="39" y="307" fill="#e2e8f0" opacity="0">"chart7d": { "path": ".gtfa/charts/52918b59-006e-4382-837a-627c92019f0d-utc-bdfd4d8d.svg" }<animate attributeName="opacity" from="0" to="1" begin="5.40s" dur="0.2s" fill="freeze"/></text>
+<text x="39" y="307" fill="#e2e8f0" opacity="0">"chart7d": { "path": ".gtfa/charts/745c7592-9a60-438b-9472-b27b22c410ac-utc-bdfd4d8d.svg" }<animate attributeName="opacity" from="0" to="1" begin="5.40s" dur="0.2s" fill="freeze"/></text>
 <text x="24" y="326" fill="#94a3b8" opacity="0">}<animate attributeName="opacity" from="0" to="1" begin="5.65s" dur="0.2s" fill="freeze"/></text>
 <text x="24" y="355" fill="#64748b" font-size="11" opacity="0"># trimmed; long strings shortened with … · path shown under default --chart-dir · full output adds series, warnings, meta<animate attributeName="opacity" from="0" to="1" begin="5.95s" dur="0.2s" fill="freeze"/></text>
 </svg>

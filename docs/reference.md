@@ -91,16 +91,16 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 | `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | `US` | **63,000/day** | ±50% | 18.035 × 3,500 ≈ 63,123 (7-day sudoku/gpts ratio); thesaurus cross-check ≈62,720. |
 | `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | `US` | **3,500/day** (≈105k/month) | ±50% | Long-window ruler; back-derived from public keyword-tool volumes through measured Trends ratios. |
 
-**Why 3,500/day:** public keyword-tool volumes for sudoku, thesaurus, and calculator, divided by measured 7-day Trends ratios (sudoku/gpts 18.035, thesaurus/gpts 7.341, calculator/sudoku ≈18), centralize near 3,500/day. The estimates are rounded and the built-in tolerance stays ±50%. Google Ads' own `gpts` number (1.5M/month) is unusable because Keyword Planner merges close variants such as "gpt".
+**Why 3,500/day:** public US keyword-tool volumes for sudoku, thesaurus, and calculator, divided by measured 7-day Trends ratios (sudoku/gpts 18.035, thesaurus/gpts 7.341, calculator/sudoku ≈18). The sudoku and calculator rows cluster at 2,100–4,100/day, and 3,500 sits in that cluster. The thesaurus rows run higher because the tools disagree widely on that keyword (1.5M–4.1M/month). All of these are rounded third-party estimates, so the built-in tolerance stays ±50%. Google Ads' own `gpts` number (1.5M/month) is unusable because Keyword Planner merges close variants such as "gpt".
 
 | Source (US monthly) | Per day | Implied gpts/day |
 | --- | ---: | ---: |
-| sudoku, Google Ads (via [seodata.dev](https://www.seodata.dev/)) — 2.24M | 74k | ≈4,100 |
-| sudoku, Semrush ([sudoku.com](https://www.semrush.com/website/sudoku.com/overview/)) — 1.83M | 60k | ≈3,300 |
+| sudoku, Google Ads (via [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=us)) — 2.24M | 74k | ≈4,100 |
+| sudoku, Semrush, Sep 2026 ([sudoku.com](https://www.semrush.com/website/sudoku.com/overview/)) — 1.83M | 60k | ≈3,300 |
 | sudoku, Ahrefs ([sudoku.com](https://ahrefstop.com/websites/sudoku.com)) — 1.5M | 49k | ≈2,700 |
-| thesaurus, Google Ads — 1.5M | 49k | ≈6,700 |
-| thesaurus, Semrush ([thesaurus.com](https://srush.toolspur.com/website/thesaurus.com/overview/)) — 1.83M | 60k | ≈8,200 |
-| calculator, Ahrefs / Google Ads ([top Google searches](https://ahrefs.com/blog/top-google-searches/)) — 21.0M / 20.4M | ≈680k | ≈2,100 |
+| thesaurus, Google Ads (via [seodata.dev](https://api.seodata.dev/v1/keyword?q=thesaurus&country=us)) — 1.5M | 49k | ≈6,700 |
+| thesaurus, Semrush, Oct 2026 ([thesaurus.com](https://www.semrush.com/website/thesaurus.com/overview/)) — 4.09M | 134k | ≈18,300 |
+| calculator, Ahrefs ([top Google searches](https://ahrefs.com/blog/top-google-searches/)) / Google Ads ([seodata.dev](https://api.seodata.dev/v1/keyword?q=calculator&country=us)) — 21.0M / 20.4M | ≈680k | ≈2,100 |
 
 Derivation of 63,000: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 3,500 ≈ 63,123. Cross-check through thesaurus: thesaurus/gpts 7.341 × 3,500 ≈ 25,694, then sudoku/thesaurus 2.441 × 25,694 ≈ 62,720. Both round to ≈63,000, so 1-day and 7-day estimates sit on the same ruler (`gpts = 3,500`). Alternates worth noting: thesaurus ≈25,700/day is closer to small AI terms but has zero points at night; chairs ≈143,000/day (scaled from its earlier 22,500/day estimate to the new ruler) is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
 
