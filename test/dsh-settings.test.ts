@@ -2,6 +2,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, EN, loadApifyUsage, withPendingAnchor, type ApifyUsageView, type Draft } from '../src/client/index.js';
+import {
+  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL, APIFY_STARTER_MONTHLY_USD,
+} from '../src/options.js';
 
 const t = (key: string) => EN[key] ?? key;
 
@@ -72,6 +75,30 @@ const readyUsage: ApifyUsageView = {
   },
 };
 
+const paidUsage: Extract<ApifyUsageView, { status: 'ready' }> = {
+  status: 'ready',
+  data: {
+    plan: { tier: 'STARTER', monthlyBasePriceUsd: 19, monthlyUsageCreditsUsd: 19 },
+    usageUsd: 8.0559,
+    limitUsd: 19,
+    cycle: { startAt: '2026-01-01T00:00:00.000Z', endAt: '2099-01-31T23:59:59.999Z' },
+    residentialGb: 0.006,
+    residentialGbLimit: 5,
+    fetchedAt: '2026-01-15T12:34:00.000Z',
+    source: 'config',
+  },
+};
+
+const freeUsage: Extract<ApifyUsageView, { status: 'ready' }> = {
+  status: 'ready',
+  data: {
+    ...paidUsage.data,
+    plan: { tier: 'FREE', monthlyBasePriceUsd: 0, monthlyUsageCreditsUsd: 5 },
+    usageUsd: 1.25,
+    limitUsd: 5,
+  },
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -125,6 +152,47 @@ describe('dsh settings form', () => {
 
     const invalid = render({ draft: { egress: 'apify' }, usage: { status: 'error', code: 'invalid-token' } });
     expect(invalid).toContain('Apify rejected the token (401). Check it in Apify Console → Settings → API &amp; Integrations.');
+  });
+
+  it('shows the Apify sign-up bar only when no token is configured', () => {
+    const html = render({ draft: { egress: 'apify' }, usage: { status: 'error', code: 'no-token' } });
+    expect(html).toContain('No Apify account? Sign up free');
+    expect(html).toContain('$5 of platform credit');
+    expect(html).toContain('Starter, $19/mo with $19 credit');
+    expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
+    expect(html).toContain(`href="${APIFY_PRICING_URL}"`);
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html).toContain('Sign up →');
+    expect(html).toContain('Pricing');
+  });
+
+  it('hides the sign-up bar and free-plan hint on a paid plan', () => {
+    const html = render({ draft: { egress: 'apify' }, usage: paidUsage });
+    expect(html).toContain('$8.05 / $19.00');
+    expect(html).not.toContain('No Apify account?');
+    expect(html).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
+    expect(html).not.toContain('Free plan:');
+  });
+
+  it('shows the free-plan proxy hint for a Free plan', () => {
+    const html = render({ draft: { egress: 'apify' }, usage: freeUsage });
+    expect(html).toContain('Free plan: Apify Proxy from outside Apify needs a paid plan');
+    expect(html).toContain('Upgrade →');
+    expect(html).toContain(`href="${APIFY_PRICING_URL}"`);
+    expect(html).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
+  });
+
+  it('does not show the sign-up bar while egress is local', () => {
+    const html = render({ draft: { egress: 'local' }, usage: { status: 'error', code: 'no-token' } });
+    expect(html).not.toContain('No Apify account?');
+    expect(html).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
+  });
+
+  it('exposes the Apify sign-up and pricing constants', () => {
+    expect(APIFY_SIGNUP_URL).toBe('https://console.apify.com/sign-up');
+    expect(APIFY_PRICING_URL).toBe('https://apify.com/pricing');
+    expect(APIFY_FREE_MONTHLY_CREDIT_USD).toBe(5);
+    expect(APIFY_STARTER_MONTHLY_USD).toBe(19);
   });
 
   it('keeps Advanced collapsed by default and shows its fields inside the disclosure', () => {

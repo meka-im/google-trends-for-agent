@@ -18,7 +18,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
-  APIFY_PROXY_GROUPS, BUILTIN_ANCHOR_TERMS, DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY,
+  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_PROXY_GROUPS, APIFY_SIGNUP_URL, APIFY_STARTER_MONTHLY_USD,
+  BUILTIN_ANCHOR_TERMS, DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY,
   GEO_CODES, PROXY_COUNTRY_CODES, regionLabel, type ApifyProxyGroup,
 } from '../options.js';
 
@@ -209,6 +210,11 @@ export const EN: Record<string, string> = {
   usageResidential: 'Residential proxy: {gb} GB this cycle',
   usageResidentialLimit: 'Residential proxy: {gb} GB this cycle of {limit} GB',
   usageResidentialUnknown: 'Residential proxy: —',
+  signupBar: 'No Apify account? Sign up free — the Free plan includes {free} of platform credit every month. Using the proxy from dsh needs a paid plan (Starter, {starter}/mo with {starter} credit).',
+  signupAction: 'Sign up →',
+  pricingAction: 'Pricing',
+  freePlanHint: 'Free plan: Apify Proxy from outside Apify needs a paid plan, so Apify egress won\'t work.',
+  freePlanUpgrade: 'Upgrade →',
   token: 'Apify token',
   tokenHint: 'Leave blank to keep the current token or use APIFY_TOKEN. A saved token is written to the profile\'s cordis.patch.yml (mode 0600).',
   tokenPrefixWarning: 'Apify API tokens usually start with apify_api_. Double-check this one.',
@@ -328,6 +334,11 @@ export const ZH: Record<string, string> = {
   usageResidential: '住宅代理：本周期 {gb} GB',
   usageResidentialLimit: '住宅代理：本周期 {gb} GB，上限 {limit} GB',
   usageResidentialUnknown: '住宅代理：—',
+  signupBar: '还没有 Apify 账号？免费注册 — 免费版每月含 {free} 平台额度。从 dsh 使用代理需要付费版（Starter，{starter}/月，含 {starter} 额度）。',
+  signupAction: '注册 →',
+  pricingAction: '价格',
+  freePlanHint: '免费版：从 Apify 平台外部使用代理需要付费版，Apify 出口将无法使用。',
+  freePlanUpgrade: '升级 →',
   token: 'Apify Token',
   tokenHint: '留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN。保存的 Token 会写入 profile 的 cordis.patch.yml（权限 0600）。',
   tokenPrefixWarning: 'Apify API Token 通常以 apify_api_ 开头，请再确认。',
@@ -482,6 +493,17 @@ const styles: Record<string, CSSProperties> = {
     border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
     background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,.06))',
   },
+  signupBar: {
+    display: 'grid', gap: 6, padding: '10px 12px', borderRadius: 10,
+    border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
+    background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.08))',
+  },
+  signupText: { margin: 0, fontSize: 12, lineHeight: 1.5 },
+  signupLinks: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 12 },
+  signupPrimary: { color: 'var(--dsw-alias-brand-primary, #2f6fed)', fontWeight: 600, textDecoration: 'none' },
+  signupSecondary: { color: 'var(--dsw-alias-label-tertiary, inherit)', textDecoration: 'underline' },
+  usageBlock: { display: 'grid', gap: 6 },
+  freePlanHint: { margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-state-warning-primary, #b7791f)' },
   usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   usageTitle: { fontSize: 13, fontWeight: 650 },
   usageAmount: { fontSize: 24, lineHeight: 1.2, fontWeight: 700, letterSpacing: '-0.02em' },
@@ -836,6 +858,32 @@ export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Pr
   } catch {
     return { ok: false, egress, status: null, latencyMs: 0, code: 'network' };
   }
+}
+
+function isFreePlan(data: ApifyUsageData): boolean {
+  return data.plan.tier?.toUpperCase() === 'FREE'
+    || (data.limitUsd !== null && Math.abs(data.limitUsd - APIFY_FREE_MONTHLY_CREDIT_USD) <= 0.005);
+}
+
+function ApifySignupBar({ t }: { t: Translate }) {
+  const amounts = {
+    free: `$${APIFY_FREE_MONTHLY_CREDIT_USD}`,
+    starter: `$${APIFY_STARTER_MONTHLY_USD}`,
+  };
+  return <div style={styles.signupBar}>
+    <p style={styles.signupText}>{template(t('signupBar'), amounts)}</p>
+    <div style={styles.signupLinks}>
+      <a style={styles.signupPrimary} href={APIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('signupAction')}</a>
+      <a style={styles.signupSecondary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('pricingAction')}</a>
+    </div>
+  </div>;
+}
+
+function FreePlanHint({ t }: { t: Translate }) {
+  return <p style={styles.freePlanHint}>
+    {t('freePlanHint')}{' '}
+    <a style={styles.signupPrimary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('freePlanUpgrade')}</a>
+  </p>;
 }
 
 export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshing = false }: {
@@ -1245,8 +1293,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
 
     {draft.egress === 'apify' ? <section style={styles.section}>
       <SectionHeader title={t('apify')} description={t('apifyDescription')} />
-      <ApifyUsageCard state={usage} t={t} locale={intlLocale}
-        onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />
+      {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} /> : null}
+      <div style={styles.usageBlock}>
+        <ApifyUsageCard state={usage} t={t} locale={intlLocale}
+          onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />
+        {usage.status === 'ready' && isFreePlan(usage.data) ? <FreePlanHint t={t} /> : null}
+      </div>
       <Field label={t('token')} hint={t('tokenHint')}>
         <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
           placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}

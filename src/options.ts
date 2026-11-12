@@ -5,6 +5,20 @@ export const APIFY_PROXY_GROUPS = ['RESIDENTIAL', 'auto'] as const;
 export type ApifyProxyGroup = (typeof APIFY_PROXY_GROUPS)[number];
 export const DEFAULT_APIFY_PROXY_GROUP: ApifyProxyGroup = 'RESIDENTIAL';
 
+/**
+ * Apify sign-up facts, checked 2026-11-12:
+ * - https://apify.com/pricing — Free is $0 and includes $5 of platform usage per
+ *   month; Starter is $19/mo and includes $19. Residential proxy is $8/GB on both.
+ * - https://docs.apify.com/platform/proxy (External connection) — "To connect to
+ *   Apify Proxy from outside the Apify platform, you need a paid Apify plan."
+ *   This plugin's Apify egress is an external connection, so it needs a paid plan.
+ * - Sign-up: https://console.apify.com/sign-up
+ */
+export const APIFY_SIGNUP_URL = 'https://console.apify.com/sign-up';
+export const APIFY_PRICING_URL = 'https://apify.com/pricing';
+export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
+export const APIFY_STARTER_MONTHLY_USD = 19;
+
 /** Curated Apify proxy countries; the UI shows localized names next to the code. */
 export const PROXY_COUNTRY_CODES = [
   'US', 'GB', 'CA', 'AU', 'DE', 'FR', 'JP', 'KR', 'SG', 'IN', 'BR', 'MX', 'ES', 'IT', 'NL', 'SE',

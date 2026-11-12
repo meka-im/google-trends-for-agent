@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-321%20passed-22c55e?style=flat-square" alt="321 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-326%20passed-22c55e?style=flat-square" alt="326 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -97,6 +97,8 @@ After install, open **dsh web → Plugins → Google Trends → gtfa → Configu
 Configure egress (`local` or `apify`), the Apify token, default geo, the proxy group and country, baselines, and snapshot cache; choices use selects, segmented controls, and toggles, and changes apply live. Under Apify, the settings page shows this cycle's usage (plan, USD, residential GB) and a **Test connection** button for the saved egress; both run on the Host, so the token never reaches the browser. The token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
 
 `local` sends requests from the machine running dsh (`HTTPS_PROXY` is still honored). `apify` uses the Apify proxy without the Actor, fetches the proxy password once from the Apify API, and rotates the session on HTTP 429 or a Google challenge. Apify traffic is billed per GB from your Apify credits.
+
+Apify egress needs a paid Apify plan because this is external proxy access; sign up at [console.apify.com/sign-up](https://console.apify.com/sign-up).
 
 ## Deploy to Apify
 
@@ -196,7 +198,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 321 tests
+npm test          # 326 tests
 npm run typecheck
 npm run build
 npm run trends -- --help
