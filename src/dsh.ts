@@ -3,9 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
-import { loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
+import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
 import {
-  DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY,
+  APIFY_PROXY_GROUPS, DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY, GEO_CODES, PROXY_COUNTRY_CODES,
   normalizeApifyProxyGroup, normalizeGeo, normalizeProxyCountry, type ApifyProxyGroup,
 } from './options.js';
 import { throwIfAborted, type Transport } from './transport.js';
@@ -66,9 +66,18 @@ function createConfig(Schema: SchemaFactory) {
       long: Schema.string().description('Anchor term for now 7-d and longer windows.'),
     }).default({}).description('Optional automatic anchor term per window.'),
   }), (value: unknown) => {
-    const row = value as { anchors?: Anchor[] | null; windowAnchors?: WindowAnchors | null };
-    if (row.anchors?.length || row.windowAnchors?.short?.trim() || row.windowAnchors?.long?.trim()) {
-      baselinesFromConfig(value);
+    // Keep this callback self-contained: dsh serializes transform callbacks to the
+    // browser settings form, where this module's imports are not in scope.
+    const row = (value ?? {}) as { anchors?: Array<{ term?: unknown }> | null; windowAnchors?: Record<string, unknown> | null };
+    const terms = new Set(['gpts', 'sudoku']);
+    for (const anchor of row.anchors ?? []) {
+      const term = String(anchor.term ?? '').trim().toLowerCase();
+      if (!term) throw new Error('anchor term must not be blank');
+      terms.add(term);
+    }
+    for (const key of ['short', 'long']) {
+      const term = String(row.windowAnchors?.[key] ?? '').trim();
+      if (term && !terms.has(term.toLowerCase())) throw new Error(`windowAnchors.${key} "${term}" is not in anchors or the built-in anchors`);
     }
     return value;
   }).description('Optional inline baselines override.');
@@ -79,14 +88,12 @@ function createConfig(Schema: SchemaFactory) {
       .description('local sends Google requests from the dsh machine; apify uses the Apify proxy.').volatile(),
     apifyToken: Schema.string().role('secret')
       .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
-    apifyProxyGroup: Schema.transform(Schema.string(), (value: string) => normalizeApifyProxyGroup(value))
-      .default(DEFAULT_APIFY_PROXY_GROUP)
+    // Plain constant unions only: transform callbacks are re-evaluated in the browser.
+    apifyProxyGroup: Schema.union([...APIFY_PROXY_GROUPS]).default(DEFAULT_APIFY_PROXY_GROUP)
       .description('Apify proxy mode: RESIDENTIAL for residential IPs, or auto for automatic datacenter selection.').volatile(),
-    apifyProxyCountry: Schema.transform(Schema.string(), (value: string) => normalizeProxyCountry(value))
-      .default(DEFAULT_PROXY_COUNTRY)
+    apifyProxyCountry: Schema.union([...PROXY_COUNTRY_CODES]).default(DEFAULT_PROXY_COUNTRY)
       .description('Apify proxy country from the built-in list.').volatile(),
-    geo: Schema.transform(Schema.string(), (value: string) => normalizeGeo(value))
-      .default(DEFAULT_GEO)
+    geo: Schema.union([...GEO_CODES]).default(DEFAULT_GEO)
       .description('Default geo for trends_ask, trends_compare, and trends_snapshot; empty means Worldwide.').volatile(),
     anchor: Schema.string()
       .description('Optional fixed anchor for validate and trends_snapshot; blank picks the window default.').volatile(),
@@ -158,7 +165,8 @@ export function baselinesFromConfig(value: unknown): Baselines | undefined {
   if (!anchors.length && !hasWindow) return undefined;
   return parseBaselines({
     version: 2,
-    anchors: anchors.map(anchor => ({ ...anchor, geo: anchor.geo?.trim() || 'US' })),
+    // Window-only overrides pick among the built-in anchors.
+    anchors: anchors.length ? anchors.map(anchor => ({ ...anchor, geo: anchor.geo?.trim() || 'US' })) : [...BUILTIN_ANCHORS],
     ...(hasWindow ? { windowAnchors: windows } : {}),
   }, 'dsh baselines');
 }

@@ -2,7 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import Schema from '@deepseek-ai/schemastery';
 import { Config, baselinesFromConfig, register, resolveGtfaSettings } from '../src/dsh.js';
+import { BUILTIN_ANCHOR_TERMS } from '../src/options.js';
 import { ApifyProxyUrlProvider, resolveApifyCredentials } from '../src/egress.js';
 import { createTools } from '../src/tools.js';
 import type { Transport } from '../src/transport.js';
@@ -64,16 +66,16 @@ describe('dsh Config schema', () => {
 
   it('accepts only the shared proxy modes and curated countries', () => {
     expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'auto' }) as never).apifyProxyGroup).toBe('auto');
-    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'residential' }) as never).apifyProxyGroup).toBe('RESIDENTIAL');
+    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'RESIDENTIAL' }) as never).apifyProxyGroup).toBe('RESIDENTIAL');
     expect(() => Config!({ apifyProxyGroup: 'GOOGLE_SERP' } as never)).toThrow(/apifyProxyGroup/);
-    expect(resolveGtfaSettings(Config!({ apifyProxyCountry: 'gb' }) as never).apifyProxyCountry).toBe('GB');
+    expect(resolveGtfaSettings(Config!({ apifyProxyCountry: 'GB' }) as never).apifyProxyCountry).toBe('GB');
     expect(() => Config!({ apifyProxyCountry: 'XX' })).toThrow(/apifyProxyCountry/);
   });
 
   it('accepts Worldwide (empty geo) and rejects unknown geos', () => {
     expect(resolveGtfaSettings(Config!({ geo: '' }) as never).geo).toBe('');
-    expect(resolveGtfaSettings(Config!({ geo: 'gb' }) as never).geo).toBe('GB');
-    expect(() => Config!({ geo: 'ZZ' })).toThrow(/geo must be empty/);
+    expect(resolveGtfaSettings(Config!({ geo: 'GB' }) as never).geo).toBe('GB');
+    expect(() => Config!({ geo: 'ZZ' })).toThrow(/\$\.geo/);
   });
 
   it('validates inline baselines with the shared traffic rules', () => {
@@ -187,5 +189,30 @@ describe('Apify token resolution', () => {
     expect(JSON.stringify(result)).not.toContain(token);
     expect(String((result.error as { message?: string })?.message)).not.toContain(token);
     for (const spy of logged) expect(JSON.stringify(spy.mock.calls)).not.toContain(token);
+  });
+});
+
+describe('dsh Config as the browser settings form sees it', () => {
+  // dsh sends Config.toJSON() to the web client, which rebuilds it with `new Schema(json)`
+  // and validates the stored value; transform callbacks run there without module scope.
+  const browserSchema = () => new Schema(JSON.parse(JSON.stringify(Config!.toJSON())));
+
+  it('validates defaults and a full value without module bindings', () => {
+    const schema = browserSchema();
+    expect(() => schema({ egress: 'local' })).not.toThrow();
+    expect(() => schema({
+      egress: 'apify', apifyProxyGroup: 'auto', apifyProxyCountry: 'GB', geo: '', anchor: 'gpts', cache: false, charts: false,
+      baselines: { anchors: [{ term: 'genie', geo: 'GB', dailySearches: 120, tolerance: 0.2 }], windowAnchors: { short: 'genie', long: 'gpts' } },
+    })).not.toThrow();
+  });
+
+  it('accepts every built-in anchor as a window anchor and rejects unknown terms', () => {
+    const schema = browserSchema();
+    for (const term of BUILTIN_ANCHOR_TERMS) {
+      expect(() => schema({ baselines: { windowAnchors: { long: term } } })).not.toThrow();
+      expect(resolveGtfaSettings(Config!({ baselines: { windowAnchors: { long: term } } }) as never).baselines?.windowAnchors).toEqual({ long: term });
+    }
+    expect(() => schema({ baselines: { windowAnchors: { short: 'nope' } } })).toThrow(/windowAnchors.short/);
+    expect(() => schema({ geo: 'XX' })).toThrow();
   });
 });
