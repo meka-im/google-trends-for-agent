@@ -85,7 +85,9 @@ describe('Streamable HTTP MCP transport', () => {
 
   it('relays only https://trends.google.com requests and passes the response through', async () => {
     const calls: { url: string; method?: string; timeoutMs: number }[] = [];
+    const seenHeaders: Record<string, string>[] = [];
     const transport = vi.fn<Transport>(async request => {
+      seenHeaders.push(request.headers);
       calls.push({ url: request.url, method: request.method, timeoutMs: request.timeoutMs });
       return { status: 200, headers: { 'x-actor': 'yes' }, body: '<html>relayed</html>' };
     });
@@ -97,7 +99,7 @@ describe('Streamable HTTP MCP transport', () => {
       body: JSON.stringify(body),
     });
 
-    for (const url of ['https://evil.test/steal', 'http://trends.google.com/trends/', 'https://trends.google.com.evil.test/']) {
+    for (const url of ['https://evil.test/steal', 'http://trends.google.com/trends/', 'https://trends.google.com.evil.test/', 'https://trends.google.com:8443/trends/', 'https://u:p@trends.google.com/']) {
       const rejected = await relay({ url, headers: {}, timeoutMs: 5000 });
       expect(rejected.status).toBe(400);
       expect(await rejected.json()).toEqual({ error: { code: 'INVALID_INPUT', message: expect.any(String) } });
@@ -107,7 +109,7 @@ describe('Streamable HTTP MCP transport', () => {
     const accepted = await relay({
       url: 'https://trends.google.com/trends/api/explore?hl=en-US&q=secret',
       method: 'GET',
-      headers: { accept: 'application/json', 'x-secret': 'do-not-log' },
+      headers: { accept: 'application/json', 'x-secret': 'do-not-log', Host: 'evil.test', 'proxy-authorization': 'x', connection: 'close' },
       timeoutMs: 999_999,
     });
     expect(accepted.status).toBe(200);
@@ -117,6 +119,7 @@ describe('Streamable HTTP MCP transport', () => {
       body: '<html>relayed</html>',
     });
     expect(calls).toEqual([{ url: 'https://trends.google.com/trends/api/explore?hl=en-US&q=secret', method: 'GET', timeoutMs: 60_000 }]);
+    expect(seenHeaders).toEqual([{ accept: 'application/json' }]);
     expect(logs.join('\n')).toContain('Relay GET /trends/api/explore');
     for (const secret of ['hl=en-US', 'q=secret', 'do-not-log', '<html>relayed</html>']) {
       expect(logs.join('\n')).not.toContain(secret);
@@ -205,6 +208,54 @@ describe('Streamable HTTP MCP transport', () => {
     now = 200;
     queued!();
     expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores readiness probes and keeps a request in flight until its handler finishes', async () => {
+    const harness = async (transport?: Transport) => {
+      const state = { now: 0, queued: undefined as (() => void) | undefined, exit: vi.fn() };
+      const { http } = await start(transport, {
+        idleExit: {
+          enabled: true,
+          timeoutMs: 100,
+          now: () => state.now,
+          schedule: callback => { state.queued = callback; return 1; },
+          cancel: () => { state.queued = undefined; },
+          exit: state.exit,
+          log: () => {},
+        },
+      });
+      return { ...state, state, base: `http://127.0.0.1:${http.port}` };
+    };
+
+    const probed = await harness();
+    const probe = await realFetch(`${probed.base}/`, { headers: { 'x-apify-container-server-readiness-probe': '1' } });
+    expect(probe.status).toBe(200);
+    probed.state.now = 200;
+    probed.state.queued!();
+    expect(probed.state.exit).toHaveBeenCalledTimes(1);
+
+    let finish: (() => void) | undefined;
+    const slow = await harness(async () => {
+      await new Promise<void>(resolve => { finish = resolve; });
+      return { status: 200, headers: {}, body: 'ok' };
+    });
+    const controller = new AbortController();
+    const pending = realFetch(`${slow.base}/egress/fetch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://trends.google.com/trends/', headers: {} }),
+      signal: controller.signal,
+    }).catch(() => undefined);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    controller.abort();
+    await pending;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(slow.state.queued).toBeUndefined();
+    finish!();
+    await vi.waitFor(() => expect(slow.state.queued).toBeTypeOf('function'));
+    slow.state.now = 1000;
+    slow.state.queued!();
+    expect(slow.state.exit).toHaveBeenCalledTimes(1);
   });
 
   it('does not schedule an exit when idle exit is disabled', () => {

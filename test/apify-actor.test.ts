@@ -103,6 +103,24 @@ describe('Apify Actor client', () => {
     expect(await down.listMyActors(TOKEN)).toMatchObject({ ok: false, code: 'network' });
   });
 
+  it('reports a running or failed first build that has no latest tag yet', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target === ACTS_URL) return json({ data: { items: [{ id: 'a1', name: 'google-trends-for-agent', username: 'alice' }] } });
+      if (target === `${API}/acts/a1`) return actorDetail('a1', 'google-trends-for-agent', null);
+      if (target === `${API}/acts/a1/builds?desc=1&limit=1`) return json({ data: { items: [{ id: 'b0', status: 'FAILED' }] } });
+      throw new Error(`unexpected ${target}`);
+    });
+    const client = new ApifyActorClient({ fetch: fetchMock as unknown as typeof fetch });
+    const result = await client.listMyActors(TOKEN);
+    expect(result).toMatchObject({ ok: true, actors: [{ id: 'a1', lastBuildStatus: 'FAILED' }] });
+  });
+
+  it('never sends the token to a non-Apify Standby host', async () => {
+    const client = new ApifyActorClient({ fetch: (async () => actorDetail('a1', 'google-trends-for-agent', null, 'https://evil.test')) as unknown as typeof fetch });
+    await expect(client.resolveStandbyUrl(TOKEN, 'a1')).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringMatching(/unexpected Standby URL/) });
+  });
+
   it('resolves and caches the Standby URL per token + Actor', async () => {
     let now = 0;
     const fetchMock = vi.fn(async (url: string | URL | Request) => {

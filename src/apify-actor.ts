@@ -74,6 +74,14 @@ function actorMatches(name: string): boolean {
   return name === GTFA_ACTOR_NAME || name.startsWith(`${GTFA_ACTOR_NAME}-`);
 }
 
+/** The token is only ever sent to an https *.apify.actor Standby host. */
+function isApifyStandbyUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' && !url.port && !url.username && !url.password && url.hostname.endsWith('.apify.actor');
+  } catch { return false; }
+}
+
 interface CachedActors {
   tokenHash: string;
   at: number;
@@ -139,6 +147,14 @@ export class ApifyActorClient {
         const build = await this.getJson(`${API_BASE}/actor-builds/${encodeURIComponent(buildId)}`, trimmed, options.signal);
         if (!build.ok) return build;
         lastBuildStatus = stringOrNull(record(record(build.body).data).status);
+      } else {
+        // `latest` is tagged only on success, so a running or failed first build
+        // shows up only in the build list.
+        const builds = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}/builds?desc=1&limit=1`, trimmed, options.signal);
+        if (!builds.ok) return builds;
+        const recent = record(record(builds.body).data).items;
+        const first = record(Array.isArray(recent) ? recent[0] : undefined);
+        lastBuildStatus = stringOrNull(first.status);
       }
       actors.push({
         id,
@@ -171,6 +187,9 @@ export class ApifyActorClient {
     const url = stringOrNull(data.standbyUrl);
     if (!url) {
       throw new GTrendsError('INVALID_INPUT', 'This Actor has no Standby URL. Enable Standby in the Actor settings, then try again.');
+    }
+    if (!isApifyStandbyUrl(url)) {
+      throw new GTrendsError('INVALID_INPUT', 'Apify returned an unexpected Standby URL for this Actor.');
     }
     this.standbyCache = { key, at: this.clock(), url };
     return url;

@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-340%20passed-22c55e?style=flat-square" alt="340 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-343%20passed-22c55e?style=flat-square" alt="343 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -107,7 +107,6 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 ## 部署到 Apify
 
-[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](#部署到-apify)
 
 该 Actor 以 **Standby 模式**通过 **Streamable HTTP** 运行 MCP 服务器，并默认通过**美国 Apify 住宅代理**访问 Google Trends。它既是无法运行本地进程、也无法访问 `localhost` 的远程 Agent 的接入方式，也是 dsh 插件 `apify` 出口的转发层；两者都可以在免费版使用。
 
@@ -199,7 +198,7 @@ GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读
 
 ```sh
 npm install
-npm test          # 340 个测试
+npm test          # 343 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

@@ -200,9 +200,12 @@ function allowedRelayUrl(raw: unknown): URL | undefined {
   if (typeof raw !== 'string' || !raw.trim()) return undefined;
   let url: URL;
   try { url = new URL(raw); } catch { return undefined; }
-  if (url.protocol !== 'https:' || url.hostname !== 'trends.google.com' || url.username || url.password) return undefined;
+  if (url.origin !== 'https://trends.google.com' || url.username || url.password) return undefined;
   return url;
 }
+
+/** Headers the relay forwards; anything else (Host, proxy auth, hop-by-hop) is dropped. */
+const RELAY_HEADERS = new Set(['accept', 'accept-language', 'content-type', 'cookie', 'referer', 'user-agent']);
 
 function relayError(res: ServerResponse): void {
   writeApiError(res, 400, 'INVALID_INPUT', 'url must be an https://trends.google.com URL.');
@@ -263,7 +266,7 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
     }
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(record(row.headers))) {
-      if (typeof value === 'string') headers[key] = value;
+      if (typeof value === 'string' && RELAY_HEADERS.has(key.toLowerCase())) headers[key] = value;
     }
     if (row.body !== undefined && typeof row.body !== 'string') {
       writeApiError(res, 400, 'INVALID_INPUT', 'body must be a string.');
@@ -438,13 +441,20 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
   };
 
   const server = createHttpServer((req, res) => {
-    idle?.enter();
-    res.once('close', () => idle?.leave());
+    // Readiness probes are not activity; everything else counts until both the
+    // handler has finished and the response has closed.
+    const tracked = idle && !header(req, 'x-apify-container-server-readiness-probe');
+    let pending = tracked ? 2 : 0;
+    const release = () => { if (pending > 0 && --pending === 0) idle?.leave(); };
+    if (tracked) {
+      idle.enter();
+      res.once('close', release);
+    }
     handle(req, res).catch(error => {
       options.log?.(`HTTP request failed: ${error instanceof Error ? error.message : String(error)}`);
       if (!res.headersSent) writeJsonRpcError(res, 500, 'Internal server error', -32603);
       else res.end();
-    });
+    }).finally(release);
   });
 
   await new Promise<void>((resolve, reject) => {

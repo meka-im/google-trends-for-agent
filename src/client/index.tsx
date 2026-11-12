@@ -1262,7 +1262,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
       setDeployNotice(null);
       return;
     }
-    if (actors.actors.some(actor => actor.lastBuildStatus?.toUpperCase() === 'FAILED')) {
+    if (actors.actors.some(actor => ['FAILED', 'ABORTED', 'TIMED-OUT'].includes(actor.lastBuildStatus?.toUpperCase() ?? ''))) {
       setBuilding(false);
       setDeployNotice(t('deployBuildFailed'));
     }

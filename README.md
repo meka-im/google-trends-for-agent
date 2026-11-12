@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-340%20passed-22c55e?style=flat-square" alt="340 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-343%20passed-22c55e?style=flat-square" alt="343 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -107,7 +107,6 @@ If `apify` egress has no Actor selected, the tools return a clear `INVALID_INPUT
 
 ## Deploy to Apify
 
-[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](#deploy-to-apify)
 
 The Actor runs the MCP server in **Standby mode** over **Streamable HTTP** and sends Google Trends requests through an **Apify Residential proxy in the US** by default. It is the remote path for agents that cannot run local processes, and the egress relay for the dsh plugin's `apify` mode; both work on the Free plan.
 
@@ -199,7 +198,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 340 tests
+npm test          # 343 tests
 npm run typecheck
 npm run build
 npm run trends -- --help
