@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Window-aware anchors: short windows (`now 1-H`, `now 4-H`, `now 1-d`) use `sudoku` at 9,900 US searches/day; `now 7-d` and longer keep `gpts` at 550/day. Snapshots report `anchor` and `anchor7d` with the baseline used by each window.
+- Built-in US anchors rescaled to `gpts` at 3,500 searches/day and `sudoku` at 63,000/day, derived from public keyword-tool volumes through measured Trends ratios. Window-aware anchoring still uses `sudoku` for short windows and `gpts` for 7 days and longer; snapshots report `anchor` and `anchor7d` with the baseline used by each window.
 - Version 2 baselines files (`anchors` plus optional `windowAnchors`) load through `GTFA_BASELINES` for the CLI, MCP server, and Actor; version 1 and unknown window-anchor terms are rejected with clear errors.
 
 ## 0.1.0

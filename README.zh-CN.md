@@ -147,17 +147,17 @@ Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中
 
 | 窗口 | 锚点 | 美国基线 | 为什么用它 |
 | --- | --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **9,900/天**，±50% | 全天都有人搜（24 小时内 99.4% 的点非零），短窗口也能校准；`gpts` 在短窗口里太稀疏。 |
-| `now 7-d` 及更长 | `gpts` | **550/天**，±50% | 基准尺子，其他基线都由它推出。 |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/天**，±50% | 全天都有人搜（24 小时内 99.4% 的点非零），短窗口也能校准；`gpts` 在短窗口里太稀疏。 |
+| `now 7-d` 及更长 | `gpts` | **3,500/天**，±50% | 基准尺子，其他基线都由它推出。 |
 
-**9,900 怎么来的：** 在 7 天共享尺度上，`sudoku` 平均是 `gpts` 的 18.035 倍，18.035 × 550 ≈ 9,919。经 `thesaurus` 中转（7.341 × 550 ≈ 4,038，再 × 2.441 ≈ 9,857）结果一致，所以短窗口和长窗口用的是同一把尺子。备选锚点与来源见[参考文档](docs/reference.md#calibration-and-the-anchor)。
+**63,000 怎么来的：** 在 7 天共享尺度上，`sudoku` 平均是 `gpts` 的 18.035 倍，18.035 × 3,500 ≈ 63,123。经 `thesaurus` 中转（7.341 × 3,500 ≈ 25,694，再 × 2.441 ≈ 62,720）结果一致，所以短窗口和长窗口用的是同一把尺子。3,500 的基线是用 sudoku、thesaurus、calculator 的公开关键词工具量，经实测 Trends 比例反推的——来源见[参考文档](docs/reference.md#calibration-and-the-anchor)。备选：`thesaurus` ≈25,700/天；`chairs` ≈143,000/天。
 
 - `--anchor` / MCP `anchor` 可强制两个窗口都用同一个锚点。每次快照都会返回 `anchor`（请求窗口）和 `anchor7d`（7 天校验），写明用了哪个锚点和基线。
 - 用 version 2 的 `baselines.json` 覆盖或新增基线（模板：[examples/baselines.json](examples/baselines.json)）：
 
 ```json
 { "version": 2,
-  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 }],
+  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 }],
   "windowAnchors": { "short": "sudoku", "long": "gpts" } }
 ```
 

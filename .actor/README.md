@@ -6,7 +6,7 @@ It returns **relative search interest** and **anchor-calibrated searches/day est
 
 ## Why use anchored traffic?
 
-Google Trends reports a 0–100 relative scale, not search volume. The `trends_snapshot` tool compares a term with a window-aware anchor on the same scale, then applies a calibrated baseline to estimate **searches/day**: `sudoku` (US 9,900/day) for 1-hour/4-hour/1-day windows, `gpts` (US 550/day) for 7-day-and-longer windows. Numerical traffic stays `null` when the anchor is too sparse or when no calibration exists, instead of inventing a number.
+Google Trends reports a 0–100 relative scale, not search volume. The `trends_snapshot` tool compares a term with a window-aware anchor on the same scale, then applies a calibrated baseline to estimate **searches/day**: `sudoku` (US 63,000/day) for 1-hour/4-hour/1-day windows, `gpts` (US 3,500/day) for 7-day-and-longer windows. Numerical traffic stays `null` when the anchor is too sparse or when no calibration exists, instead of inventing a number.
 
 This makes the output useful for comparing an emerging term with an established one, checking whether interest is rising, or adding a search-interest signal to an agent workflow. Light, interactive use only: this is an unofficial client for undocumented endpoints and has no SLA.
 

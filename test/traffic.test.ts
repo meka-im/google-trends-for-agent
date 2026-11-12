@@ -28,47 +28,47 @@ describe('window anchor defaults', () => {
 
   it('honors windowAnchors and custom anchor terms', async () => {
     const b = await loadBaselines(write({ version: 2, anchors: [
-      { term: 'chairs', geo: 'US', dailySearches: 22500, tolerance: 0.5 },
-      { term: 'thesaurus', geo: 'US', dailySearches: 4000 },
+      { term: 'chairs', geo: 'US', dailySearches: 143000, tolerance: 0.5 },
+      { term: 'thesaurus', geo: 'US', dailySearches: 25700 },
     ], windowAnchors: { short: 'chairs', long: 'thesaurus' } }));
     expect(defaultAnchorFor('now 1-H', b)).toBe('chairs');
     expect(defaultAnchorFor('now 1-d', b)).toBe('chairs');
     expect(defaultAnchorFor('now 7-d', b)).toBe('thesaurus');
     expect(defaultAnchorFor('all', b)).toBe('thesaurus');
-    expect(findAnchor(b, 'chairs', 'US')).toMatchObject({ term: 'chairs', dailySearches: 22500 });
+    expect(findAnchor(b, 'chairs', 'US')).toMatchObject({ term: 'chairs', dailySearches: 143000 });
   });
 
   it('prefers a user anchor over the built-in anchor with the same term and geo', () => {
     const b: Baselines = { version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 12000, tolerance: 0.2 }] };
     expect(findAnchor(b, 'sudoku', 'US')).toMatchObject({ dailySearches: 12000, tolerance: 0.2 });
-    expect(findAnchor(undefined, 'sudoku', 'US')).toMatchObject({ dailySearches: 9900, tolerance: 0.5 });
+    expect(findAnchor(undefined, 'sudoku', 'US')).toMatchObject({ dailySearches: 63000, tolerance: 0.5 });
     expect(anchorDailySearches(findAnchor(b, 'sudoku', 'US')!)).toBe(12000);
   });
 });
 
 describe('baselines file validation', () => {
   it('rejects version 1 instead of translating it', async () => {
-    await expect(loadBaselines(write({ version: 1, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 550 }] })))
+    await expect(loadBaselines(write({ version: 1, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }] })))
       .rejects.toThrow(/version 1 is no longer supported/);
   });
 
   it('rejects a window anchor that is not in anchors or the built-ins', async () => {
-    await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 550 }], windowAnchors: { short: 'chairs' } })))
+    await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }], windowAnchors: { short: 'chairs' } })))
       .rejects.toThrow(/not in anchors or the built-in anchors/);
   });
 
   it('rejects malformed, negative, and excessive tolerances', async () => {
     for (const tolerance of ['oops', -0.1, 1.5]) {
-      await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 9900, tolerance }] })))
+      await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 63000, tolerance }] })))
         .rejects.toThrow(/tolerance must be a number from 0 to 1/);
     }
-    await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 9900, tolerance: 0 }] }))).resolves.toBeTruthy();
+    await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 63000, tolerance: 0 }] }))).resolves.toBeTruthy();
   });
 
   it('loads the shipped examples/baselines.json', async () => {
     const b = await loadBaselines('examples/baselines.json');
-    expect(findAnchor(b, 'sudoku', 'US')).toMatchObject({ dailySearches: 9900 });
-    expect(findAnchor(b, 'gpts', 'US')).toMatchObject({ dailySearches: 550 });
+    expect(findAnchor(b, 'sudoku', 'US')).toMatchObject({ dailySearches: 63000 });
+    expect(findAnchor(b, 'gpts', 'US')).toMatchObject({ dailySearches: 3500 });
     expect(defaultAnchorFor('now 1-d', b)).toBe('sudoku');
     expect(defaultAnchorFor('now 7-d', b)).toBe('gpts');
   });

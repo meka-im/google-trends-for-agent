@@ -38,7 +38,7 @@
 <text x="280" y="256" text-anchor="middle" fill="#94a3b8" font-size="10.5">reuse &lt;= 360 min</text>
 <rect x="380" y="194" width="160" height="96" rx="12" fill="#111a2e" stroke="#fbbf24" stroke-width="2"/>
 <text x="460" y="218" text-anchor="middle" fill="#f1f5f9" font-size="13" font-weight="700">Anchor calibration</text>
-<text x="460" y="238" text-anchor="middle" fill="#94a3b8" font-size="10.5">score ÷ level × 550/day</text>
+<text x="460" y="238" text-anchor="middle" fill="#94a3b8" font-size="10.5">score ÷ level × 3,500/day</text>
 <text x="460" y="256" text-anchor="middle" fill="#94a3b8" font-size="10.5">sparse-anchor gate</text>
 <rect x="560" y="194" width="160" height="96" rx="12" fill="#111a2e" stroke="#22d3ee" stroke-width="2"/>
 <text x="640" y="218" text-anchor="middle" fill="#f1f5f9" font-size="13" font-weight="700">Envelope</text>

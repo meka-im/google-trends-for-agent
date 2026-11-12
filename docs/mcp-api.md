@@ -112,17 +112,17 @@
     "reasons": ["Settled tail mean >= 1.5 × earlier mean"],
     "traffic": {
       "unit": "searches/day",
-      "average": 2376,
-      "latest": 3240,
-      "settledLatest": 2376,
-      "peak": 3240,
-      "low": 1188,
-      "high": 3564,
+      "average": 15120,
+      "latest": 20618,
+      "settledLatest": 15120,
+      "peak": 20618,
+      "low": 7560,
+      "high": 22680,
       "gapCount": 0
     },
     "anchor": {
       "term": "sudoku",
-      "dailySearches": 9900,
+      "dailySearches": 63000,
       "ratio": 0.24,
       "band": "mid",
       "note": "Anchor calibration estimate; not measured volume"
@@ -206,7 +206,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 
 ## `trends_snapshot` — 把兴趣换算成每日搜索量
 
-一次共享尺度的 `[term, anchor]` 兴趣对比（同一个 0–100 标尺），加上该 term 的 Popular / Rising 相关查询，换算成 **searches/day** 估计、趋势裁决和 SVG 折线图（默认只给 `chart.path`，`svg: true` / `--svg` 才内联文本）。请求窗口对应 `chart` / `traffic` / `series` / `anchor`；同时始终附带 **`now 7-d`** 的 `chart7d` / `traffic7d` / `anchor7d`，各自使用对应窗口的锚点。短窗口（`now 1-H` / `now 4-H` / `now 1-d`）自动使用美国 `sudoku`（9,900 次/日，±50%），`now 7-d` 及以上自动使用美国 `gpts`（550 次/日，±50%）；这是**标定估计，不是实测流量**。
+一次共享尺度的 `[term, anchor]` 兴趣对比（同一个 0–100 标尺），加上该 term 的 Popular / Rising 相关查询，换算成 **searches/day** 估计、趋势裁决和 SVG 折线图（默认只给 `chart.path`，`svg: true` / `--svg` 才内联文本）。请求窗口对应 `chart` / `traffic` / `series` / `anchor`；同时始终附带 **`now 7-d`** 的 `chart7d` / `traffic7d` / `anchor7d`，各自使用对应窗口的锚点。短窗口（`now 1-H` / `now 4-H` / `now 1-d`）自动使用美国 `sudoku`（63,000 次/日，±50%），`now 7-d` 及以上自动使用美国 `gpts`（3,500 次/日，±50%）；这是**标定估计，不是实测流量**。
 
 ### 入参
 
@@ -243,11 +243,11 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
   "schemaVersion": 1,
   "status": "ok",
   "term": "Astra",
-  "summary": "Astra ≈ 5.7k searches/day (US·24h), 0.58× sudoku; rising",
+  "summary": "Astra ≈ 36.5k searches/day (US·24h), 0.58× sudoku; rising",
   "filter": { "geo": "US", "time": "now 1-d", "category": 0, "property": "web" },
   "anchor": {
     "term": "sudoku",
-    "dailySearches": 9900,
+    "dailySearches": 63000,
     "tolerance": 0.5,
     "level": 100,
     "ratio": 0.58,
@@ -256,7 +256,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
   },
   "anchor7d": {
     "term": "gpts",
-    "dailySearches": 550,
+    "dailySearches": 3500,
     "tolerance": 0.5,
     "level": 100,
     "ratio": 0.5,
@@ -265,19 +265,19 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
   },
   "traffic": {
     "unit": "searches/day",
-    "average": 5742,
-    "latest": 7920,
-    "settledLatest": 5940,
-    "peak": 7920,
-    "low": 2871,
-    "high": 8613,
+    "average": 36540,
+    "latest": 50400,
+    "settledLatest": 37800,
+    "peak": 50400,
+    "low": 18270,
+    "high": 54810,
     "gapCount": 1
   },
   "series": {
     "points": [
-      { "t": "2026-10-31T00:00:00.000Z", "score": 40, "traffic": 3960 },
+      { "t": "2026-10-31T00:00:00.000Z", "score": 40, "traffic": 25200 },
       { "t": "2026-10-31T01:00:00.000Z", "score": 0, "traffic": 0, "gap": true },
-      { "t": "2026-10-31T02:00:00.000Z", "score": 50, "traffic": 4950 }
+      { "t": "2026-10-31T02:00:00.000Z", "score": 50, "traffic": 31500 }
     ],
     "anchorPoints": [
       { "t": "2026-10-31T00:00:00.000Z", "score": 100 },
@@ -294,21 +294,21 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
   },
   "traffic7d": {
     "unit": "searches/day",
-    "average": 275,
-    "latest": 330,
-    "settledLatest": 440,
-    "peak": 440,
-    "low": 138,
-    "high": 413,
+    "average": 1750,
+    "latest": 2100,
+    "settledLatest": 2800,
+    "peak": 2800,
+    "low": 875,
+    "high": 2625,
     "gapCount": 1
   },
   "tables": {
     "popular": [
-      { "rank": 1, "query": "astra app", "value": 100, "formattedValue": "100", "estDaily": 5742 },
-      { "rank": 2, "query": "astra ai", "value": 50, "formattedValue": "50", "estDaily": 2871 }
+      { "rank": 1, "query": "astra app", "value": 100, "formattedValue": "100", "estDaily": 36540 },
+      { "rank": 2, "query": "astra ai", "value": 50, "formattedValue": "50", "estDaily": 18270 }
     ],
     "rising": [
-      { "rank": 1, "query": "astra ai", "value": 250, "formattedValue": "+250%", "breakout": false, "estDaily": 2871 },
+      { "rank": 1, "query": "astra ai", "value": 250, "formattedValue": "+250%", "breakout": false, "estDaily": 18270 },
       { "rank": 2, "query": "astra new", "value": 5000, "formattedValue": "Breakout", "breakout": true, "estDaily": null }
     ]
   },
@@ -342,7 +342,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回约 720×280 的内联 SVG（时间轴使用规范化后的 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
 | `chart.path` | 写入 `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` 的路径（时区 slug 如 `utc-bdfd4d8d`、`asia-shanghai-b485a3cf`；短 SHA-1 后缀基于规范化 IANA 名称并避免不同时区碰撞）；`null` 表示文件写入被禁用/失败 |
 | `chart7d` | 始终存在的 `now 7-d` 曲线，形状与 `chart` 相同（`{ svg, path }`）；`svg` 默认 `""`，`path` 仍写入。7d 拉取失败时为 `{ "svg": "", "path": null }` 并写入 warning |
-| `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用 `anchor7d` 的基线（默认 `gpts` 550 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
+| `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用 `anchor7d` 的基线（默认 `gpts` 3,500 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
 | `tables.popular[].estDaily` | 以 term 窗口平均日流量为顶行基准：`round(value / 100 × traffic.average)` |
 | `tables.rising[]` | 保留 `formattedValue` / `breakout`；`estDaily` 仅当同一查询也出现在 Popular 中时可推导，否则 `null` |
 | `verdict.label` | `rising` · `spiking` · `steady` · `fading` · `no_data` |
@@ -364,13 +364,13 @@ published.est = round(popular.value / 100 × average)
 失败 => ratio = null, traffic 数值 = null, warning = anchor too sparse/weak for calibration; traffic omitted
 ```
 
-内建美国锚点有两个：`gpts` **550 次/日**（`now 7-d` 及以上）和 `sudoku` **9,900 次/日**（`now 1-H` / `now 4-H` / `now 1-d`），都使用 ±50% tolerance。9,900 的推导：7 天共享尺度 sudoku/gpts = 18.035 → 18.035 × 550 ≈ 9,919；thesaurus 交叉校验 thesaurus/gpts 7.341 × 550 ≈ 4,038，sudoku/thesaurus 2.441 × 4,038 ≈ 9,857，两者都四舍五入到 ≈9,900，因此短窗口与 7 天窗口在同一把尺子上（gpts=550）。备选：thesaurus ≈4,000/日（更接近小 AI 词，但夜间有零点）、chairs ≈22,500/日（100% 非零，但压扁极小的词）；过大的 weather / calculator / pizza 会压扁小词。方法参考 [Krazydad](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
+内建美国锚点有两个：`gpts` **3,500 次/日**（`now 7-d` 及以上）和 `sudoku` **63,000 次/日**（`now 1-H` / `now 4-H` / `now 1-d`），都使用 ±50% tolerance。63,000 的推导：7 天共享尺度 sudoku/gpts = 18.035 → 18.035 × 3,500 ≈ 63,123；thesaurus 交叉校验 thesaurus/gpts 7.341 × 3,500 ≈ 25,694，sudoku/thesaurus 2.441 × 25,694 ≈ 62,720，两者都四舍五入到 ≈63,000，因此短窗口与 7 天窗口在同一把尺子上（gpts=3,500）。3,500 的基线由 sudoku、thesaurus、calculator 的公开关键词工具量经实测 Trends 比例反推（来源见 [reference](reference.md#calibration-and-the-anchor)）。备选：thesaurus ≈25,700/日（更接近小 AI 词，但夜间有零点）、chairs ≈143,000/日（100% 非零，但压扁极小的词）；过大的 weather / calculator / pizza 会压扁小词。方法参考 [Krazydad](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
 
 `examples/baselines.json` 是 version 2：`{"version":2,"anchors":[{term,geo,dailySearches,tolerance?}],"windowAnchors":{"short"?:string,"long"?:string}}`。用 `GTFA_BASELINES=/path/to/baselines.json` 覆盖 CLI（`ask --validate` / `snapshot`）、`gtfa-mcp`（stdio 与 `--http`）和 Actor；库调用可用 `baselines` 传入同结构。同 term+geo 的用户锚点优先于内建；`windowAnchors` 的词必须存在于 `anchors` 或内建锚点中。version 1 会被拒绝，无效文件会明确报错而不是静默回退。显式 `anchor` 会同时覆盖主窗口和 7d 窗口；单次调用的 `anchor` 参数优先于 Actor 的服务级锚点设置。
 
 **没有匹配 `geo + anchor` 的标定时**（例如 `geo: "JP"`），或**锚点可靠性门失败时**，`traffic` / `traffic7d` 的数值字段和 `estDaily` 全部为 `null`，`anchor.note` / `meta.warnings` 会说明原因，但 `summary`、`series`、`chart`、`chart7d` 仍会返回。`trends_ask`（`validate: true`）使用完全相同的公式与门，`verdict.anchor` 会显示 `dailySearches`，`verdict.traffic` 为日频。
 
-**English summary.** Anchors are automatic: `sudoku` (US 9,900/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 550/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
+**English summary.** Anchors are automatic: `sudoku` (US 63,000/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 3,500/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
 
 **注意事项：**
 

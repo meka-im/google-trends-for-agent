@@ -79,10 +79,10 @@ Call `trends_ask` with `points: true` only when the full interest series is need
 
 | Window | Anchor | US baseline |
 | --- | --- | --- |
-| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | 9,900/day, ±50% |
-| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | 550/day, ±50% |
+| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | 63,000/day, ±50% |
+| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | 3,500/day, ±50% |
 
-The 9,900 baseline comes from the 7-day shared-scale ratio sudoku/gpts = 18.035: 18.035 × 550 ≈ 9,919. Cross-checking through thesaurus gives ≈9,857. Both round to ≈9,900, so short and long windows sit on the same `gpts = 550` ruler. The denser `sudoku` anchor avoids the sparse-24h failure that `gpts` often hits.
+The 63,000 baseline comes from the 7-day shared-scale ratio sudoku/gpts = 18.035: 18.035 × 3,500 ≈ 63,123. Cross-checking through thesaurus (7.341 × 3,500 ≈ 25,694, then × 2.441 ≈ 62,720) lands in the same place, so short and long windows sit on the same `gpts = 3,500` ruler. The 3,500 baseline is back-derived from public keyword-tool volumes for sudoku, thesaurus, and calculator through measured Trends ratios (sources in the reference). Alternates: thesaurus ≈25,700/day; chairs ≈143,000/day. The denser `sudoku` anchor avoids the sparse-24h failure that `gpts` often hits.
 
 `trends_snapshot` also fetches `now 7-d` (with `gpts` unless you force an anchor) and reports that window as `anchor7d`. Pass MCP `anchor` or CLI `--anchor` to force one term for both windows (a per-call `anchor` beats the Actor's anchor input). `GTFA_BASELINES=/path/baselines.json` loads a version 2 baselines file (`anchors` plus optional `windowAnchors.short` / `.long`) for `gtfa`, `gtfa-mcp` (stdio and `--http`), and the Actor; version 1 and unknown `windowAnchors` terms are rejected with a clear error. These are estimates, not measured Google volume.
 

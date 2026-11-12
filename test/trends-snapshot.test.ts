@@ -75,21 +75,21 @@ describe('trends_snapshot traffic conversion', () => {
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir });
     expect(e).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', term: 'Astra', filter: { geo: 'US', time: 'now 1-d', category: 0, property: 'web' } });
     expect(e.chart).toEqual({ svg: '', path: chartPath(chartDir, 'traffic-fixture') });
-    expect(e.anchor).toEqual({ term: 'sudoku', dailySearches: 9900, tolerance: 0.5, level: 100, ratio: 0.58, source: 'baseline', note: 'Anchor calibration estimate; not measured volume' });
-    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550, level: null, ratio: null, note: 'No now 7-d snapshot; baseline only' });
-    expect(e.traffic).toEqual({ unit: 'searches/day', average: 5742, latest: 7920, settledLatest: 5940, peak: 7920, low: 2871, high: 8613, gapCount: 1 });
+    expect(e.anchor).toEqual({ term: 'sudoku', dailySearches: 63000, tolerance: 0.5, level: 100, ratio: 0.58, source: 'baseline', note: 'Anchor calibration estimate; not measured volume' });
+    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 3500, level: null, ratio: null, note: 'No now 7-d snapshot; baseline only' });
+    expect(e.traffic).toEqual({ unit: 'searches/day', average: 36540, latest: 50400, settledLatest: 37800, peak: 50400, low: 18270, high: 54810, gapCount: 1 });
     expect(e.series.points[1]).toEqual({ t: '2026-10-31T01:00:00.000Z', score: 0, traffic: 0, gap: true });
     expect(e.series.anchorPoints[1]).toEqual({ t: '2026-10-31T01:00:00.000Z', score: 0 });
     expect(e.tables.popular).toEqual([
-      { rank: 1, query: 'astra app', value: 100, formattedValue: '100', estDaily: 5742 },
-      { rank: 2, query: 'astra ai', value: 50, formattedValue: '50', estDaily: 2871 },
+      { rank: 1, query: 'astra app', value: 100, formattedValue: '100', estDaily: 36540 },
+      { rank: 2, query: 'astra ai', value: 50, formattedValue: '50', estDaily: 18270 },
     ]);
     expect(e.tables.rising).toEqual([
-      { rank: 1, query: 'astra ai', value: 250, formattedValue: '+250%', breakout: false, estDaily: 2871 },
+      { rank: 1, query: 'astra ai', value: 250, formattedValue: '+250%', breakout: false, estDaily: 18270 },
       { rank: 2, query: 'astra new', value: 5000, formattedValue: 'Breakout', breakout: true, estDaily: null },
     ]);
     expect(e.verdict).toMatchObject({ label: 'rising', confidence: 'mid', prioritize: true, reasons: ['Breakout related queries'] });
-    expect(e.summary).toContain('Astra ≈ 5.7k searches/day (US·24h), 0.58× sudoku; rising');
+    expect(e.summary).toContain('Astra ≈ 36.5k searches/day (US·24h), 0.58× sudoku; rising');
     expect(e.meta).toMatchObject({ cached: false, snapshotId: 'traffic-fixture', exploreUrl: expect.stringContaining('q=Astra') });
     expect(e.meta.warnings?.[0]).toContain('1 low-sample gap point');
     expect(Object.keys(e).slice(0, 3)).toEqual(['ok', 'schemaVersion', 'status']);
@@ -100,7 +100,7 @@ describe('trends_snapshot traffic conversion', () => {
     // Raw mean would be 66.67 and inflate traffic; gap-aware level is exactly 100.
     expect(e.anchor.level).toBe(100);
     expect(e.series.anchorPoints).toHaveLength(6);
-    expect(e.traffic.average).toBe(5742);
+    expect(e.traffic.average).toBe(36540);
   });
 
   it('omits traffic when the anchor is sparse/near-zero and keeps a precise level + warning', async () => {
@@ -146,8 +146,8 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.chart.svg).toContain('(UTC)');
     expect(e.chart.svg).toContain('10/31 00:00');
     expect(e.chart.svg).toContain('>05:00<');
-    expect(e.chart.svg).toMatch(/peak 7.9k · 10\/31 05:00/);
-    expect(e.chart.svg).toMatch(/latest 7.9k · 10\/31 05:00/);
+    expect(e.chart.svg).toMatch(/peak 50.4k · 10\/31 05:00/);
+    expect(e.chart.svg).toMatch(/latest 50.4k · 10\/31 05:00/);
     expect(e.chart.svg).toContain('anchor (sudoku)');
     expect(e.chart.svg).not.toMatch(/NaN|undefined/);
     expect(e.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
@@ -209,7 +209,7 @@ describe('trends_snapshot traffic conversion', () => {
   it('adds a calibrated now 7-d chart and traffic block alongside the primary window', async () => {
     const chartDir = temp();
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir, week: weekFixture(), svg: true });
-    expect(e.traffic7d).toEqual({ unit: 'searches/day', average: 275, latest: 330, settledLatest: 440, peak: 440, low: 138, high: 413, gapCount: 1 });
+    expect(e.traffic7d).toEqual({ unit: 'searches/day', average: 1750, latest: 2100, settledLatest: 2800, peak: 2800, low: 875, high: 2625, gapCount: 1 });
     expect(e.chart7d.svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"[\s\S]*<\/svg>$/);
     expect(e.chart7d.svg).toContain('class="term-line"');
     expect(e.chart7d.svg).toContain('class="anchor-line"');
@@ -244,7 +244,7 @@ describe('trends_snapshot traffic conversion', () => {
     const e = await trafficSnapshotEnvelope(weekFixture(), { cached: false, ageMin: 0, chartDir });
     expect(e.chart7d).toEqual(e.chart);
     expect(e.traffic7d).toEqual(e.traffic);
-    expect(e.traffic7d).toMatchObject({ average: 275, settledLatest: 440, gapCount: 1 });
+    expect(e.traffic7d).toMatchObject({ average: 1750, settledLatest: 2800, gapCount: 1 });
     expect(e.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
   });
 });
@@ -294,47 +294,47 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(r.snapshot.anchor?.term).toBe('sudoku');
     expect(r.week?.anchor?.term).toBe('gpts');
     const e = await trafficSnapshotEnvelope(r.snapshot, { cached: r.source === 'cache', ageMin: r.ageMin, chartDir, week: r.week, svg: true });
-    expect(e.anchor).toMatchObject({ term: 'sudoku', dailySearches: 9900, ratio: 0.58 });
-    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550, ratio: 0.5 });
+    expect(e.anchor).toMatchObject({ term: 'sudoku', dailySearches: 63000, ratio: 0.58 });
+    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 3500, ratio: 0.5 });
     expect(e.traffic.average).not.toBeNull();
     expect(e.chart.svg).not.toBe(e.chart7d?.svg);
     expect(e.chart.svg).toContain('anchor (sudoku)');
     expect(e.chart7d?.svg).toContain('anchor (gpts)');
-    expect(e.traffic7d).toMatchObject({ average: 275, gapCount: 1 });
+    expect(e.traffic7d).toMatchObject({ average: 1750, gapCount: 1 });
     expect(e.chart.path).not.toBe(e.chart7d?.path);
   });
 
   it('uses an explicit anchor for both windows when a baselines override exists', async () => {
     const chartDir = temp(), store = new SnapshotStore(temp());
-    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 }] };
+    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 143000, geo: 'US', tolerance: 0.5 }] };
     const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(input.timeRange === 'now 7-d' ? weekFixture() : fixture()));
     const r = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never, baselines, anchor: 'chairs' });
     const calls = query.mock.calls.map(([input]) => input as { queries: string[] });
     expect(calls.map(c => c.queries)).toEqual([['Astra', 'chairs'], ['Astra', 'chairs']]);
     const e = await trafficSnapshotEnvelope(r.snapshot, { cached: r.source === 'cache', ageMin: r.ageMin, chartDir, week: r.week, baselines });
-    expect(e.anchor).toMatchObject({ term: 'chairs', dailySearches: 22500 });
-    expect(e.anchor7d).toMatchObject({ term: 'chairs', dailySearches: 22500 });
+    expect(e.anchor).toMatchObject({ term: 'chairs', dailySearches: 143000 });
+    expect(e.anchor7d).toMatchObject({ term: 'chairs', dailySearches: 143000 });
     expect(e.traffic.average).not.toBeNull();
     expect(e.traffic7d.average).not.toBeNull();
   });
 
   it('honors windowAnchors overrides for the short window while keeping gpts for 7-d', async () => {
     const chartDir = temp(), store = new SnapshotStore(temp());
-    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 }], windowAnchors: { short: 'chairs' } };
+    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 143000, geo: 'US', tolerance: 0.5 }], windowAnchors: { short: 'chairs' } };
     const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(input.timeRange === 'now 7-d' ? weekFixture() : fixture()));
     const r = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never, baselines });
     const calls = query.mock.calls.map(([input]) => input as { timeRange?: string; queries: string[] });
     expect(calls.find(c => c.timeRange === 'now 1-d')?.queries).toEqual(['Astra', 'chairs']);
     expect(calls.find(c => c.timeRange === 'now 7-d')?.queries).toEqual(['Astra', 'gpts']);
     const e = await trafficSnapshotEnvelope(r.snapshot, { cached: r.source === 'cache', ageMin: r.ageMin, chartDir, week: r.week, baselines });
-    expect(e.anchor).toMatchObject({ term: 'chairs', dailySearches: 22500 });
-    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550 });
+    expect(e.anchor).toMatchObject({ term: 'chairs', dailySearches: 143000 });
+    expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 3500 });
   });
 
   it('honors a long windowAnchors mapping and lets an explicit anchor beat both mappings', async () => {
     const baselines = { version: 2 as const, anchors: [
-      { term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 },
-      { term: 'thesaurus', dailySearches: 4000, geo: 'US', tolerance: 0.5 },
+      { term: 'chairs', dailySearches: 143000, geo: 'US', tolerance: 0.5 },
+      { term: 'thesaurus', dailySearches: 25700, geo: 'US', tolerance: 0.5 },
     ], windowAnchors: { short: 'chairs', long: 'thesaurus' } };
     const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(input.timeRange === 'now 7-d' ? weekFixture() : fixture()));
     const auto = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store: new SnapshotStore(temp()), query: query as never, baselines });
@@ -342,18 +342,18 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(autoCalls.find(c => c.timeRange === 'now 1-d')?.queries).toEqual(['Astra', 'chairs']);
     expect(autoCalls.find(c => c.timeRange === 'now 7-d')?.queries).toEqual(['Astra', 'thesaurus']);
     const autoEnvelope = await trafficSnapshotEnvelope(auto.snapshot, { cached: false, ageMin: 0, chartDir: null, week: auto.week, baselines });
-    expect(autoEnvelope.anchor7d).toMatchObject({ term: 'thesaurus', dailySearches: 4000 });
+    expect(autoEnvelope.anchor7d).toMatchObject({ term: 'thesaurus', dailySearches: 25700 });
     query.mockClear();
     await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store: new SnapshotStore(temp()), query: query as never, baselines, anchor: 'gpts' });
     expect(query.mock.calls.map(([input]) => (input as { queries: string[] }).queries)).toEqual([['Astra', 'gpts'], ['Astra', 'gpts']]);
   });
 
   it('keeps an explicit anchor in the baseline-only anchor7d when the week snapshot is missing', async () => {
-    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 }] };
+    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 143000, geo: 'US', tolerance: 0.5 }] };
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, weekError: 'upstream 503', weekAnchor: 'chairs', baselines });
-    expect(e.anchor7d).toMatchObject({ term: 'chairs', dailySearches: 22500, level: null, ratio: null });
+    expect(e.anchor7d).toMatchObject({ term: 'chairs', dailySearches: 143000, level: null, ratio: null });
     const auto = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, weekError: 'upstream 503' });
-    expect(auto.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550, level: null, ratio: null });
+    expect(auto.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 3500, level: null, ratio: null });
   });
 
   it('rejects an invalid IANA time zone before querying upstream', async () => {
@@ -372,7 +372,7 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(r.snapshot.anchor?.term).toBe('gpts');
     expect(r.week).toBe(r.snapshot);
     const e = await trafficSnapshotEnvelope(r.snapshot, { cached: r.source === 'cache', ageMin: r.ageMin, chartDir, week: r.week });
-    expect(e.anchor).toMatchObject({ term: 'gpts', dailySearches: 550 });
+    expect(e.anchor).toMatchObject({ term: 'gpts', dailySearches: 3500 });
     expect(e.anchor7d).toEqual(e.anchor);
     expect(e.chart7d).toEqual(e.chart);
     expect(e.traffic7d).toEqual(e.traffic);
@@ -400,7 +400,7 @@ describe('trends_snapshot schema and CLI', () => {
     const client = await connect({ snapshotDir: storeDir, chartDir });
     const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra' } });
     expect(r.isError).not.toBe(true);
-    expect(r.structuredContent).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', term: 'Astra', traffic: { average: 5742 }, traffic7d: { average: 275 }, anchor: { term: 'sudoku', dailySearches: 9900 }, anchor7d: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
+    expect(r.structuredContent).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', term: 'Astra', traffic: { average: 36540 }, traffic7d: { average: 1750 }, anchor: { term: 'sudoku', dailySearches: 63000 }, anchor7d: { term: 'gpts', dailySearches: 3500 }, meta: { cached: true } });
     const { tools } = await client.listTools();
     expect((tools.find(t => t.name === 'trends_snapshot')!.inputSchema as { required?: string[] }).required).not.toContain('anchor');
     expect((r.structuredContent as { chart: { path: string } }).chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
@@ -420,11 +420,11 @@ describe('trends_snapshot schema and CLI', () => {
     day.anchor.term = 'chairs'; week.anchor.term = 'chairs';
     await new SnapshotStore(storeDir).save(day);
     await new SnapshotStore(storeDir).save(week);
-    const baselines: Baselines = { version: 2, anchors: [{ term: 'chairs', geo: 'US', dailySearches: 22500, tolerance: 0.5 }] };
+    const baselines: Baselines = { version: 2, anchors: [{ term: 'chairs', geo: 'US', dailySearches: 143000, tolerance: 0.5 }] };
     const client = await connect({ snapshotDir: storeDir, chartDir, anchor: 'chairs', baselines });
     const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra' } });
     expect(r.isError).not.toBe(true);
-    expect(r.structuredContent).toMatchObject({ anchor: { term: 'chairs', dailySearches: 22500 }, anchor7d: { term: 'chairs', dailySearches: 22500 }, traffic: { average: 13050 }, meta: { cached: true } });
+    expect(r.structuredContent).toMatchObject({ anchor: { term: 'chairs', dailySearches: 143000 }, anchor7d: { term: 'chairs', dailySearches: 143000 }, traffic: { average: 82940 }, meta: { cached: true } });
   });
 
   it('lets a per-call anchor win over the server-wide anchor', async () => {
@@ -437,7 +437,7 @@ describe('trends_snapshot schema and CLI', () => {
     const client = await connect({ snapshotDir: storeDir, chartDir, anchor: 'chairs' });
     const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra', anchor: 'gpts' } });
     expect(r.isError).not.toBe(true);
-    expect(r.structuredContent).toMatchObject({ anchor: { term: 'gpts', dailySearches: 550 }, anchor7d: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
+    expect(r.structuredContent).toMatchObject({ anchor: { term: 'gpts', dailySearches: 3500 }, anchor7d: { term: 'gpts', dailySearches: 3500 }, meta: { cached: true } });
   });
 
   it('CLI snapshot --json emits the same envelope shape as MCP', async () => {
@@ -450,7 +450,7 @@ describe('trends_snapshot schema and CLI', () => {
     const r = await runSnapshotCli(['Astra', '--json', '--store', storeDir, '--chart-dir', chartDir], { query: query as never });
     expect(r.code).toBe(0);
     const out = JSON.parse(r.stdout);
-    expect(out).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', term: 'Astra', traffic: { average: 5742, settledLatest: 5940 }, traffic7d: { average: 275, settledLatest: 440 }, anchor: { term: 'sudoku', dailySearches: 9900 }, anchor7d: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
+    expect(out).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', term: 'Astra', traffic: { average: 36540, settledLatest: 37800 }, traffic7d: { average: 1750, settledLatest: 2800 }, anchor: { term: 'sudoku', dailySearches: 63000 }, anchor7d: { term: 'gpts', dailySearches: 3500 }, meta: { cached: true } });
     expect(Object.keys(out).slice(0, 3)).toEqual(['ok', 'schemaVersion', 'status']);
     expect(out.chart.path).toBe(chartPath(chartDir, 'traffic-fixture'));
     expect(out.chart7d.path).toBe(chartPath(chartDir, 'traffic-fixture-7d'));
@@ -490,7 +490,7 @@ describe('trends_snapshot schema and CLI', () => {
     await new SnapshotStore(storeDir).save(week);
     const good = join(dir, 'baselines.json'), bad = join(dir, 'v1.json');
     writeFileSync(good, JSON.stringify({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 19800, tolerance: 0.5 }] }));
-    writeFileSync(bad, JSON.stringify({ version: 1, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 550 }] }));
+    writeFileSync(bad, JSON.stringify({ version: 1, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 3500 }] }));
     const previous = process.env.GTFA_BASELINES;
     try {
       process.env.GTFA_BASELINES = good;
@@ -499,7 +499,7 @@ describe('trends_snapshot schema and CLI', () => {
       const out = JSON.parse(r.stdout);
       expect(out.anchor).toMatchObject({ term: 'sudoku', dailySearches: 19800 });
       expect(out.traffic.average).toBeGreaterThan(11000);
-      expect(out.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550 });
+      expect(out.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 3500 });
       process.env.GTFA_BASELINES = bad;
       const failed = await runSnapshotCli(['Astra', '--json', '--store', storeDir, '--chart-dir', chartDir], { query: vi.fn() as never });
       expect(failed.code).not.toBe(0);

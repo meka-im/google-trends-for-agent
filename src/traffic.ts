@@ -10,12 +10,13 @@ export const SHORT_WINDOWS = ['now 1-H', 'now 4-H', 'now 1-d'] as const;
 const DEFAULTS = { short: 'sudoku', long: 'gpts' } as const;
 
 /**
- * Built-in US baselines. gpts ≈550/day is the long-window ruler (now 7-d and beyond);
- * sudoku ≈9,900/day is the same ruler measured through the 7-day shared-scale ratio.
+ * Built-in US baselines. gpts ≈3,500/day is the long-window ruler (now 7-d and beyond),
+ * back-derived from public keyword-tool volumes through measured 7-day Trends ratios.
+ * sudoku ≈63,000/day is the same ruler measured through the 7-day sudoku/gpts ratio.
  */
 export const BUILTIN_ANCHORS: readonly Anchor[] = [
-  { term: 'gpts', dailySearches: 550, geo: 'US', tolerance: 0.5 },
-  { term: 'sudoku', dailySearches: 9900, geo: 'US', tolerance: 0.5 },
+  { term: 'gpts', dailySearches: 3500, geo: 'US', tolerance: 0.5 },
+  { term: 'sudoku', dailySearches: 63000, geo: 'US', tolerance: 0.5 },
 ];
 
 function invalid(message: string): never { throw new Error(`Invalid baselines: ${message}`); }

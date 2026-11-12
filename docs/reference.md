@@ -88,10 +88,21 @@ traffic = round(score ÷ anchorLevel × dailySearches)
 
 | Window | Anchor | Geo | Daily searches | Tolerance | How derived |
 | --- | --- | --- | --- | --- | --- |
-| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | `US` | **9,900/day** | ±50% | 18.035 × 550 ≈ 9,919 (7-day sudoku/gpts ratio); thesaurus cross-check ≈9,857. |
-| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | `US` | **550/day** (≈16.5k/month) | ±50% | Long-window ruler; the baseline the short-window number is derived from. |
+| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | `US` | **63,000/day** | ±50% | 18.035 × 3,500 ≈ 63,123 (7-day sudoku/gpts ratio); thesaurus cross-check ≈62,720. |
+| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | `US` | **3,500/day** (≈105k/month) | ±50% | Long-window ruler; back-derived from public keyword-tool volumes through measured Trends ratios. |
 
-Derivation of 9,900: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 550 ≈ 9,919. Cross-check through thesaurus: thesaurus/gpts 7.341 × 550 ≈ 4,038, then sudoku/thesaurus 2.441 × 4,038 ≈ 9,857. Both round to ≈9,900, so 1-day and 7-day estimates sit on the same ruler (`gpts = 550`). Alternates worth noting: thesaurus ≈4,000/day is closer to small AI terms but has zero points at night; chairs ≈22,500/day is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
+**Why 3,500/day:** public keyword-tool volumes for sudoku, thesaurus, and calculator, divided by measured 7-day Trends ratios (sudoku/gpts 18.035, thesaurus/gpts 7.341, calculator/sudoku ≈18), centralize near 3,500/day. The estimates are rounded and the built-in tolerance stays ±50%. Google Ads' own `gpts` number (1.5M/month) is unusable because Keyword Planner merges close variants such as "gpt".
+
+| Source (US monthly) | Per day | Implied gpts/day |
+| --- | ---: | ---: |
+| sudoku, Google Ads (via [seodata.dev](https://www.seodata.dev/)) — 2.24M | 74k | ≈4,100 |
+| sudoku, Semrush ([sudoku.com](https://www.semrush.com/website/sudoku.com/overview/)) — 1.83M | 60k | ≈3,300 |
+| sudoku, Ahrefs ([sudoku.com](https://ahrefstop.com/websites/sudoku.com)) — 1.5M | 49k | ≈2,700 |
+| thesaurus, Google Ads — 1.5M | 49k | ≈6,700 |
+| thesaurus, Semrush ([thesaurus.com](https://srush.toolspur.com/website/thesaurus.com/overview/)) — 1.83M | 60k | ≈8,200 |
+| calculator, Ahrefs / Google Ads ([top Google searches](https://ahrefs.com/blog/top-google-searches/)) — 21.0M / 20.4M | ≈680k | ≈2,100 |
+
+Derivation of 63,000: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 3,500 ≈ 63,123. Cross-check through thesaurus: thesaurus/gpts 7.341 × 3,500 ≈ 25,694, then sudoku/thesaurus 2.441 × 25,694 ≈ 62,720. Both round to ≈63,000, so 1-day and 7-day estimates sit on the same ruler (`gpts = 3,500`). Alternates worth noting: thesaurus ≈25,700/day is closer to small AI terms but has zero points at night; chairs ≈143,000/day (scaled from its earlier 22,500/day estimate to the new ruler) is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
 
 The built-in baselines are in [examples/baselines.json](../examples/baselines.json). A version 2 file can replace or add anchors; `windowAnchors` remaps the automatic short/long defaults:
 
@@ -99,8 +110,8 @@ The built-in baselines are in [examples/baselines.json](../examples/baselines.js
 {
   "version": 2,
   "anchors": [
-    { "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 },
-    { "term": "gpts", "geo": "US", "dailySearches": 550, "tolerance": 0.5 }
+    { "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 },
+    { "term": "gpts", "geo": "US", "dailySearches": 3500, "tolerance": 0.5 }
   ],
   "windowAnchors": { "short": "sudoku", "long": "gpts" }
 }
@@ -114,7 +125,7 @@ Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot),
 - gap-aware `anchorLevel ≥ 1` on Trends' integer scale;
 - at least 25% of non-gap anchor points nonzero.
 
-A real 24-hour Sora run with the old `gpts` anchor failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. That is why short windows now use `sudoku`: in a US 24-hour check it was 99.4% nonzero (CV 0.21), and small AI terms such as `gemini 4 carbon`, `pika h3`, and `genie 4` stayed nonzero next to it. A 7-day Sora run with `gpts` calibrated normally: average **5,782**, latest **6,166** (6.2k), peak **8,684** (8.7k) searches/day.
+A real 24-hour Sora run with `gpts` failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. That is why short windows now use `sudoku`: in a US 24-hour check it was 99.4% nonzero (CV 0.21), and small AI terms such as `gemini 4 carbon`, `pika h3`, and `genie 4` stayed nonzero next to it. A 7-day Sora run with `gpts` calibrated normally: average **36,795**, latest **39,238** (39.2k), peak **55,262** (55.3k) searches/day.
 
 These numbers are **estimates from an anchor**, not measured Google search volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from a separate 7-day fetch and give you a second check; that fetch uses `gpts` unless an explicit anchor was given. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent. Cache keys include the filter window and anchor term, so a 1-day `sudoku` snapshot and a 7-day `gpts` snapshot never collide.
 

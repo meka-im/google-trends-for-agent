@@ -147,17 +147,17 @@ Full flags and examples: [reference](docs/reference.md#cli-surface).
 
 | Window | Anchor | US baseline | Why this anchor |
 | --- | --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **9,900/day**, ±50% | Searched around the clock (99.4% of 24h points nonzero), so short windows calibrate. `gpts` is too sparse there. |
-| `now 7-d` and longer | `gpts` | **550/day**, ±50% | The reference ruler that every other baseline is derived from. |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/day**, ±50% | Searched around the clock (99.4% of 24h points nonzero), so short windows calibrate. `gpts` is too sparse there. |
+| `now 7-d` and longer | `gpts` | **3,500/day**, ±50% | The reference ruler that every other baseline is derived from. |
 
-**How 9,900 is derived:** on a 7-day shared scale `sudoku` averages 18.035 × `gpts`, so 18.035 × 550 ≈ 9,919. Going through `thesaurus` (7.341 × 550 ≈ 4,038, then × 2.441 ≈ 9,857) lands in the same place, so short and long windows use one ruler. Alternates and sources: [reference](docs/reference.md#calibration-and-the-anchor).
+**How 63,000 is derived:** on a 7-day shared scale `sudoku` averages 18.035 × `gpts`, so 18.035 × 3,500 ≈ 63,123. Going through `thesaurus` (7.341 × 3,500 ≈ 25,694, then × 2.441 ≈ 62,720) lands in the same place, so short and long windows use one ruler. The 3,500 baseline is back-derived from public keyword-tool volumes for sudoku, thesaurus, and calculator through measured Trends ratios — sources in [reference](docs/reference.md#calibration-and-the-anchor). Alternates: `thesaurus` ≈25,700/day; `chairs` ≈143,000/day.
 
 - `--anchor` / MCP `anchor` forces one anchor for both windows. Every snapshot reports `anchor` (requested window) and `anchor7d` (the 7-day check) with the term and baseline used.
 - Override or add baselines with a version 2 `baselines.json` (template: [examples/baselines.json](examples/baselines.json)):
 
 ```json
 { "version": 2,
-  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 }],
+  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 }],
   "windowAnchors": { "short": "sudoku", "long": "gpts" } }
 ```
 
