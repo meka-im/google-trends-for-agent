@@ -133,11 +133,50 @@ describe('dsh plugin execution', () => {
 
   it('returns the shared error envelope when apify egress has no token', async () => {
     vi.stubEnv('APIFY_TOKEN', '');
-    vi.stubEnv('APIFY_PROXY_PASSWORD', '');
     const { ctx, tools } = fakeCtx();
     await register(ctx, config({ egress: 'apify' }));
     const result = await tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: new AbortController().signal });
     expect(result).toMatchObject({ ok: false, status: 'error', error: { code: 'INVALID_INPUT', message: expect.stringMatching(/APIFY_TOKEN/) } });
+  });
+
+  it('returns a clear error when apify egress has a token but no Actor', async () => {
+    vi.stubEnv('APIFY_TOKEN', '');
+    const { ctx, tools } = fakeCtx();
+    await register(ctx, config({ egress: 'apify', apifyToken: 'apify_api_token', chartDir: null }));
+    const result = await tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: new AbortController().signal });
+    expect(result).toMatchObject({
+      ok: false,
+      status: 'error',
+      error: { code: 'INVALID_INPUT', message: expect.stringMatching(/Select or deploy your google-trends-for-agent Actor/) },
+    });
+  });
+
+  it('uses the Actor relay transport when apify egress has an Actor', async () => {
+    const relayCalls: string[] = [];
+    const relayFetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init!.body)) as { url: string };
+      relayCalls.push(request.url);
+      const path = new URL(request.url).pathname;
+      const body = request.url.includes('/explore')
+        ? fixture('explore-multi.txt')
+        : request.url.includes('/multiline')
+          ? fixture('multiline-multi.txt')
+          : '';
+      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
+    });
+    const { ctx, tools } = fakeCtx();
+    await register(ctx, config({ egress: 'apify', apifyToken: 'apify_api_token', apifyActor: 'actor-1' }), {
+      apify: {
+        fetch: relayFetch as unknown as typeof fetch,
+        resolveStandbyUrl: async () => 'https://actor.test',
+      },
+      minIntervalMs: 0,
+    });
+    const result = await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, { signal: new AbortController().signal });
+    expect(result).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 1-d' } });
+    expect(relayCalls.length).toBeGreaterThan(0);
+    expect(relayCalls.every(url => url.startsWith('https://trends.google.com/'))).toBe(true);
+    expect(relayFetch.mock.calls.every(call => String(call[0]) === 'https://actor.test/egress/fetch')).toBe(true);
   });
 
   it('respects an aborted exec.signal', async () => {

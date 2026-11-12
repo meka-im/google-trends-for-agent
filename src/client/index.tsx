@@ -18,9 +18,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
-  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_PROXY_GROUPS, APIFY_SIGNUP_URL, APIFY_STARTER_MONTHLY_USD,
-  BUILTIN_ANCHOR_TERMS, DEFAULT_APIFY_PROXY_GROUP, DEFAULT_GEO, DEFAULT_PROXY_COUNTRY,
-  GEO_CODES, PROXY_COUNTRY_CODES, regionLabel, type ApifyProxyGroup,
+  APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
+  BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, apifyEstimatedCalls, regionLabel,
 } from '../options.js';
 
 /** Cordis service name used by the client bundle. */
@@ -30,7 +29,10 @@ const NS = 'gtfa';
 const PACKAGE = 'google-trends-for-agent';
 const ENTRY = 'gtfa';
 const USAGE_URL = 'api/gtfa.apify-usage';
+const ACTORS_URL = 'api/gtfa.apify-actors';
+const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const TEST_URL = 'api/gtfa.test-connection';
+const DEPLOY_MANUAL_URL = 'https://github.com/meka-im/google-trends-for-agent#deploy-to-apify';
 
 type Translate = (key: string) => string;
 
@@ -117,8 +119,7 @@ export interface Draft {
   egress: 'local' | 'apify';
   token: string;
   clearToken: boolean;
-  proxyGroup: ApifyProxyGroup;
-  proxyCountry: string;
+  actor: string;
   geo: string;
   anchor: string;
   cache: boolean;
@@ -161,37 +162,55 @@ export interface TestConnectionView {
   egress: 'local' | 'apify';
   status: number | null;
   latencyMs: number;
-  code?: 'no-token' | 'invalid-token' | 'proxy-auth' | 'network' | 'http' | 'busy';
+  code?: 'no-token' | 'no-actor' | 'invalid-token' | 'network' | 'http' | 'busy';
   message?: string;
-  ip?: string;
-  country?: string;
+  actorId?: string;
 }
 
+export interface ApifyActorView {
+  id: string;
+  name: string;
+  username: string | null;
+  title: string | null;
+  standbyUrl: string | null;
+  standbyEnabled: boolean;
+  lastBuildStatus: string | null;
+}
+
+export type ApifyActorsView =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; code: 'no-token' | 'invalid-token' | 'network' | 'http'; httpStatus?: number }
+  | { status: 'ready'; actors: ApifyActorView[] };
+
+export type DeployActorView =
+  | { ok: true; actorId: string; buildId: string }
+  | { ok: false; code: string; message?: string };
+
 export const EN: Record<string, string> = {
-  summary: 'Configure egress, the Apify token, usage, default geo, anchors, and snapshot cache.',
-  intro: 'Changes apply live, no restart needed. Usage and Test connection run on the dsh host, so the token never reaches the browser.',
+  summary: 'Configure egress, the Apify token and Actor, usage, default geo, anchors, and snapshot cache.',
+  intro: 'Changes apply live, no restart needed. Usage, Actor listing, deploy, and Test connection run on the dsh host, so the token never reaches the browser.',
   connection: 'Connection',
   connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
   egress: 'Egress',
-  egressHint: 'Local: requests leave from the machine running dsh. Apify proxy: requests go out through Apify proxy IPs.',
+  egressHint: 'Local: requests leave from the machine running dsh. Apify: requests go through your own google-trends-for-agent Actor, which uses its on-platform residential proxy (works on the Free plan).',
   egressLocal: 'Local (this machine)',
-  egressApify: 'Apify proxy',
+  egressApify: 'Apify Actor',
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
-  testApifyOk: 'Apify proxy OK — IP {ip} ({country}), {ms} ms',
-  testApifyOkNoIp: 'Apify proxy OK — {ms} ms',
-  testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to test the Apify proxy.',
+  testApifyOk: 'Apify Actor OK — HTTP {status}, {ms} ms',
+  testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to use apify egress.',
+  testNoActor: 'Select or deploy your google-trends-for-agent Actor first.',
   testInvalidToken: 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.',
-  testProxyAuth: 'Apify proxy rejected the credentials (407). Check the token and proxy access.',
   testNetworkLocal: 'Could not reach Google Trends from this machine.',
   testDetail: ' Details: {detail}',
-  testNetworkApify: 'Could not reach the Apify proxy (proxy.apify.com:8000) from this machine.',
+  testNetworkApify: 'Could not reach your Apify Actor (or it returned no Standby response).',
   testHttp: 'Target returned HTTP {status}.',
   testBusy: 'A test is already running. Try again in a moment.',
   apify: 'Apify',
-  apifyDescription: 'Token, proxy location, and this cycle\'s Apify usage.',
+  apifyDescription: 'Token, your Actor, and this cycle\'s Apify usage.',
   usageTitle: 'Apify usage',
   usageLoading: 'Loading Apify usage…',
   usageNoToken: 'Add an Apify token (or set APIFY_TOKEN) to see usage.',
@@ -210,23 +229,32 @@ export const EN: Record<string, string> = {
   usageResidential: 'Residential proxy: {gb} GB this cycle',
   usageResidentialLimit: 'Residential proxy: {gb} GB this cycle of {limit} GB',
   usageResidentialUnknown: 'Residential proxy: —',
-  signupBar: 'No Apify account? Sign up free — the Free plan includes {free} of platform credit every month. Using the proxy from dsh needs a paid plan (Starter, {starter}/mo with {starter} credit).',
+  signupBar: 'No Apify account? Sign up free — the Free plan\'s {free} monthly credit is enough for this plugin (roughly {calls} calls a month at about ${cost} per call, estimated).',
   signupAction: 'Sign up →',
   pricingAction: 'Pricing',
-  freePlanHint: 'Free plan: Apify Proxy from outside Apify needs a paid plan, so Apify egress won\'t work.',
-  freePlanUpgrade: 'Upgrade →',
   token: 'Apify token',
   tokenHint: 'Leave blank to keep the current token or use APIFY_TOKEN. A saved token is written to the profile\'s cordis.patch.yml (mode 0600).',
   tokenPrefixWarning: 'Apify API tokens usually start with apify_api_. Double-check this one.',
   tokenStored: 'A token is stored. Type a new one to replace it.',
   tokenEmpty: 'No token stored.',
   clearToken: 'Clear the stored token',
-  proxyGroup: 'Proxy group',
-  proxyGroupHint: 'Residential uses residential IPs. Datacenter (automatic) uses Apify\'s auto mode and lets Apify pick datacenter IPs; no group or account-specific proxy is used.',
-  proxyResidential: 'Residential',
-  proxyDatacenter: 'Datacenter (automatic)',
-  country: 'Proxy country',
-  countryHint: 'Country for Apify proxy sessions. Default US.',
+  actor: 'Actor',
+  actorHint: 'Your google-trends-for-agent Actor. It fetches Google Trends with its on-platform residential proxy and exits after 60 s idle.',
+  actorNone: 'Select an Actor',
+  actorRefresh: 'Refresh',
+  actorLoading: 'Loading your Actors…',
+  actorBuild: 'Build: {status}',
+  actorBuildUnknown: '—',
+  actorEmpty: 'No google-trends-for-agent Actor in your account yet.',
+  actorLoadNetwork: 'Could not load your Actors. Check connectivity and try again.',
+  actorLoadHttp: 'Apify API returned HTTP {status}.',
+  deploy: 'Deploy to my Apify account →',
+  deploying: 'Deploying…',
+  deployManual: 'or deploy manually',
+  deployBuilding: 'Building… (about 2–4 min)',
+  deployExists: 'That Actor already exists. Refresh the list and select it.',
+  deployFailed: 'Deploy failed. Try again or deploy manually.',
+  deployBuildFailed: 'The build failed. Check the build log in Apify Console.',
   defaults: 'Defaults',
   defaultsDescription: 'Defaults applied when a tool call omits them.',
   geo: 'Default geo',
@@ -280,7 +308,6 @@ export const EN: Record<string, string> = {
   readOnly: 'This configuration is read-only.',
   invalidAnchor: 'Each anchor needs a term and a positive dailySearches value.',
   invalidTolerance: 'Choose a tolerance from the list.',
-  invalidCountry: 'Choose a proxy country from the list.',
   invalidGeo: 'Choose a geo from the list.',
   duplicateAnchor: 'That anchor term is already in the list.',
   tokenConflict: 'Type a new token or clear the stored one, not both.',
@@ -292,30 +319,29 @@ export const EN: Record<string, string> = {
 };
 
 export const ZH: Record<string, string> = {
-  summary: '配置出口、Apify Token 与用量、默认地区、基线和快照缓存。',
-  intro: '修改即时生效，无需重启。用量和测试连接在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
+  summary: '配置出口、Apify Token 与 Actor、用量、默认地区、基线和快照缓存。',
+  intro: '修改即时生效，无需重启。用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
   connection: '连接',
   connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
   egress: '出口',
-  egressHint: '本机直连：请求从运行 dsh 的机器发出；Apify 代理：请求经 Apify 代理 IP 发出。',
+  egressHint: '本机直连：请求从运行 dsh 的机器发出；Apify：请求经你自己的 google-trends-for-agent Actor 转发，使用平台内住宅代理（免费版可用）。',
   egressLocal: '本机直连',
-  egressApify: 'Apify 代理',
+  egressApify: 'Apify Actor',
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
-  testApifyOk: 'Apify 代理正常 — IP {ip}（{country}），{ms} ms',
-  testApifyOkNoIp: 'Apify 代理正常 — {ms} ms',
-  testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可测试 Apify 代理。',
+  testApifyOk: 'Apify Actor 正常 — HTTP {status}，{ms} ms',
+  testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可使用 Apify 出口。',
+  testNoActor: '请先选择或部署你的 google-trends-for-agent Actor。',
   testInvalidToken: 'Apify 拒绝了该 Token。请在 Apify Console → Settings → API & Integrations 中检查。',
-  testProxyAuth: 'Apify 代理拒绝了凭据（407）。请检查 Token 和代理权限。',
   testNetworkLocal: '本机无法连接 Google Trends。',
   testDetail: '详情：{detail}',
-  testNetworkApify: '本机无法连接 Apify 代理（proxy.apify.com:8000）。',
+  testNetworkApify: '无法连接你的 Apify Actor（或它没有返回 Standby 响应）。',
   testHttp: '目标返回 HTTP {status}。',
   testBusy: '已有测试正在进行，请稍后再试。',
   apify: 'Apify',
-  apifyDescription: 'Token、代理位置和本计费周期的 Apify 用量。',
+  apifyDescription: 'Token、你的 Actor 和本计费周期的 Apify 用量。',
   usageTitle: 'Apify 用量',
   usageLoading: '正在加载 Apify 用量…',
   usageNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可查看用量。',
@@ -334,23 +360,32 @@ export const ZH: Record<string, string> = {
   usageResidential: '住宅代理：本周期 {gb} GB',
   usageResidentialLimit: '住宅代理：本周期 {gb} GB，上限 {limit} GB',
   usageResidentialUnknown: '住宅代理：—',
-  signupBar: '还没有 Apify 账号？免费注册 — 免费版每月含 {free} 平台额度。从 dsh 使用代理需要付费版（Starter，{starter}/月，含 {starter} 额度）。',
+  signupBar: '还没有 Apify 账号？免费注册 — 免费版每月 {free} 额度足够本插件使用（估算约每月 {calls} 次调用，每次约 ${cost}）。',
   signupAction: '注册 →',
   pricingAction: '价格',
-  freePlanHint: '免费版：从 Apify 平台外部使用代理需要付费版，Apify 出口将无法使用。',
-  freePlanUpgrade: '升级 →',
   token: 'Apify Token',
   tokenHint: '留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN。保存的 Token 会写入 profile 的 cordis.patch.yml（权限 0600）。',
   tokenPrefixWarning: 'Apify API Token 通常以 apify_api_ 开头，请再确认。',
   tokenStored: '已保存 Token；输入新值可替换。',
   tokenEmpty: '未保存 Token。',
   clearToken: '清除已保存的 Token',
-  proxyGroup: '代理分组',
-  proxyGroupHint: '住宅使用住宅 IP；数据中心（自动）使用 Apify 的 auto 模式，由 Apify 选择数据中心 IP，不使用分组或账户专属代理。',
-  proxyResidential: '住宅',
-  proxyDatacenter: '数据中心（自动）',
-  country: '代理国家',
-  countryHint: 'Apify 代理会话使用的国家，默认 US。',
+  actor: 'Actor',
+  actorHint: '你的 google-trends-for-agent Actor。它使用平台内住宅代理访问 Google Trends，并在空闲 60 秒后退出。',
+  actorNone: '选择 Actor',
+  actorRefresh: '刷新',
+  actorLoading: '正在加载你的 Actor…',
+  actorBuild: '构建：{status}',
+  actorBuildUnknown: '—',
+  actorEmpty: '你的账号里还没有 google-trends-for-agent Actor。',
+  actorLoadNetwork: '无法加载你的 Actor 列表。请检查网络后重试。',
+  actorLoadHttp: 'Apify API 返回 HTTP {status}。',
+  deploy: '部署到我的 Apify 账号 →',
+  deploying: '部署中…',
+  deployManual: '或手动部署',
+  deployBuilding: '构建中…（约 2–4 分钟）',
+  deployExists: '该 Actor 已存在。请刷新列表并选择它。',
+  deployFailed: '部署失败。请重试或手动部署。',
+  deployBuildFailed: '构建失败。请在 Apify Console 查看构建日志。',
   defaults: '默认值',
   defaultsDescription: '工具调用未指定时使用的默认值。',
   geo: '默认地区',
@@ -404,7 +439,6 @@ export const ZH: Record<string, string> = {
   readOnly: '此配置为只读。',
   invalidAnchor: '每个锚点都需要词和大于 0 的每日搜索量。',
   invalidTolerance: '请选择列表中的容差。',
-  invalidCountry: '请选择列表中的代理国家。',
   invalidGeo: '请选择列表中的地区。',
   duplicateAnchor: '该锚点词已在列表中。',
   tokenConflict: '只能输入新 Token 或清除已保存的 Token，二者选其一。',
@@ -504,7 +538,6 @@ const styles: Record<string, CSSProperties> = {
   signupPrimary: { color: '#2f6fed', fontWeight: 600, textDecoration: 'none' },
   signupSecondary: { color: 'var(--dsw-alias-label-tertiary, inherit)', textDecoration: 'underline' },
   usageBlock: { display: 'grid', gap: 6 },
-  freePlanHint: { margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-state-warning-primary, #b7791f)' },
   usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   usageTitle: { fontSize: 13, fontWeight: 650 },
   usageAmount: { fontSize: 24, lineHeight: 1.2, fontWeight: 700, letterSpacing: '-0.02em' },
@@ -523,7 +556,6 @@ const TOLERANCE_OPTIONS = [
   { value: '1', label: 'tolerance100' },
 ] as const;
 const GEO_SET = new Set<string>(GEO_CODES);
-const COUNTRY_SET = new Set<string>(PROXY_COUNTRY_CODES);
 
 function text(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
@@ -582,8 +614,7 @@ export function fromSnapshot(value: Record<string, unknown> | undefined): Draft 
     egress: source.egress === 'apify' ? 'apify' : 'local',
     token: '',
     clearToken: false,
-    proxyGroup: text(source.apifyProxyGroup).toUpperCase() === 'AUTO' ? 'auto' : DEFAULT_APIFY_PROXY_GROUP,
-    proxyCountry: text(source.apifyProxyCountry, DEFAULT_PROXY_COUNTRY).toUpperCase(),
+    actor: text(source.apifyActor),
     geo: text(source.geo, DEFAULT_GEO).toUpperCase(),
     anchor: text(source.anchor),
     cache: source.cache !== false,
@@ -618,13 +649,11 @@ export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
 
   if (draft.token && draft.clearToken) return t('tokenConflict');
   set(['egress'], draft.egress);
-  // Local egress leaves the saved Apify token and proxy location untouched.
+  // Local egress leaves the saved Apify token and Actor untouched.
   if (draft.egress === 'apify') {
     if (draft.token.trim()) set(['apifyToken'], draft.token.trim());
     else if (draft.clearToken) unset(['apifyToken']);
-    set(['apifyProxyGroup'], draft.proxyGroup);
-    if (!COUNTRY_SET.has(draft.proxyCountry)) return t('invalidCountry');
-    set(['apifyProxyCountry'], draft.proxyCountry);
+    textOrUnset(['apifyActor'], draft.actor);
   }
   if (!GEO_SET.has(draft.geo)) return t('invalidGeo');
   set(['geo'], draft.geo);
@@ -768,24 +797,35 @@ function usageErrorText(state: Extract<ApifyUsageView, { status: 'error' }>, t: 
 function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text: string } {
   if (result.ok) {
     if (result.egress === 'apify') {
-      return {
-        ok: true,
-        text: result.ip
-          ? template(t('testApifyOk'), { ip: result.ip, country: result.country ?? '—', ms: result.latencyMs })
-          : template(t('testApifyOkNoIp'), { ms: result.latencyMs }),
-      };
+      return { ok: true, text: template(t('testApifyOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
     }
     return { ok: true, text: template(t('testLocalOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
   }
   let key = result.egress === 'apify' ? 'testNetworkApify' : 'testNetworkLocal';
   if (result.code === 'no-token') key = 'testNoToken';
+  else if (result.code === 'no-actor') key = 'testNoActor';
   else if (result.code === 'invalid-token') key = 'testInvalidToken';
-  else if (result.code === 'proxy-auth') key = 'testProxyAuth';
   else if (result.code === 'http') key = 'testHttp';
   else if (result.code === 'busy') key = 'testBusy';
   const base = key === 'testHttp' ? template(t(key), { status: statusLabel(result.status) }) : t(key);
   const detail = result.code === 'network' && result.message ? template(t('testDetail'), { detail: result.message }) : '';
   return { ok: false, text: base + detail };
+}
+
+function normalizeActor(value: unknown): ApifyActorView | null {
+  const row = record(value);
+  const id = stringOrNull(row.id);
+  const name = stringOrNull(row.name);
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    username: stringOrNull(row.username),
+    title: stringOrNull(row.title),
+    standbyUrl: stringOrNull(row.standbyUrl),
+    standbyEnabled: row.standbyEnabled === true,
+    lastBuildStatus: stringOrNull(row.lastBuildStatus),
+  };
 }
 
 function normalizeUsage(value: Record<string, unknown>): ApifyUsageData {
@@ -831,6 +871,58 @@ export async function loadApifyUsage(refresh = false): Promise<ApifyUsageView> {
   }
 }
 
+/** Load the Actor list for the saved token. */
+export async function loadApifyActors(refresh = false): Promise<ApifyActorsView> {
+  try {
+    const response = await fetch(`${ACTORS_URL}${refresh ? '?refresh=1' : ''}`, {
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+    let body: unknown;
+    try { body = await response.json(); } catch { body = undefined; }
+    const row = record(body);
+    if (row.ok === false) {
+      const code = row.code === 'no-token' || row.code === 'invalid-token' || row.code === 'network' || row.code === 'http'
+        ? row.code
+        : 'http';
+      const httpStatus = numberOrNull(row.status) ?? (!response.ok ? response.status : null);
+      return { status: 'error', code, ...(httpStatus === null ? {} : { httpStatus }) };
+    }
+    if (response.ok && row.ok === true && Array.isArray(row.actors)) {
+      const actors = row.actors.map(normalizeActor).filter((actor): actor is ApifyActorView => actor !== null);
+      return { status: 'ready', actors };
+    }
+    return { status: 'error', code: 'http', httpStatus: response.status };
+  } catch {
+    return { status: 'error', code: 'network' };
+  }
+}
+
+/** Deploy this package's Actor into the user's account. */
+export async function deployApifyActor(): Promise<DeployActorView> {
+  try {
+    const response = await fetch(DEPLOY_URL, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: '{}',
+      cache: 'no-store',
+    });
+    let body: unknown;
+    try { body = await response.json(); } catch { body = undefined; }
+    const row = record(body);
+    if (row.ok === true && typeof row.actorId === 'string' && typeof row.buildId === 'string') {
+      return { ok: true, actorId: row.actorId, buildId: row.buildId };
+    }
+    return {
+      ok: false,
+      code: typeof row.code === 'string' ? row.code : 'http',
+      ...(typeof row.message === 'string' ? { message: row.message } : {}),
+    };
+  } catch {
+    return { ok: false, code: 'network' };
+  }
+}
+
 /** Send exactly one owner-authenticated test request for the saved egress. */
 export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Promise<TestConnectionView> {
   try {
@@ -851,8 +943,7 @@ export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Pr
         latencyMs: numberOrNull(row.latencyMs) ?? 0,
         ...(typeof row.code === 'string' ? { code: row.code as TestConnectionView['code'] } : {}),
         ...(typeof row.message === 'string' ? { message: row.message } : {}),
-        ...(typeof row.ip === 'string' ? { ip: row.ip } : {}),
-        ...(typeof row.country === 'string' ? { country: row.country } : {}),
+        ...(typeof row.actorId === 'string' ? { actorId: row.actorId } : {}),
       };
     }
     return { ok: false, egress, status: response.status, latencyMs: 0, code: 'http' };
@@ -861,16 +952,11 @@ export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Pr
   }
 }
 
-function isFreePlan(data: ApifyUsageData): boolean {
-  return data.plan.tier?.toUpperCase() === 'FREE'
-    || (data.limitUsd !== null && Math.abs(data.limitUsd - APIFY_FREE_MONTHLY_CREDIT_USD) <= 0.005);
-}
-
-function ApifySignupBar({ t }: { t: Translate }) {
-  const amounts = {
-    free: `$${APIFY_FREE_MONTHLY_CREDIT_USD}`,
-    starter: `$${APIFY_STARTER_MONTHLY_USD}`,
-  };
+function ApifySignupBar({ t, locale }: { t: Translate; locale: string }) {
+  const calls = new Intl.NumberFormat(locale).format(apifyEstimatedCalls());
+  const cost = new Intl.NumberFormat(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+    .format(APIFY_EST_COST_PER_CALL_USD);
+  const amounts = { free: `$${APIFY_FREE_MONTHLY_CREDIT_USD}`, calls, cost };
   return <div style={styles.signupBar}>
     <p style={styles.signupText}>{template(t('signupBar'), amounts)}</p>
     <div style={styles.signupLinks}>
@@ -880,11 +966,11 @@ function ApifySignupBar({ t }: { t: Translate }) {
   </div>;
 }
 
-function FreePlanHint({ t }: { t: Translate }) {
-  return <p style={styles.freePlanHint}>
-    {t('freePlanHint')}{' '}
-    <a style={styles.signupPrimary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('freePlanUpgrade')}</a>
-  </p>;
+function actorErrorText(state: Extract<ApifyActorsView, { status: 'error' }>, t: Translate): string {
+  if (state.code === 'no-token') return t('testNoToken');
+  if (state.code === 'invalid-token') return t('testInvalidToken');
+  if (state.code === 'network') return t('actorLoadNetwork');
+  return template(t('actorLoadHttp'), { status: statusLabel(state.httpStatus ?? null) });
 }
 
 export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshing = false }: {
@@ -1075,10 +1161,12 @@ export interface ConfigPageProps {
   initialDraft?: Partial<Draft>;
   /** Test seam: start the usage card in a specific state for server-render coverage. */
   initialUsage?: ApifyUsageView;
+  /** Test seam: start the Actor list in a specific state for server-render coverage. */
+  initialActors?: ApifyActorsView;
 }
 
 /** Settings page. Exported for server-render tests. */
-export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPageProps) {
+export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }: ConfigPageProps) {
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -1093,6 +1181,11 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
   const [failure, setFailure] = useState<string | null>(null);
   const [usage, setUsage] = useState<ApifyUsageView>(initialUsage ?? { status: 'idle' });
   const [usageRequest, setUsageRequest] = useState({ id: 0, refresh: false });
+  const [actors, setActors] = useState<ApifyActorsView>(initialActors ?? { status: 'idle' });
+  const [actorsRequest, setActorsRequest] = useState({ id: 0, refresh: false });
+  const [deploying, setDeploying] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [deployNotice, setDeployNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
   const lastRevision = useRef<number | undefined>(snapshot.revision);
@@ -1134,12 +1227,54 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
     return () => { cancelled = true; };
   }, [draft.egress, usageRequest]);
 
+  useEffect(() => {
+    if (draft.egress !== 'apify') {
+      setActors({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setActors({ status: 'loading' });
+    void loadApifyActors(actorsRequest.refresh).then(next => {
+      if (!cancelled) setActors(next);
+    });
+    return () => { cancelled = true; };
+  }, [draft.egress, actorsRequest]);
+
+  // Auto-select the first matching Actor into the draft when none is saved yet.
+  useEffect(() => {
+    if (actors.status !== 'ready' || actors.actors.length === 0) return;
+    setDraft(current => current.actor ? current : { ...current, actor: actors.actors[0]!.id });
+  }, [actors]);
+
+  // While a deploy build runs, re-list every 15 s until it succeeds.
+  useEffect(() => {
+    if (!building) return;
+    const timer = setInterval(() => setActorsRequest(current => ({ id: current.id + 1, refresh: true })), 15_000);
+    return () => clearInterval(timer);
+  }, [building]);
+
+  useEffect(() => {
+    if (!building || actors.status !== 'ready') return;
+    const succeeded = actors.actors.find(actor => actor.lastBuildStatus?.toUpperCase() === 'SUCCEEDED');
+    if (succeeded) {
+      setDraft(current => ({ ...current, actor: succeeded.id }));
+      setBuilding(false);
+      setDeployNotice(null);
+      return;
+    }
+    if (actors.actors.some(actor => actor.lastBuildStatus?.toUpperCase() === 'FAILED')) {
+      setBuilding(false);
+      setDeployNotice(t('deployBuildFailed'));
+    }
+  }, [building, actors, t]);
+
   const edit = (patch: Partial<Draft>) => setDraft(current => ({ ...current, ...patch }));
   const editAnchor = (index: number, patch: Partial<AnchorDraft>) => setDraft(current => ({
     ...current,
     anchors: current.anchors.map((anchor, i) => i === index ? { ...anchor, ...patch } : anchor),
   }));
   const requestUsage = (refresh: boolean) => setUsageRequest(current => ({ id: current.id + 1, refresh }));
+  const requestActors = (refresh: boolean) => setActorsRequest(current => ({ id: current.id + 1, refresh }));
 
   const addAnchor = () => {
     if (validation.newAnchorTerm || validation.newAnchorDaily) return;
@@ -1189,7 +1324,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
         setDraft(cleaned);
         setBaseline(draftKey(cleaned));
         setNotice(t('saved'));
-        if (draft.egress === 'apify' && (tokenChanged || egressChanged)) requestUsage(false);
+        if (draft.egress === 'apify' && (tokenChanged || egressChanged)) {
+          requestUsage(false);
+          requestActors(true);
+        }
       }
     } catch (error) {
       setFailure(error instanceof Error ? error.message : t('failed'));
@@ -1205,6 +1343,28 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
       setTestResult(await runConnectionTest(draft.egress));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const deploy = async () => {
+    setDeploying(true);
+    setDeployNotice(null);
+    try {
+      const result = await deployApifyActor();
+      if (result.ok) {
+        setBuilding(true);
+        requestActors(true);
+      } else if (result.code === 'exists') {
+        setDeployNotice(t('deployExists'));
+      } else if (result.code === 'no-token') {
+        setDeployNotice(t('testNoToken'));
+      } else if (result.code === 'invalid-token') {
+        setDeployNotice(t('testInvalidToken'));
+      } else {
+        setDeployNotice(t('deployFailed'));
+      }
+    } finally {
+      setDeploying(false);
     }
   };
 
@@ -1232,13 +1392,13 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
     [{ value: '', label: t('anchorAutomatic') }, ...anchorOptions], [anchorOptions, t]);
   const windowOptions = useMemo(() =>
     [{ value: '', label: t('windowDefault') }, ...anchorOptions], [anchorOptions, t]);
-  const countryOptions = useMemo(() => {
-    const options: { value: string; label: string }[] = PROXY_COUNTRY_CODES.map(code => ({ value: code, label: regionLabel(code, intlLocale) }));
-    if (draft.proxyCountry && !COUNTRY_SET.has(draft.proxyCountry)) {
-      options.unshift({ value: draft.proxyCountry, label: regionLabel(draft.proxyCountry, intlLocale) || draft.proxyCountry });
-    }
-    return options;
-  }, [draft.proxyCountry, intlLocale]);
+  const actorOptions = useMemo(() => actors.status === 'ready'
+    ? actors.actors.map(actor => ({
+      value: actor.id,
+      label: `${[actor.username, actor.name].filter(Boolean).join('/')}${actor.title ? ` — ${actor.title}` : ''}`,
+    }))
+    : [], [actors]);
+  const selectedActor = actors.status === 'ready' ? actors.actors.find(actor => actor.id === draft.actor) : undefined;
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide') },
@@ -1294,11 +1454,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
 
     {draft.egress === 'apify' ? <section style={styles.section}>
       <SectionHeader title={t('apify')} description={t('apifyDescription')} />
-      {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} /> : null}
+      {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
       <div style={styles.usageBlock}>
         <ApifyUsageCard state={usage} t={t} locale={intlLocale}
           onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />
-        {usage.status === 'ready' && isFreePlan(usage.data) ? <FreePlanHint t={t} /> : null}
       </div>
       <Field label={t('token')} hint={t('tokenHint')}>
         <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
@@ -1314,15 +1473,37 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage }: ConfigPagePro
             onChange={checked => edit({ clearToken: checked })} />
         </div> : null}
       </Field>
-      <Select label={t('proxyGroup')} hint={t('proxyGroupHint')} value={draft.proxyGroup} disabled={!editable}
-        options={[
-          { value: APIFY_PROXY_GROUPS[0], label: t('proxyResidential') },
-          { value: APIFY_PROXY_GROUPS[1], label: t('proxyDatacenter') },
-        ]}
-        onChange={value => edit({ proxyGroup: value === 'auto' ? 'auto' : 'RESIDENTIAL' })} />
-      <Select label={t('country')} hint={t('countryHint')} value={draft.proxyCountry} disabled={!editable}
-        options={countryOptions}
-        onChange={value => edit({ proxyCountry: value })} />
+      <div style={styles.field}>
+        <div style={styles.switchRow}>
+          <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
+          <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
+            onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
+        </div>
+        <select style={styles.select} aria-label={t('actor')} value={draft.actor}
+          disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
+          onChange={event => edit({ actor: event.target.value })}>
+          <option value="">{t('actorNone')}</option>
+          {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        <p style={styles.hint}>{t('actorHint')}</p>
+        {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
+          status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
+        })}</p> : null}
+        {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
+        {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
+      </div>
+      {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
+        <p style={styles.usageMeta}>{t('actorEmpty')}</p>
+        <div>
+          <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
+            disabled={!editable || deploying} onClick={() => { void deploy(); }}>
+            {deploying ? t('deploying') : t('deploy')}
+          </button>
+        </div>
+        <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
+      </div> : null}
+      {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
+      {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
     </section> : null}
 
     <section style={styles.section}>

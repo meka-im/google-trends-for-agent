@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-326%20passed-22c55e?style=flat-square" alt="326 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-340%20passed-22c55e?style=flat-square" alt="340 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -92,27 +92,26 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑同一条命令。
 ```
 
-安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**；如果 bundle 显示 Off，请先开启。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。没有 MCP 服务器、没有 `gtfa` CLI 子进程，也不经过 Actor 端点。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
+安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**；如果 bundle 显示 Off，请先开启。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。默认不启动 MCP 服务器、不运行 `gtfa` CLI 子进程，也不经过 Actor 端点；选择 `apify` 出口时会经过你自己的 Actor。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
 
-可配置出口（`local` 或 `apify`）、Apify Token、默认地区、代理分组/国家、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。选择 Apify 后，设置页会显示本计费周期的用量（套餐、美元、住宅流量）和**测试连接**按钮，二者都在 Host 运行，浏览器看不到 Token。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
+可配置出口（`local` 或 `apify`）、Apify Token、你的 Actor、默认地区、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。选择 Apify 后，设置页会显示本计费周期的用量（套餐、美元、住宅流量）、Token 输入框和带最新构建状态的 **Actor** 下拉框。**测试连接**通过已保存的出口发出一次请求；用量、Actor 列表、部署和测试都在 Host 运行，浏览器看不到 Token。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
 
-`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 不经 Actor、直接使用 Apify 代理，通过 Apify API 获取一次代理密码，并在 HTTP 429 或 Google 验证页时轮换会话。Apify 流量按 GB 从你的 Apify 额度中扣除。
+`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 会把每个请求发到**你自己 Apify 账号**里的 `google-trends-for-agent` Actor 的 `/egress/fetch`；Actor 用平台内住宅代理执行请求，并在 HTTP 429 或 Google 验证页时轮换会话。代理在 Actor 内使用，所以免费版也可以工作。Apify 住宅流量按 GB 从你的 Apify 额度中扣除。
 
-Apify 出口需要付费 Apify 套餐：从 Apify 平台外部连接代理属于外部连接，免费版无法使用；请在 [console.apify.com/sign-up](https://console.apify.com/sign-up) 注册。
+先部署一次 Actor，然后在下拉框里选中它：
 
-## 部署到 Apify（Deploy to Apify）
+- **一键**：在 **Plugins → Google Trends → Configure → Apify** 中点击 **部署到我的 Apify 账号 →**。等待**构建中…（约 2–4 分钟）**和 `succeeded` 状态，新 Actor 会自动选中。
+- **手动**：Apify Console → Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**；或克隆仓库后运行 `apify push`。
 
-[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](https://console.apify.com/actors/new)
+如果 `apify` 出口没有选择 Actor，工具会返回明确的 `INVALID_INPUT` 错误，而不会调用 Google。
 
-该 Actor 以 **Standby 模式**通过 **Streamable HTTP** 运行同一个 MCP 服务器，并默认通过**美国 Apify 住宅代理**访问 Google Trends。它是无法运行本地进程、也无法访问 `localhost` 的远程 Agent 的接入方式。
+## 部署到 Apify
 
-在本仓库执行：
+[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](#部署到-apify)
 
-```sh
-apify push
-```
+该 Actor 以 **Standby 模式**通过 **Streamable HTTP** 运行 MCP 服务器，并默认通过**美国 Apify 住宅代理**访问 Google Trends。它既是无法运行本地进程、也无法访问 `localhost` 的远程 Agent 的接入方式，也是 dsh 插件 `apify` 出口的转发层；两者都可以在免费版使用。
 
-然后把 Standby URL 和 Apify API Token 交给客户端：
+可用插件里的“一键部署”按钮（见上），也可在 Apify Console 新建 Actor 并关联 `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**；或克隆仓库后运行 `apify push`。然后把 Standby URL 和 Apify API Token 交给客户端：
 
 ```text
 https://<user>--google-trends-for-agent.apify.actor/mcp
@@ -132,7 +131,9 @@ Authorization: Bearer APIFY_TOKEN
 
 主机名里的用户名会把点号换成连字符（例如 `meka.im` 变为 `meka-im`，即 `https://meka-im--google-trends-for-agent.apify.actor/mcp`）。也可在 Actor 控制台复制准确的 Standby URL。
 
-Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除，费率以你的套餐和 Apify 控制台为准。请保持轻量调用：`trends_now` 查询多个国家比单次 `trends_ask` 消耗更多代理流量。Actor 配置和商店说明见 [`.actor/README.md`](.actor/README.md)。
+该 Actor 还在同一主机提供纯 HTTP API：`POST /egress/fetch`（插件的 Google Trends 转发）、`POST /tools/{name}`（四个工具）、`GET /health` 和 `GET /mcp`（MCP）。所有请求都使用 `Authorization: Bearer APIFY_TOKEN`。Actor 只记录方法和路径，不记录查询串、请求头或请求体。
+
+Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除，费率以你的套餐和 Apify 控制台为准。单租户 Standby 空闲时仍会产生计算费用，因此无请求 60 秒后 Actor 会退出（`GTFA_IDLE_EXIT_SECS`）。请保持轻量调用：`trends_now` 查询多个国家比单次 `trends_ask` 消耗更多代理流量。Actor 配置和商店说明见 [`.actor/README.md`](.actor/README.md)。
 
 ## MCP 工具
 
@@ -198,7 +199,7 @@ GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读
 
 ```sh
 npm install
-npm test          # 326 个测试
+npm test          # 340 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

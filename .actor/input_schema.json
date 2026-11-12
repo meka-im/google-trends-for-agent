@@ -1,12 +1,12 @@
 {
-  "title": "Google Trends MCP",
+  "title": "Google Trends for AI Agents (MCP + HTTP)",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "proxyConfiguration": {
       "title": "Proxy configuration",
       "type": "object",
-      "description": "Egress for Google Trends requests. The default is Apify Residential proxy in the US; residential traffic is billed per GB from your Apify credits.",
+      "description": "Egress for Google Trends requests inside the Actor. The default is the on-platform Apify Residential proxy in the US; residential traffic is billed per GB from your Apify credits.",
       "editor": "proxy",
       "prefill": {
         "useApifyProxy": true,

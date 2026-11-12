@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { Actor } from 'apify';
 import { createServer } from './mcp.js';
-import { startHttpMcpServer, resolveStandbyPort } from './http.js';
+import { startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
 import { createDefaultTransport, type Transport } from './transport.js';
+import { createTools } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
 
 interface ActorInput {
@@ -12,6 +14,10 @@ interface ActorInput {
 }
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
+const version = (() => {
+  try { return String((JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: unknown }).version ?? '0.1.0'); }
+  catch { return '0.1.0'; }
+})();
 
 await Actor.init();
 
@@ -21,11 +27,10 @@ try {
   const anchor = text(input.anchor, '');
   const baselines = await loadBaselinesFromEnv();
   const proxyInput = actorProxyInput(input.proxyConfiguration);
-  const hasApifyCredentials = Boolean(process.env.APIFY_PROXY_PASSWORD || process.env.APIFY_TOKEN);
   const hasCustomProxy = Array.isArray(proxyInput.proxyUrls) && proxyInput.proxyUrls.length > 0;
 
   let proxyTransport: Transport | undefined;
-  if (Actor.isAtHome() || hasApifyCredentials || hasCustomProxy) {
+  if (Actor.isAtHome() || hasCustomProxy) {
     // Reuse the Actor SDK's proxy configuration and the existing HTTPS_PROXY path;
     // only the URL (and later the session id) is new here.
     const proxyConfiguration = await Actor.createProxyConfiguration(proxyInput as never);
@@ -48,17 +53,44 @@ try {
       console.log('Egress: direct (proxy disabled in Actor input).');
     }
   } else {
-    console.log('Egress: direct (no Apify proxy credentials outside the Apify platform).');
+    console.log('Egress: direct (outside the Apify platform).');
   }
 
   const snapshotDir = process.env.GTFA_SNAPSHOT_DIR || '/tmp/gtfa/snapshots';
   const chartDir = process.env.GTFA_CHART_DIR || '/tmp/gtfa/charts';
   const port = resolveStandbyPort();
+  const relayTransport = proxyTransport ?? createDefaultTransport();
+  const tools = createTools({
+    transport: relayTransport,
+    defaultGeo: geo,
+    ...(anchor ? { anchor } : {}),
+    ...(baselines ? { baselines } : {}),
+    snapshotDir,
+    chartDir,
+    minIntervalMs: 1500,
+  });
 
-  const http = await startHttpMcpServer({
+  const idleEnv = process.env.GTFA_IDLE_EXIT_SECS?.trim();
+  const idleSecsRaw = idleEnv ? Number(idleEnv) : 60;
+  const idleSecs = Number.isFinite(idleSecsRaw) && idleSecsRaw >= 0 ? idleSecsRaw : 60;
+  let http: HttpMcpServer | undefined;
+
+  http = await startHttpMcpServer({
     port,
     host: '0.0.0.0',
     path: '/mcp',
+    version,
+    tools,
+    transport: relayTransport,
+    idleExit: {
+      enabled: process.env.APIFY_META_ORIGIN === 'STANDBY',
+      timeoutMs: idleSecs * 1000,
+      log: message => console.log(message),
+      exit: async () => {
+        await http?.close();
+        await Actor.exit();
+      },
+    },
     log: message => console.log(message),
     createMcpServer: () => createServer({
       defaultGeo: geo,
@@ -66,19 +98,19 @@ try {
       ...(baselines ? { baselines } : {}),
       snapshotDir,
       chartDir,
-      ...(proxyTransport ? { transport: proxyTransport } : {}),
+      transport: relayTransport,
     }),
   });
 
-  // Never charge: this Actor only proxies MCP requests and has no PPE events.
-  console.log(`Standby MCP ready on port ${http.port} at /mcp (geo=${geo}, anchor=${anchor || 'auto'}).`);
+  // Never charge: this Actor only proxies MCP/HTTP requests and has no PPE events.
+  console.log(`Standby MCP + HTTP ready on port ${http.port}: /mcp, /egress/fetch, /tools/{name}, /health (geo=${geo}, anchor=${anchor || 'auto'}).`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`Received ${signal}; shutting down.`);
-    await http.close();
+    await http!.close();
     await Actor.exit();
   };
   process.once('SIGTERM', () => { void shutdown('SIGTERM'); });

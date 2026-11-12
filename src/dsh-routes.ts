@@ -1,35 +1,41 @@
-import { createHash } from 'node:crypto';
-import { createEgressTransport, type EgressMode, type EgressOptions } from './egress.js';
 import { createApifyAccountClient, type ApifyUsageResult, type ApifyUsageSource } from './apify-account.js';
+import {
+  createActorRelayTransport,
+  createApifyActorClient,
+  resolveApifyApiToken,
+  type ApifyActorClientOptions,
+} from './apify-actor.js';
 import { abortError, createDefaultTransport, raceAbort, type Transport } from './transport.js';
-import type { ApifyProxyGroup } from './options.js';
+import type { EgressMode } from './options.js';
 
 export const APIFY_USAGE_PATH = '/api/gtfa.apify-usage';
+export const APIFY_ACTORS_PATH = '/api/gtfa.apify-actors';
+export const APIFY_DEPLOY_PATH = '/api/gtfa.apify-deploy';
 export const TEST_CONNECTION_PATH = '/api/gtfa.test-connection';
 
 const TRENDS_URL = 'https://trends.google.com/trends/';
-const BROWSER_INFO_URL = 'http://api.apify.com/v2/browser-info';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface RouteSettings {
   egress: EgressMode;
   apifyToken?: string;
-  apifyProxyGroup: ApifyProxyGroup;
-  apifyProxyCountry: string;
+  apifyActor?: string;
 }
 
 export interface RouteOverrides {
-  /** Fetch implementation for the Apify REST API (usage) in tests. */
+  /** Fetch implementation for the Apify REST API in tests. */
   fetch?: typeof globalThis.fetch;
   /** Local transport used by the local test-connection check in tests. */
   localTransport?: Transport;
-  /** Apify transport construction overrides for test-connection in tests. */
-  egress?: EgressOptions;
-  /** Clock override for latency and fetchedAt assertions. */
+  /** Relay transport factory used by the apify test-connection check in tests. */
+  relayTransport?: (token: string, actorId: string) => Transport;
+  /** Actor client overrides (cache clock). */
+  actorOptions?: ApifyActorClientOptions;
+  /** Clock override for latency assertions. */
   now?: () => number;
 }
 
-export type TestConnectionCode = 'no-token' | 'invalid-token' | 'proxy-auth' | 'network' | 'http' | 'busy';
+export type TestConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'network' | 'http' | 'busy';
 
 export interface TestConnectionResult {
   ok: boolean;
@@ -38,8 +44,7 @@ export interface TestConnectionResult {
   latencyMs: number;
   code?: TestConnectionCode;
   message?: string;
-  ip?: string;
-  country?: string;
+  actorId?: string;
 }
 
 interface ConnectionRoute {
@@ -57,15 +62,6 @@ interface RouteContext {
   get?(name: string): unknown;
   inject?(names: string[], callback: (ctx: RouteContext) => void): unknown;
   effect?(callback: () => void | (() => void)): unknown;
-}
-
-/** Saved config token wins; otherwise APIFY_TOKEN. APIFY_PROXY_PASSWORD is not an API token. */
-export function resolveApifyApiToken(configToken?: string | null, env: NodeJS.ProcessEnv = process.env): { token?: string; source?: ApifyUsageSource } {
-  const configured = configToken?.trim();
-  if (configured) return { token: configured, source: 'config' };
-  const fromEnv = env.APIFY_TOKEN?.trim();
-  if (fromEnv) return { token: fromEnv, source: 'env' };
-  return {};
 }
 
 /** Remove proxy credentials and any accidental token text from an error message. */
@@ -89,8 +85,15 @@ function errorText(error: unknown): string {
   return detail && !error.message.includes(detail) ? `${error.message}: ${detail}` : error.message;
 }
 
-function failure(egress: EgressMode, code: TestConnectionCode, message: string, latencyMs: number, status: number | null = null): TestConnectionResult {
-  return { ok: false, egress, status, latencyMs, code, message };
+function failure(
+  egress: EgressMode,
+  code: TestConnectionCode,
+  message: string,
+  latencyMs: number,
+  status: number | null = null,
+  actorId?: string,
+): TestConnectionResult {
+  return { ok: false, egress, status, latencyMs, code, message, ...(actorId ? { actorId } : {}) };
 }
 
 function elapsed(clock: () => number, startedAt: number): number {
@@ -101,33 +104,17 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { 'cache-control': 'no-store' } });
 }
 
-function parseBrowserInfo(body: string): { ip?: string; country?: string } {
-  try {
-    const parsed = body ? JSON.parse(body) as unknown : undefined;
-    const top = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-    const data = top.data && typeof top.data === 'object' && !Array.isArray(top.data) ? top.data as Record<string, unknown> : {};
-    const source = Object.keys(data).length ? data : top;
-    const ip = typeof source.clientIp === 'string' && source.clientIp.trim() ? source.clientIp.trim() : undefined;
-    const country = typeof source.countryCode === 'string' && source.countryCode.trim() ? source.countryCode.trim() : undefined;
-    return { ...(ip ? { ip } : {}), ...(country ? { country } : {}) };
-  } catch {
-    return {};
-  }
-}
-
 /**
- * One reachability check for the saved egress: one target request per call. The first
- * Apify check per token also looks up the proxy password (GET /v2/users/me), as the tools do.
+ * One reachability check for the saved egress: one target request per call.
+ * The apify check relays `GET https://trends.google.com/trends/` through the
+ * selected Actor, so it exercises the same path the tools use.
  */
 export async function testConnection(options: {
   egress: EgressMode;
   apifyToken?: string;
-  apifyProxyGroup?: ApifyProxyGroup;
-  apifyProxyCountry?: string;
+  apifyActor?: string;
   localTransport?: Transport;
-  apifyOptions?: EgressOptions;
-  /** Reuse a transport across clicks so the proxy password lookup happens once per token/group/country. */
-  apifyTransport?: (token: string, build: () => Transport) => Transport;
+  relayTransport?: (token: string, actorId: string) => Transport;
   signal?: AbortSignal;
   timeoutMs?: number;
   now?: () => number;
@@ -147,7 +134,6 @@ export async function testConnection(options: {
         ...(options.signal ? { signal: options.signal } : {}),
       }), options.signal);
       const latencyMs = elapsed(clock, startedAt);
-      if (response.status === 407) return failure('local', 'proxy-auth', 'The HTTPS proxy rejected authentication (407). Check HTTPS_PROXY credentials.', latencyMs, 407);
       if (response.status < 200 || response.status >= 400) {
         return failure('local', 'http', `Google Trends returned HTTP ${response.status}.`, latencyMs, response.status);
       }
@@ -165,59 +151,51 @@ export async function testConnection(options: {
 
   const resolved = resolveApifyApiToken(options.apifyToken);
   if (!resolved.token) {
-    return failure('apify', 'no-token', 'Add an Apify token (or set APIFY_TOKEN) to test the Apify proxy.', 0);
+    return failure('apify', 'no-token', 'Add an Apify token (or set APIFY_TOKEN) to use apify egress.', 0);
+  }
+  const actorId = options.apifyActor?.trim();
+  if (!actorId) {
+    return failure('apify', 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', 0);
   }
   const startedAt = clock();
   let transport: Transport;
   try {
-    const build = () => createEgressTransport({
-      ...options.apifyOptions,
-      egress: 'apify',
-      apifyToken: resolved.token,
-      apifyProxyGroup: options.apifyProxyGroup,
-      apifyProxyCountry: options.apifyProxyCountry,
-    });
-    transport = options.apifyTransport ? options.apifyTransport(resolved.token, build) : build();
+    transport = options.relayTransport?.(resolved.token, actorId)
+      ?? createActorRelayTransport({ token: resolved.token, actorId });
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
     const message = scrubSecrets(errorText(error), resolved.token);
-    return failure('apify', 'invalid-token', message || 'Could not build the Apify proxy transport.', 0);
+    return failure('apify', 'invalid-token', message || 'Could not build the Actor relay transport.', 0, null, actorId);
   }
 
   try {
     const response = await raceAbort(transport({
-      url: BROWSER_INFO_URL,
+      url: TRENDS_URL,
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0' },
       timeoutMs,
       ...(options.signal ? { signal: options.signal } : {}),
     }), options.signal);
     const latencyMs = elapsed(clock, startedAt);
-    if (response.status === 407) {
-      return failure('apify', 'proxy-auth', 'Apify proxy rejected the credentials (407). Check the token and proxy access.', latencyMs, 407);
-    }
     if (response.status === 401 || response.status === 403) {
-      return failure('apify', 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status);
+      return failure('apify', 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status, actorId);
     }
-    if (response.status < 200 || response.status >= 300) {
-      return failure('apify', 'http', `Apify proxy check returned HTTP ${response.status}.`, latencyMs, response.status);
+    if (response.status === 404) {
+      return failure('apify', 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', latencyMs, response.status, actorId);
     }
-    return {
-      ok: true,
-      egress: 'apify',
-      status: response.status,
-      latencyMs,
-      ...parseBrowserInfo(response.body),
-    };
+    if (response.status < 200 || response.status >= 400) {
+      return failure('apify', 'http', `Your Apify Actor returned HTTP ${response.status}.`, latencyMs, response.status, actorId);
+    }
+    return { ok: true, egress: 'apify', status: response.status, latencyMs, actorId };
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
     const message = scrubSecrets(errorText(error), resolved.token);
-    const code: TestConnectionCode = /407|proxy authentication|proxy auth/i.test(message)
-      ? 'proxy-auth'
-      : /HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
-        ? 'invalid-token'
+    const code: TestConnectionCode = /rejected the token|HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
+      ? 'invalid-token'
+      : /Select or deploy|HTTP 404|Standby URL|no Actor/i.test(message)
+        ? 'no-actor'
         : 'network';
-    return failure('apify', code, message || 'Could not reach the Apify proxy. Check connectivity and the saved settings.', elapsed(clock, startedAt));
+    return failure('apify', code, message || 'Could not reach your Apify Actor. Check the Standby URL and connectivity.', elapsed(clock, startedAt), null, actorId);
   }
 }
 
@@ -228,10 +206,13 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     ...(overrides.fetch ? { fetch: overrides.fetch } : {}),
     ...(overrides.now ? { now: overrides.now } : {}),
   });
+  const actors = createApifyActorClient({
+    ...overrides.actorOptions,
+    ...(overrides.fetch ? { fetch: overrides.fetch } : {}),
+    ...(overrides.now ? { now: overrides.now } : {}),
+  });
   let testing = false;
-  // The Apify transport looks up the proxy password once (GET /v2/users/me); keep it per
-  // token hash + group + country so repeated tests make only the proxy request.
-  let cachedTransport: { key: string; transport: Transport } | undefined;
+  let deploying = false;
   const disposers: Array<() => Promise<void>> = [];
 
   disposers.push(service.fetch.register({
@@ -248,12 +229,44 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       } else {
         result = await account.usage({
           token: resolved.token,
-          source: resolved.source ?? 'config',
+          source: resolved.source as ApifyUsageSource,
           refresh,
           signal: request.signal,
         });
       }
       return json(result);
+    },
+  }));
+
+  disposers.push(service.fetch.register({
+    path: APIFY_ACTORS_PATH,
+    methods: ['GET'],
+    requestBody: 'buffered',
+    fetch: async request => {
+      const refresh = new URL(request.url).searchParams.get('refresh') === '1';
+      const settings = getSettings();
+      const resolved = resolveApifyApiToken(settings.apifyToken);
+      if (!resolved.token) return json({ ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to list your Actors.' });
+      return json(await actors.listMyActors(resolved.token, { refresh, signal: request.signal }));
+    },
+  }));
+
+  disposers.push(service.fetch.register({
+    path: APIFY_DEPLOY_PATH,
+    methods: ['POST'],
+    requestBody: 'buffered',
+    fetch: async () => {
+      if (deploying) {
+        return json({ ok: false, code: 'busy', message: 'A deploy is already running. Try again in a moment.' }, 429);
+      }
+      const resolved = resolveApifyApiToken(getSettings().apifyToken);
+      if (!resolved.token) return json({ ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to deploy the Actor.' });
+      deploying = true;
+      try {
+        return json(await actors.deployActor(resolved.token));
+      } finally {
+        deploying = false;
+      }
     },
   }));
 
@@ -271,15 +284,9 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
         const result = await testConnection({
           egress: settings.egress,
           apifyToken: settings.apifyToken,
-          apifyProxyGroup: settings.apifyProxyGroup,
-          apifyProxyCountry: settings.apifyProxyCountry,
+          apifyActor: settings.apifyActor,
           localTransport: overrides.localTransport,
-          apifyOptions: overrides.egress,
-          apifyTransport: (token, build) => {
-            const key = `${createHash('sha256').update(token).digest('hex')}|${settings.apifyProxyGroup}|${settings.apifyProxyCountry}`;
-            if (cachedTransport?.key !== key) cachedTransport = { key, transport: build() };
-            return cachedTransport.transport;
-          },
+          relayTransport: overrides.relayTransport,
           signal: request.signal,
           now: overrides.now,
         });
@@ -296,9 +303,9 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
 }
 
 /**
- * Register the owner-only usage and test-connection routes when the web host
- * provides `connection`. Headless/TUI profiles have no such service, so tools
- * and skills keep working unchanged.
+ * Register the owner-only usage, Actor, deploy, and test-connection routes when
+ * the web host provides `connection`. Headless/TUI profiles have no such
+ * service, so tools and skills keep working unchanged.
  */
 export function registerRoutes(ctx: RouteContext, getSettings: () => RouteSettings, overrides: RouteOverrides = {}): void {
   const attach = (scope: RouteContext) => {

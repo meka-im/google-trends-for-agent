@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createServer } from '../src/mcp.js';
-import { parsePort, resolveStandbyPort, startHttpMcpServer, type HttpMcpServer } from '../src/http.js';
+import { IdleExitController, parsePort, resolveStandbyPort, startHttpMcpServer, type HttpMcpServer, type IdleExitOptions } from '../src/http.js';
+import type { GtfaTool } from '../src/tools.js';
 import type { Transport } from '../src/transport.js';
 
 // test/setup.ts blocks global fetch; the SDK client needs real localhost HTTP.
@@ -18,16 +19,25 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-async function start(transport?: Transport): Promise<{ http: HttpMcpServer; snapshotDir: string }> {
+async function start(
+  transport?: Transport,
+  extra: { tools?: GtfaTool[]; version?: string; idleExit?: IdleExitOptions; log?: (message: string) => void } = {},
+): Promise<{ http: HttpMcpServer; snapshotDir: string }> {
   const snapshotDir = mkdtempSync(join(tmpdir(), 'gtfa-http-'));
+  const effective = transport ?? (async req => req.method === 'HEAD'
+    ? { status: 200, headers: {}, body: '' }
+    : { status: 200, headers: {}, body: sgBody });
   const http = await startHttpMcpServer({
     port: 0,
+    transport: effective,
+    ...(extra.tools ? { tools: extra.tools } : {}),
+    ...(extra.version ? { version: extra.version } : {}),
+    ...(extra.idleExit ? { idleExit: extra.idleExit } : {}),
+    ...(extra.log ? { log: extra.log } : {}),
     createMcpServer: () => createServer({
       snapshotDir,
       minIntervalMs: 0,
-      transport: transport ?? (async req => req.method === 'HEAD'
-        ? { status: 200, headers: {}, body: '' }
-        : { status: 200, headers: {}, body: sgBody }),
+      transport: effective,
     }),
   });
   cleanups.push(async () => { await http.close(); rmSync(snapshotDir, { recursive: true, force: true }); });
@@ -62,6 +72,149 @@ describe('Streamable HTTP MCP transport', () => {
     const probe = await realFetch(`http://127.0.0.1:${http.port}/`, { headers: { 'x-apify-container-server-readiness-probe': '1' } });
     expect(probe.status).toBe(200);
     expect(await probe.text()).toContain('Readiness probe OK');
+  });
+
+  it('serves GET /health as cheap JSON without calling Google', async () => {
+    const transport = vi.fn<Transport>(async () => ({ status: 200, headers: {}, body: '' }));
+    const { http } = await start(transport, { version: '9.9.9' });
+    const response = await realFetch(`http://127.0.0.1:${http.port}/health`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, version: '9.9.9' });
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('relays only https://trends.google.com requests and passes the response through', async () => {
+    const calls: { url: string; method?: string; timeoutMs: number }[] = [];
+    const transport = vi.fn<Transport>(async request => {
+      calls.push({ url: request.url, method: request.method, timeoutMs: request.timeoutMs });
+      return { status: 200, headers: { 'x-actor': 'yes' }, body: '<html>relayed</html>' };
+    });
+    const logs: string[] = [];
+    const { http } = await start(transport, { log: message => logs.push(message) });
+    const relay = (body: unknown) => realFetch(`http://127.0.0.1:${http.port}/egress/fetch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    for (const url of ['https://evil.test/steal', 'http://trends.google.com/trends/', 'https://trends.google.com.evil.test/']) {
+      const rejected = await relay({ url, headers: {}, timeoutMs: 5000 });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toEqual({ error: { code: 'INVALID_INPUT', message: expect.any(String) } });
+    }
+    expect(transport).not.toHaveBeenCalled();
+
+    const accepted = await relay({
+      url: 'https://trends.google.com/trends/api/explore?hl=en-US&q=secret',
+      method: 'GET',
+      headers: { accept: 'application/json', 'x-secret': 'do-not-log' },
+      timeoutMs: 999_999,
+    });
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual({
+      status: 200,
+      headers: { 'x-actor': 'yes' },
+      body: '<html>relayed</html>',
+    });
+    expect(calls).toEqual([{ url: 'https://trends.google.com/trends/api/explore?hl=en-US&q=secret', method: 'GET', timeoutMs: 60_000 }]);
+    expect(logs.join('\n')).toContain('Relay GET /trends/api/explore');
+    for (const secret of ['hl=en-US', 'q=secret', 'do-not-log', '<html>relayed</html>']) {
+      expect(logs.join('\n')).not.toContain(secret);
+    }
+  });
+
+  it('runs shared tool definitions at POST /tools/{name}', async () => {
+    const tool = {
+      name: 'trends_now',
+      description: 'test',
+      inputSchema: {},
+      execute: vi.fn(async (input: unknown) => ({ ok: true, status: 'ok', received: input })),
+    } as unknown as GtfaTool;
+    const failing = {
+      name: 'trends_ask',
+      description: 'test',
+      inputSchema: {},
+      execute: vi.fn(async () => ({ ok: false, error: { code: 'INVALID_INPUT', message: 'bad input' } })),
+    } as unknown as GtfaTool;
+    const { http } = await start(undefined, { tools: [tool, failing] });
+    const call = (name: string) => realFetch(`http://127.0.0.1:${http.port}/tools/${name}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geos: ['US'] }),
+    });
+
+    const ok = await call('trends_now');
+    expect(await ok.json()).toEqual({ ok: true, result: { ok: true, status: 'ok', received: { geos: ['US'] } } });
+    const bad = await call('trends_ask');
+    expect(await bad.json()).toEqual({ ok: false, error: { code: 'INVALID_INPUT', message: 'bad input' } });
+
+    const missing = await call('nope');
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: { code: 'INVALID_INPUT', message: expect.stringContaining('Unknown tool') } });
+  });
+
+  it('exits Standby after the idle window with no in-flight requests', () => {
+    let now = 0;
+    let queued: (() => void) | undefined;
+    const exit = vi.fn();
+    const log = vi.fn();
+    const idle = new IdleExitController({
+      enabled: true,
+      timeoutMs: 100,
+      now: () => now,
+      schedule: callback => { queued = callback; return 1; },
+      cancel: () => { queued = undefined; },
+      exit,
+      log,
+    });
+    idle.start();
+    expect(queued).toBeTypeOf('function');
+    now = 40;
+    idle.enter();
+    expect(queued).toBeUndefined();
+    now = 80;
+    idle.leave();
+    expect(queued).toBeTypeOf('function');
+    now = 120;
+    queued!();
+    expect(exit).not.toHaveBeenCalled();
+    now = 200;
+    queued!();
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/No requests for .*exiting the Standby Actor/));
+    idle.stop();
+  });
+
+  it('wires the idle exit controller into the HTTP server', async () => {
+    let now = 0;
+    let queued: (() => void) | undefined;
+    const exit = vi.fn();
+    const { http } = await start(undefined, {
+      idleExit: {
+        enabled: true,
+        timeoutMs: 100,
+        now: () => now,
+        schedule: callback => { queued = callback; return 1; },
+        cancel: () => { queued = undefined; },
+        exit,
+        log: () => {},
+      },
+    });
+    expect(http.port).toBeGreaterThan(0);
+    expect(queued).toBeTypeOf('function');
+    now = 200;
+    queued!();
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule an exit when idle exit is disabled', () => {
+    const exit = vi.fn();
+    const schedule = vi.fn();
+    const idle = new IdleExitController({ enabled: false, timeoutMs: 100, exit, schedule });
+    idle.start();
+    idle.leave();
+    expect(schedule).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown session and non-MCP paths', async () => {

@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-326%20passed-22c55e?style=flat-square" alt="326 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-340%20passed-22c55e?style=flat-square" alt="340 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -92,27 +92,26 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```
 
-After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**; if the bundle shows Off, switch it on. The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library. There is no MCP server, no `gtfa` CLI subprocess, and no Actor endpoint. A bundled `gtfa` skill tells the agent when to use each tool and how to report `no_data` / `blocked` honestly.
+After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**; if the bundle shows Off, switch it on. The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library. By default there is no MCP server, no `gtfa` CLI subprocess, and no Actor endpoint; `apify` egress does call your own Actor. A bundled `gtfa` skill tells the agent when to use each tool and how to report `no_data` / `blocked` honestly.
 
-Configure egress (`local` or `apify`), the Apify token, default geo, the proxy group and country, baselines, and snapshot cache; choices use selects, segmented controls, and toggles, and changes apply live. Under Apify, the settings page shows this cycle's usage (plan, USD, residential GB) and a **Test connection** button for the saved egress; both run on the Host, so the token never reaches the browser. The token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
+Configure egress (`local` or `apify`), the Apify token, your Actor, default geo, baselines, and snapshot cache; choices use selects, segmented controls, and toggles, and changes apply live. Under Apify, the settings page shows this cycle's usage (plan, USD, residential GB), a token field, and an **Actor** select with the latest build status. **Test connection** makes one request through the saved egress; usage, Actor listing, deploy, and test all run on the Host, so the token never reaches the browser. The token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
 
-`local` sends requests from the machine running dsh (`HTTPS_PROXY` is still honored). `apify` uses the Apify proxy without the Actor, fetches the proxy password once from the Apify API, and rotates the session on HTTP 429 or a Google challenge. Apify traffic is billed per GB from your Apify credits.
+`local` sends requests from the machine running dsh (`HTTPS_PROXY` is still honored). `apify` sends each request to the `google-trends-for-agent` Actor in **your own Apify account** at `/egress/fetch`; the Actor performs it with its on-platform residential proxy and rotates the proxy session on HTTP 429 or a Google challenge. This works on the Free plan because the proxy is used inside the Actor. Apify Residential traffic is billed per GB from your Apify credits.
 
-Apify egress needs a paid Apify plan because this is external proxy access; sign up at [console.apify.com/sign-up](https://console.apify.com/sign-up).
+Deploy the Actor once, then pick it in the select:
+
+- **One click:** in **Plugins → Google Trends → Configure → Apify**, choose **Deploy to my Apify account →**. Wait for **Building… (about 2–4 min)** and a `succeeded` build status; the new Actor is then selected automatically.
+- **Manual:** in Apify Console → Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent` (branch `main`), then enable **Standby** under Settings → Server. Or clone the repository and run `apify push`.
+
+If `apify` egress has no Actor selected, the tools return a clear `INVALID_INPUT` error instead of calling Google.
 
 ## Deploy to Apify
 
-[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](https://console.apify.com/actors/new)
+[![Deploy to Apify](https://img.shields.io/badge/Deploy%20to-Apify-FF9012?style=for-the-badge&logo=apify&logoColor=white)](#deploy-to-apify)
 
-The Actor runs this MCP server in **Standby mode** over **Streamable HTTP** and sends Google Trends requests through an **Apify Residential proxy in the US** by default. It is the remote path for agents that cannot run local processes or reach `localhost`.
+The Actor runs the MCP server in **Standby mode** over **Streamable HTTP** and sends Google Trends requests through an **Apify Residential proxy in the US** by default. It is the remote path for agents that cannot run local processes, and the egress relay for the dsh plugin's `apify` mode; both work on the Free plan.
 
-From this repository:
-
-```sh
-apify push
-```
-
-Then give the client the Standby URL and an Apify API token:
+Deploy it with the one-click button in the plugin (see above), by linking `https://github.com/meka-im/google-trends-for-agent` (branch `main`) to a new Actor in Apify Console and enabling **Standby** under Settings → Server, or with `apify push` from a clone. Then give an MCP client the Standby URL and an Apify API token:
 
 ```text
 https://<user>--google-trends-for-agent.apify.actor/mcp
@@ -132,7 +131,9 @@ Authorization: Bearer APIFY_TOKEN
 
 The hostname uses your Apify username with dots replaced by hyphens (for example, `meka.im` becomes `meka-im`, so `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The Actor console also shows the exact Standby URL.
 
-The Actor charges nothing. Apify Residential proxy traffic is billed per GB from your Apify credits at your plan's proxy rate; see the Apify Console for current pricing. Keep calls light: `trends_now` over many countries consumes more proxy traffic than a single `trends_ask`. Actor configuration and Store notes live in [`.actor/README.md`](.actor/README.md).
+The Actor also serves a plain HTTP API on the same host: `POST /egress/fetch` (Google Trends relay for the plugin), `POST /tools/{name}` (the four tools), `GET /health`, and `GET /mcp` (MCP). All use `Authorization: Bearer APIFY_TOKEN`. The Actor logs only the method and path, never query strings, headers, or bodies.
+
+The Actor charges nothing. Apify Residential proxy traffic is billed per GB from your Apify credits at your plan's proxy rate; see the Apify Console for current pricing. A single-tenant Standby run bills compute while idle, so the Actor exits after 60 s with no requests (`GTFA_IDLE_EXIT_SECS`). Keep calls light: `trends_now` over many countries consumes more proxy traffic than a single `trends_ask`. Actor configuration and Store notes live in [`.actor/README.md`](.actor/README.md).
 
 ## MCP tools
 
@@ -198,7 +199,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 326 tests
+npm test          # 340 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

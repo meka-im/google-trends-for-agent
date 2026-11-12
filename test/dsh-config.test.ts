@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import Schema from '@deepseek-ai/schemastery';
 import { Config, baselinesFromConfig, register, resolveGtfaSettings } from '../src/dsh.js';
 import { BUILTIN_ANCHOR_TERMS } from '../src/options.js';
-import { ApifyProxyUrlProvider, resolveApifyCredentials } from '../src/egress.js';
 import { createTools } from '../src/tools.js';
 import type { Transport } from '../src/transport.js';
 
@@ -49,13 +48,10 @@ describe('dsh Config schema', () => {
     expect(schema.dict.egress.meta.default).toBe('local');
     expect(schema.dict.apifyToken.meta.role).toBe('secret');
     expect(schema.dict.apifyToken.meta.default).toBeUndefined();
-    expect(schema.dict.apifyProxyGroup.meta.default).toBe('RESIDENTIAL');
-    expect(schema.dict.apifyProxyCountry.meta.default).toBe('US');
+    expect(schema.dict.apifyActor.meta.default).toBeUndefined();
     expect(schema.dict.geo.meta.default).toBe('US');
     expect(schema.dict.cache.meta.default).toBe(true);
     expect(values.egress.get()).toBe('local');
-    expect(values.apifyProxyGroup.get()).toBe('RESIDENTIAL');
-    expect(values.apifyProxyCountry.get()).toBe('US');
     expect(values.geo.get()).toBe('US');
     expect(values.cache.get()).toBe(true);
   });
@@ -64,12 +60,9 @@ describe('dsh Config schema', () => {
     expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "apify"/);
   });
 
-  it('accepts only the shared proxy modes and curated countries', () => {
-    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'auto' }) as never).apifyProxyGroup).toBe('auto');
-    expect(resolveGtfaSettings(Config!({ apifyProxyGroup: 'RESIDENTIAL' }) as never).apifyProxyGroup).toBe('RESIDENTIAL');
-    expect(() => Config!({ apifyProxyGroup: 'GOOGLE_SERP' } as never)).toThrow(/apifyProxyGroup/);
-    expect(resolveGtfaSettings(Config!({ apifyProxyCountry: 'GB' }) as never).apifyProxyCountry).toBe('GB');
-    expect(() => Config!({ apifyProxyCountry: 'XX' })).toThrow(/apifyProxyCountry/);
+  it('accepts and trims the Actor id, and leaves it unset by default', () => {
+    expect(resolveGtfaSettings(Config!({ apifyActor: ' actor-1 ' }) as never).apifyActor).toBe('actor-1');
+    expect(resolveGtfaSettings(Config!({}) as never).apifyActor).toBeUndefined();
   });
 
   it('accepts Worldwide (empty geo) and rejects unknown geos', () => {
@@ -105,8 +98,6 @@ describe('dsh Config schema', () => {
   it('unwraps volatile values into runtime defaults', () => {
     expect(resolveGtfaSettings(Config!({}) as never)).toEqual({
       egress: 'local',
-      apifyProxyGroup: 'RESIDENTIAL',
-      apifyProxyCountry: 'US',
       geo: 'US',
       cache: true,
       snapshotDir: '.gtfa/snapshots',
@@ -150,27 +141,7 @@ describe('dsh Config schema', () => {
   });
 });
 
-describe('Apify token resolution', () => {
-  it('prefers the configured token, then APIFY_TOKEN, then APIFY_PROXY_PASSWORD', () => {
-    vi.stubEnv('APIFY_TOKEN', 'env-token');
-    vi.stubEnv('APIFY_PROXY_PASSWORD', 'env-password');
-    expect(resolveApifyCredentials({ token: 'config-token' })).toEqual({ token: 'config-token' });
-    expect(resolveApifyCredentials()).toEqual({ token: 'env-token' });
-    vi.stubEnv('APIFY_TOKEN', '');
-    expect(resolveApifyCredentials()).toEqual({ proxyPassword: 'env-password' });
-    vi.stubEnv('APIFY_PROXY_PASSWORD', '');
-    expect(resolveApifyCredentials()).toEqual({});
-  });
-
-  it('builds the proxy URL for residential and automatic datacenter modes', async () => {
-    const residential = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'RESIDENTIAL', country: 'gb' });
-    expect(await residential.newUrl('s1')).toBe('http://groups-RESIDENTIAL,session-s1,country-GB:secret@proxy.apify.com:8000');
-    const automatic = new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto', country: 'us' });
-    expect(await automatic.newUrl('s2')).toBe('http://session-s2,country-US:secret@proxy.apify.com:8000');
-    expect(await new ApifyProxyUrlProvider({ proxyPassword: 'secret', group: 'auto' }).newUrl())
-      .toBe('http://country-US:secret@proxy.apify.com:8000');
-  });
-
+describe('Apify Actor transport', () => {
   it('never puts the configured token in a tool envelope or an error message', async () => {
     const token = 'super-secret-apify-token';
     const fetchMock = vi.fn(async () => new Response('nope', { status: 401 }));
@@ -178,8 +149,11 @@ describe('Apify token resolution', () => {
     const tools = await (async () => {
       const registered: { execute: (args: unknown, exec: { signal?: AbortSignal }) => Promise<Record<string, unknown>> }[] = [];
       const ctx = { tools: { register: (definition: unknown) => registered.push(definition as never) } };
-      await register(ctx, { egress: 'apify', apifyToken: token, chartDir: null }, {
-        egress: { fetch: fetchMock as unknown as typeof fetch },
+      await register(ctx, { egress: 'apify', apifyToken: token, apifyActor: 'actor-1', chartDir: null }, {
+        apify: {
+          fetch: fetchMock as unknown as typeof fetch,
+          resolveStandbyUrl: async () => 'https://actor.test',
+        },
         minIntervalMs: 0,
       });
       return registered;
@@ -201,7 +175,7 @@ describe('dsh Config as the browser settings form sees it', () => {
     const schema = browserSchema();
     expect(() => schema({ egress: 'local' })).not.toThrow();
     expect(() => schema({
-      egress: 'apify', apifyProxyGroup: 'auto', apifyProxyCountry: 'GB', geo: '', anchor: 'gpts', cache: false, charts: false,
+      egress: 'apify', apifyActor: 'actor-1', geo: '', anchor: 'gpts', cache: false, charts: false,
       baselines: { anchors: [{ term: 'genie', geo: 'GB', dailySearches: 120, tolerance: 0.2 }], windowAnchors: { short: 'genie', long: 'gpts' } },
     })).not.toThrow();
   });

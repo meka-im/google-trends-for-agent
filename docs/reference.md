@@ -47,16 +47,15 @@ Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the 
 
 ## dsh plugin
 
-`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). pnpm keys git builds by commit, so the first run prints that key (it changes when main moves), add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. It does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`.
+`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). pnpm keys git builds by commit, so the first run prints that key (it changes when main moves), add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; `apify` egress calls your own Actor.
 
 Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `apify` uses the Apify proxy directly from the core library. |
-| `apifyToken` | unset | Apify API token saved in the profile's `cordis.patch.yml` (hidden in the UI, never logged or returned). When empty, `APIFY_TOKEN` then `APIFY_PROXY_PASSWORD` are used. |
-| `apifyProxyGroup` | `RESIDENTIAL` | `RESIDENTIAL` for residential IPs, or `auto` for Apify's automatic datacenter selection. Auto omits the `groups` parameter. |
-| `apifyProxyCountry` | `US` | Apify proxy country from the built-in list. |
+| `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `apify` relays each request through your own `google-trends-for-agent` Actor. |
+| `apifyToken` | unset | Apify API token saved in the profile's `cordis.patch.yml` (hidden in the UI, never logged or returned). When empty, `APIFY_TOKEN` is used. |
+| `apifyActor` | unset | Actor id of your `google-trends-for-agent` Actor (Standby); required for `apify` egress. Pick or deploy one on the settings page. |
 | `geo` | `US` | Default geo for `trends_ask`, `trends_compare`, and `trends_snapshot`; empty string means Worldwide, which has no built-in calibration and returns null traffic. |
 | `anchor` | automatic | Optional fixed anchor for `validate` / `trends_snapshot`; blank uses sudoku for short windows and gpts otherwise. |
 | `baselines` | built-in | Inline anchors `{ term, geo, dailySearches, tolerance? }` plus optional `windowAnchors.short` / `.long`; validated like a version 2 baselines file. |
@@ -67,16 +66,22 @@ Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (s
 
 Every setting with a fixed set of values is a select, segmented control, or switch; only the token, a new anchor term, `dailySearches`, and the two directories are typed inputs.
 
-The settings page also calls two owner-authenticated Host routes through dsh's Connection service; the browser never receives the Apify token:
+`apify` egress works on the Apify Free plan because the residential proxy runs **inside the Actor**, not from dsh. Deploy the Actor once: use **Deploy to my Apify account →** on the settings page, or in Apify Console create an Actor linked to `https://github.com/meka-im/google-trends-for-agent` (branch `main`) with **Standby** enabled (Settings → Server), or run `apify push` from a clone. Then pick it in the **Actor** select.
+
+The settings page also calls four owner-authenticated Host routes through dsh's Connection service; the browser never receives the Apify token:
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. The saved config token wins, then `APIFY_TOKEN` (`APIFY_PROXY_PASSWORD` is a proxy password, not an API token). |
-| `/api/gtfa.test-connection` | `POST` | Makes one reachability request for the saved egress: Google Trends for `local`, or `http://api.apify.com/v2/browser-info` through the saved Apify proxy settings. |
+| `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. The saved config token wins, then `APIFY_TOKEN`. |
+| `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with Standby URL and latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
+| `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby enabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
+| `/api/gtfa.test-connection` | `POST` | Makes one reachability request for the saved egress: `local` calls Google Trends directly; `apify` relays `GET https://trends.google.com/trends/` through `/egress/fetch`. Returns `{ ok, egress, status, latencyMs, actorId }`; codes `no-token` / `no-actor` / `invalid-token` / `network` / `http`. |
 
-Both routes require dsh's authenticated browser session and are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, status/latency, and at most the proxy's public IP/country; account identity, the raw `/users/me` object, and the token are dropped Host-side.
+These routes require dsh's authenticated browser session and are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, Actor metadata, and status/latency; account identity, the raw `/users/me` object, and the token are dropped Host-side.
 
-`egress: apify` resolves credentials in order: the configured token, `APIFY_TOKEN`, then `APIFY_PROXY_PASSWORD`. With a token it fetches `data.proxy.password` once from `GET https://api.apify.com/v2/users/me`; with only `APIFY_PROXY_PASSWORD` it uses that directly. `RESIDENTIAL` builds the username `groups-RESIDENTIAL,session-<id>,country-<CC>`; `auto` omits `groups` (`session-<id>,country-<CC>`), per Apify's username parameters. Setting `APIFY_TOKEN` and leaving the UI token blank keeps the token out of the profile, and `!!js process.env.APIFY_TOKEN` is unnecessary. The proxy URL is passed explicitly to the transport (no `process.env` mutation) and the session id rotates on HTTP 429 or a Google challenge. Missing credentials return a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
+`egress: apify` resolves the token from saved `apifyToken`, then `APIFY_TOKEN`, and needs `apifyActor`. It POSTs each `TransportRequest` to `${standbyUrl}/egress/fetch` with `Authorization: Bearer <token>`; the Actor runs it with its on-platform residential proxy and rotates the proxy session on HTTP 429 or a Google challenge. 401/403 map to `INVALID_INPUT` ("Apify rejected the token"), 404 / no Actor to `INVALID_INPUT` ("Select or deploy…"), and 429/5xx/network to retryable `NETWORK_ERROR`; the first request allows about 120 s for a cold Standby start. Missing token or Actor returns a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure, and the token is never included in errors. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
+
+The Actor's HTTP API (`/egress/fetch`, `/tools/{name}`, `/health`, `/mcp`) also uses `Authorization: Bearer <token>`. A single-tenant Standby run bills compute while idle, so the Actor exits after 60 s without in-flight requests (`GTFA_IDLE_EXIT_SECS`).
 
 ## Output contract
 

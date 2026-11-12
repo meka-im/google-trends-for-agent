@@ -1,8 +1,8 @@
 {
   "actorSpecification": 1,
   "name": "google-trends-for-agent",
-  "title": "Google Trends MCP for AI Agents",
-  "description": "Remote MCP server for Google Trends search-interest signals, with calibrated searches/day estimates and explicit error codes. Streamable HTTP, Standby mode, US residential egress.",
+  "title": "Google Trends for AI Agents (MCP + HTTP)",
+  "description": "Google Trends search-interest signals for AI agents: MCP at /mcp plus plain HTTP endpoints (/egress/fetch, /tools/{name}, /health) in Standby mode, using the Actor's on-platform residential proxy.",
   "version": "0.1",
   "meta": {
     "generatedBy": "DeepSeek Harness with deepseek-v4.1-flash"
