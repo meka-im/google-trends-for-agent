@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-238%20passed-22c55e?style=flat-square" alt="238 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-244%20passed-22c55e?style=flat-square" alt="244 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -143,26 +143,30 @@ Full flags and examples: [reference](docs/reference.md#cli-surface).
 
 ## Anchors and how the numbers work
 
-`snapshot` puts the term and one anchor on a shared 0–100 scale, then calibrates with `traffic = round(score ÷ anchorLevel × dailySearches)`. The anchor is automatic by window; `--anchor` / MCP `anchor` forces one for every window.
+`snapshot` and `ask --validate` put the term and an anchor on one shared 0–100 scale, then calibrate with `traffic = round(score ÷ anchorLevel × dailySearches)`. The anchor is picked by time window:
 
-| Window | Anchor | Baseline | How derived |
+| Window | Anchor | US baseline | Why this anchor |
 | --- | --- | --- | --- |
-| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | **9,900/day** US, ±50% | 7-day shared-scale ratio sudoku/gpts = 18.035 → 18.035 × 550 ≈ 9,919; thesaurus cross-check ≈9,857. Both round to ≈9,900. |
-| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | **550/day** US, ±50% | About 16.5k/month; the long-window ruler. |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **9,900/day**, ±50% | Searched around the clock (99.4% of 24h points nonzero), so short windows calibrate. `gpts` is too sparse there. |
+| `now 7-d` and longer | `gpts` | **550/day**, ±50% | The reference ruler that every other baseline is derived from. |
 
-Why 9,900: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 550 ≈ 9,919. Cross-check through thesaurus: thesaurus/gpts 7.341 × 550 ≈ 4,038, then sudoku/thesaurus 2.441 × 4,038 ≈ 9,857. Both round to ≈9,900, so 1-hour/1-day and 7-day estimates sit on the same ruler (`gpts = 550`). Alternates: thesaurus ≈4,000/day is closer to small AI terms but has zero points at night; chairs ≈22,500/day is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Methods: [Krazydad on comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
+**How 9,900 is derived:** on a 7-day shared scale `sudoku` averages 18.035 × `gpts`, so 18.035 × 550 ≈ 9,919. Going through `thesaurus` (7.341 × 550 ≈ 4,038, then × 2.441 ≈ 9,857) lands in the same place, so short and long windows use one ruler. Alternates and sources: [reference](docs/reference.md#calibration-and-the-anchor).
 
-`baselines.json` can override or add anchors. Version 2 only (`version: 1` is rejected), and every `windowAnchors` term must exist in `anchors` or the built-ins:
+- `--anchor` / MCP `anchor` forces one anchor for both windows. Every snapshot reports `anchor` (requested window) and `anchor7d` (the 7-day check) with the term and baseline used.
+- Override or add baselines with a version 2 `baselines.json` (template: [examples/baselines.json](examples/baselines.json)):
 
-```sh
-# baselines.json: override sudoku, keep the automatic short/long mapping
-{"version":2,"anchors":[{"term":"sudoku","geo":"US","dailySearches":9900},{"term":"gpts","geo":"US","dailySearches":550}],"windowAnchors":{"short":"sudoku","long":"gpts"}}
-GTFA_BASELINES=/path/to/baselines.json gtfa snapshot Sora --json
+```json
+{ "version": 2,
+  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 }],
+  "windowAnchors": { "short": "sudoku", "long": "gpts" } }
 ```
 
-- Numeric traffic stays `null` unless the anchor has a non-gap point, `anchorLevel ≥ 1`, and at least 25% of non-gap points are nonzero. The denser `sudoku` anchor keeps short windows from failing that gate.
-- These are anchor-based **estimates**, not measured Google search volume. When the request is not `now 7-d`, `traffic7d` / `chart7d` come from a separate 7-day fetch that uses the 7-day anchor (`gpts`) unless you passed an explicit anchor; `anchor7d` reports that window's baseline. For `now 7-d`, they reuse the primary snapshot and chart.
-- Failures stay explicit: `ok`, `status`, and `error.code` replace invented numbers, and partial results are reported rather than hidden.
+```sh
+GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp reads it too
+```
+
+- Numeric traffic stays `null` unless the anchor has a non-gap point, `anchorLevel ≥ 1`, and at least 25% of non-gap points are nonzero.
+- These are anchor-based **estimates**, not measured Google search volume. Failures stay explicit: `ok`, `status`, and `error.code` replace invented numbers.
 
 ## Docs
 
@@ -178,7 +182,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 238 tests
+npm test          # 244 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

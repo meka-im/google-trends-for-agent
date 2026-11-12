@@ -28,6 +28,7 @@ export function defaultAnchorFor(time: string, baselines?: Baselines): string {
 }
 export function validateAnchor(a: Anchor): Anchor {
   if (!a || typeof a.term !== 'string' || !a.term.trim() || !Number.isFinite(a.dailySearches) || (a.dailySearches ?? 0) <= 0 || typeof a.geo !== 'string' || !a.geo.trim()) throw new Error('invalid baseline anchor');
+  if (a.tolerance !== undefined && (typeof a.tolerance !== 'number' || !Number.isFinite(a.tolerance) || a.tolerance < 0 || a.tolerance > 1)) throw new Error('tolerance must be a number from 0 to 1');
   return a;
 }
 /** Daily searches for an anchor. */

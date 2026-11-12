@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -331,6 +331,31 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(e.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550 });
   });
 
+  it('honors a long windowAnchors mapping and lets an explicit anchor beat both mappings', async () => {
+    const baselines = { version: 2 as const, anchors: [
+      { term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 },
+      { term: 'thesaurus', dailySearches: 4000, geo: 'US', tolerance: 0.5 },
+    ], windowAnchors: { short: 'chairs', long: 'thesaurus' } };
+    const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(input.timeRange === 'now 7-d' ? weekFixture() : fixture()));
+    const auto = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store: new SnapshotStore(temp()), query: query as never, baselines });
+    const autoCalls = query.mock.calls.map(([input]) => input as { timeRange?: string; queries: string[] });
+    expect(autoCalls.find(c => c.timeRange === 'now 1-d')?.queries).toEqual(['Astra', 'chairs']);
+    expect(autoCalls.find(c => c.timeRange === 'now 7-d')?.queries).toEqual(['Astra', 'thesaurus']);
+    const autoEnvelope = await trafficSnapshotEnvelope(auto.snapshot, { cached: false, ageMin: 0, chartDir: null, week: auto.week, baselines });
+    expect(autoEnvelope.anchor7d).toMatchObject({ term: 'thesaurus', dailySearches: 4000 });
+    query.mockClear();
+    await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store: new SnapshotStore(temp()), query: query as never, baselines, anchor: 'gpts' });
+    expect(query.mock.calls.map(([input]) => (input as { queries: string[] }).queries)).toEqual([['Astra', 'gpts'], ['Astra', 'gpts']]);
+  });
+
+  it('keeps an explicit anchor in the baseline-only anchor7d when the week snapshot is missing', async () => {
+    const baselines = { version: 2 as const, anchors: [{ term: 'chairs', dailySearches: 22500, geo: 'US', tolerance: 0.5 }] };
+    const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, weekError: 'upstream 503', weekAnchor: 'chairs', baselines });
+    expect(e.anchor7d).toMatchObject({ term: 'chairs', dailySearches: 22500, level: null, ratio: null });
+    const auto = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, weekError: 'upstream 503' });
+    expect(auto.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550, level: null, ratio: null });
+  });
+
   it('rejects an invalid IANA time zone before querying upstream', async () => {
     const store = new SnapshotStore(temp()), query = vi.fn();
     await expect(fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never, timeZone: 'Not/AZone' }))
@@ -388,7 +413,7 @@ describe('trends_snapshot schema and CLI', () => {
     expect((withSvg.structuredContent as { chart7d: { svg: string } }).chart7d.svg).toContain('<svg');
   });
 
-  it('forces the server anchor override for both windows even when the call names another anchor', async () => {
+  it('uses the server-wide anchor for both windows when the call omits anchor', async () => {
     const storeDir = temp(), chartDir = temp();
     const day = fixture(), week = weekFixture(), now = new Date().toISOString();
     day.fetchedAt = now; week.fetchedAt = now;
@@ -397,9 +422,22 @@ describe('trends_snapshot schema and CLI', () => {
     await new SnapshotStore(storeDir).save(week);
     const baselines: Baselines = { version: 2, anchors: [{ term: 'chairs', geo: 'US', dailySearches: 22500, tolerance: 0.5 }] };
     const client = await connect({ snapshotDir: storeDir, chartDir, anchor: 'chairs', baselines });
-    const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra', anchor: 'gpts' } });
+    const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra' } });
     expect(r.isError).not.toBe(true);
     expect(r.structuredContent).toMatchObject({ anchor: { term: 'chairs', dailySearches: 22500 }, anchor7d: { term: 'chairs', dailySearches: 22500 }, traffic: { average: 13050 }, meta: { cached: true } });
+  });
+
+  it('lets a per-call anchor win over the server-wide anchor', async () => {
+    const storeDir = temp(), chartDir = temp();
+    const day = fixture(), week = weekFixture(), now = new Date().toISOString();
+    day.fetchedAt = now; week.fetchedAt = now;
+    day.anchor.term = 'gpts'; week.anchor.term = 'gpts';
+    await new SnapshotStore(storeDir).save(day);
+    await new SnapshotStore(storeDir).save(week);
+    const client = await connect({ snapshotDir: storeDir, chartDir, anchor: 'chairs' });
+    const r = await client.callTool({ name: 'trends_snapshot', arguments: { term: 'Astra', anchor: 'gpts' } });
+    expect(r.isError).not.toBe(true);
+    expect(r.structuredContent).toMatchObject({ anchor: { term: 'gpts', dailySearches: 550 }, anchor7d: { term: 'gpts', dailySearches: 550 }, meta: { cached: true } });
   });
 
   it('CLI snapshot --json emits the same envelope shape as MCP', async () => {
@@ -442,6 +480,33 @@ describe('trends_snapshot schema and CLI', () => {
     expect(fromEnv.code).toBe(0);
     expect(JSON.parse(fromEnv.stdout).chart.svg).toContain('Astra — searches/day (Asia/Shanghai)');
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('CLI snapshot loads GTFA_BASELINES and fails clearly on an invalid file', async () => {
+    const storeDir = temp(), chartDir = temp(), dir = temp();
+    const snap = fixture(), week = weekFixture(), now = new Date().toISOString();
+    snap.fetchedAt = now; week.fetchedAt = now;
+    await new SnapshotStore(storeDir).save(snap);
+    await new SnapshotStore(storeDir).save(week);
+    const good = join(dir, 'baselines.json'), bad = join(dir, 'v1.json');
+    writeFileSync(good, JSON.stringify({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 19800, tolerance: 0.5 }] }));
+    writeFileSync(bad, JSON.stringify({ version: 1, anchors: [{ term: 'gpts', geo: 'US', dailySearches: 550 }] }));
+    const previous = process.env.GTFA_BASELINES;
+    try {
+      process.env.GTFA_BASELINES = good;
+      const r = await runSnapshotCli(['Astra', '--json', '--store', storeDir, '--chart-dir', chartDir], { query: vi.fn() as never });
+      expect(r.code).toBe(0);
+      const out = JSON.parse(r.stdout);
+      expect(out.anchor).toMatchObject({ term: 'sudoku', dailySearches: 19800 });
+      expect(out.traffic.average).toBeGreaterThan(11000);
+      expect(out.anchor7d).toMatchObject({ term: 'gpts', dailySearches: 550 });
+      process.env.GTFA_BASELINES = bad;
+      const failed = await runSnapshotCli(['Astra', '--json', '--store', storeDir, '--chart-dir', chartDir], { query: vi.fn() as never });
+      expect(failed.code).not.toBe(0);
+      expect(failed.stdout + failed.stderr).toMatch(/GTFA_BASELINES: Invalid baselines:.*version 1/);
+    } finally {
+      if (previous === undefined) delete process.env.GTFA_BASELINES; else process.env.GTFA_BASELINES = previous;
+    }
   });
 
   it('CLI snapshot --tz rejects an invalid IANA zone with INVALID_INPUT', async () => {

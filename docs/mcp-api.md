@@ -366,11 +366,11 @@ published.est = round(popular.value / 100 × average)
 
 内建美国锚点有两个：`gpts` **550 次/日**（`now 7-d` 及以上）和 `sudoku` **9,900 次/日**（`now 1-H` / `now 4-H` / `now 1-d`），都使用 ±50% tolerance。9,900 的推导：7 天共享尺度 sudoku/gpts = 18.035 → 18.035 × 550 ≈ 9,919；thesaurus 交叉校验 thesaurus/gpts 7.341 × 550 ≈ 4,038，sudoku/thesaurus 2.441 × 4,038 ≈ 9,857，两者都四舍五入到 ≈9,900，因此短窗口与 7 天窗口在同一把尺子上（gpts=550）。备选：thesaurus ≈4,000/日（更接近小 AI 词，但夜间有零点）、chairs ≈22,500/日（100% 非零，但压扁极小的词）；过大的 weather / calculator / pizza 会压扁小词。方法参考 [Krazydad](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
 
-`examples/baselines.json` 是 version 2：`{"version":2,"anchors":[{term,geo,dailySearches,tolerance?}],"windowAnchors":{"short"?:string,"long"?:string}}`。用 `GTFA_BASELINES=/path/to/baselines.json` 覆盖 CLI（`ask --validate` / `snapshot`）、`gtfa-mcp`（stdio 与 `--http`）和 Actor；库调用可用 `baselines` 传入同结构。同 term+geo 的用户锚点优先于内建；`windowAnchors` 的词必须存在于 `anchors` 或内建锚点中。version 1 会被拒绝，无效文件会明确报错而不是静默回退。显式 `anchor` 会同时覆盖主窗口和 7d 窗口。
+`examples/baselines.json` 是 version 2：`{"version":2,"anchors":[{term,geo,dailySearches,tolerance?}],"windowAnchors":{"short"?:string,"long"?:string}}`。用 `GTFA_BASELINES=/path/to/baselines.json` 覆盖 CLI（`ask --validate` / `snapshot`）、`gtfa-mcp`（stdio 与 `--http`）和 Actor；库调用可用 `baselines` 传入同结构。同 term+geo 的用户锚点优先于内建；`windowAnchors` 的词必须存在于 `anchors` 或内建锚点中。version 1 会被拒绝，无效文件会明确报错而不是静默回退。显式 `anchor` 会同时覆盖主窗口和 7d 窗口；单次调用的 `anchor` 参数优先于 Actor 的服务级锚点设置。
 
 **没有匹配 `geo + anchor` 的标定时**（例如 `geo: "JP"`），或**锚点可靠性门失败时**，`traffic` / `traffic7d` 的数值字段和 `estDaily` 全部为 `null`，`anchor.note` / `meta.warnings` 会说明原因，但 `summary`、`series`、`chart`、`chart7d` 仍会返回。`trends_ask`（`validate: true`）使用完全相同的公式与门，`verdict.anchor` 会显示 `dailySearches`，`verdict.traffic` 为日频。
 
-**English summary.** Anchors are automatic: `sudoku` (US 9,900/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 550/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. An explicit `anchor` / `--anchor` / Actor anchor override wins for both the requested and 7-day windows. `anchor7d` reports the 7-day baseline.
+**English summary.** Anchors are automatic: `sudoku` (US 9,900/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 550/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
 
 **注意事项：**
 

@@ -124,7 +124,7 @@ export interface ServerOptions extends ClientOptions {
   baselines?: Baselines;
   /** Default geo for trends_ask/trends_compare/trends_snapshot (default US). */
   defaultGeo?: string;
-  /** Forced anchor override for validate/trends_snapshot; unset = automatic by window. */
+  /** Server-wide anchor for validate/trends_snapshot (a per-call trends_snapshot anchor still wins); unset = automatic by window. */
   anchor?: string;
 }
 /** Creates an unconnected server. options.transport injects HTTP, not MCP, transport. */
@@ -164,7 +164,7 @@ export function createServer(options: ServerOptions = {}): McpServer {
   server.registerTool('trends_snapshot', { description: 'Calibrated searches/day snapshot for one term against a shared-scale anchor. ' + SNAPSHOT_DOC + guidance, inputSchema: { term: z.string().trim().min(1).max(100), geo: z.string().default(defaultGeo), time: time.default(DEFAULTS.time), anchor: z.string().trim().min(1).max(100).optional(), fresh: z.boolean().default(false), svg: z.boolean().default(false), tz: z.string().trim().min(1).max(100).optional() } }, async ({ term, geo, time, anchor, fresh, svg, tz }) => {
     const store = storeFor(), filter = { geo, time, category: DEFAULTS.category, property: DEFAULTS.property };
     try {
-      const forcedAnchor = anchorOverride ?? anchor;
+      const forcedAnchor = anchor ?? anchorOverride;
       const a = await fetchTrafficSnapshot(term, { filter, store, anchor: forcedAnchor, baselines: options.baselines, refresh: fresh ? 'always' : undefined, query, timeZone: tz });
       return response(await trafficSnapshotEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, baselines: options.baselines, chartDir: options.chartDir, week: a.week, weekAnchor: forcedAnchor, svg, timeZone: tz, ...(a.weekError ? { weekError: a.weekError } : {}) }));
     } catch (e) {

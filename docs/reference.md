@@ -14,18 +14,18 @@ The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 | `gtfa now` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
 | `gtfa doctor` | `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `npx gtfa` with `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
-npx gtfa ask "nano banana" --validate --diff --json
-cat leads.json | npx gtfa ask --validate --from - --json
-npx gtfa snapshot Sora --geo US --svg --tz Asia/Shanghai --fresh --json
-npx gtfa compare coffee tea --geo US --time "today 3-m" --pretty
-npx gtfa --query coffee --query tea --geo US --json
-npx gtfa now --geo SG --hours 24 --limit 20 --pretty
-npx gtfa now --list-geos
-npx gtfa doctor --json
-npx gtfa help snapshot
+gtfa ask "nano banana" --validate --diff --json
+cat leads.json | gtfa ask --validate --from - --json
+gtfa snapshot Sora --geo US --svg --tz Asia/Shanghai --fresh --json
+gtfa compare coffee tea --geo US --time "today 3-m" --pretty
+gtfa --query coffee --query tea --geo US --json
+gtfa now --geo SG --hours 24 --limit 20 --pretty
+gtfa now --list-geos
+gtfa doctor --json
+gtfa help snapshot
 ```
 
 `--json` selects the agent envelope. Without it, `snapshot` prints human-readable summary lines, and `ask --validate` prints a compact table (unless `--diff`, which implies JSON). `compare`/default mode prints JSON by default, but the agent envelope requires `--json`; `now` prints raw JSON unless `--json` is set. Help prints plain text on an interactive TTY and JSON when piped or with `--json`. Diagnostics go to stderr.
@@ -106,7 +106,7 @@ The built-in baselines are in [examples/baselines.json](../examples/baselines.js
 }
 ```
 
-Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot), `gtfa-mcp` (stdio or `--http`), and the Actor; library callers pass `baselines`. User anchors win by term + geo, then the built-ins apply. Every `windowAnchors` term must exist in `anchors` or the built-ins. Version 1 is rejected, and an invalid file fails with a clear error instead of falling back. An explicit `--anchor` / MCP `anchor` / Actor anchor override wins for every window; otherwise the primary window chooses its automatic anchor and the extra `now 7-d` fetch uses the 7-day anchor. `anchor` and `anchor7d` report each window's term and baseline.
+Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot), `gtfa-mcp` (stdio or `--http`), and the Actor; library callers pass `baselines`. User anchors win by term + geo, then the built-ins apply. Every `windowAnchors` term must exist in `anchors` or the built-ins. Version 1 is rejected, and an invalid file fails with a clear error instead of falling back. An explicit `--anchor` / MCP `anchor` wins for every window (a per-call MCP `anchor` beats the Actor's server-wide anchor input); otherwise the primary window chooses its automatic anchor and the extra `now 7-d` fetch uses the 7-day anchor. `anchor` and `anchor7d` report each window's term and baseline.
 
 `traffic.low` / `traffic.high` apply that tolerance to the average. Numeric traffic is `null` when no matching geo + anchor baseline exists, or when the anchor reliability gate fails:
 

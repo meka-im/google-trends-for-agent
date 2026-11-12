@@ -57,6 +57,22 @@ describe('baselines file validation', () => {
       .rejects.toThrow(/not in anchors or the built-in anchors/);
   });
 
+  it('rejects malformed, negative, and excessive tolerances', async () => {
+    for (const tolerance of ['oops', -0.1, 1.5]) {
+      await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 9900, tolerance }] })))
+        .rejects.toThrow(/tolerance must be a number from 0 to 1/);
+    }
+    await expect(loadBaselines(write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 9900, tolerance: 0 }] }))).resolves.toBeTruthy();
+  });
+
+  it('loads the shipped examples/baselines.json', async () => {
+    const b = await loadBaselines('examples/baselines.json');
+    expect(findAnchor(b, 'sudoku', 'US')).toMatchObject({ dailySearches: 9900 });
+    expect(findAnchor(b, 'gpts', 'US')).toMatchObject({ dailySearches: 550 });
+    expect(defaultAnchorFor('now 1-d', b)).toBe('sudoku');
+    expect(defaultAnchorFor('now 7-d', b)).toBe('gpts');
+  });
+
   it('loads GTFA_BASELINES and reports invalid files clearly', async () => {
     const path = write({ version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 12345 }] });
     process.env.GTFA_BASELINES = path;

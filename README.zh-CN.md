@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-238%20passed-22c55e?style=flat-square" alt="238 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-244%20passed-22c55e?style=flat-square" alt="244 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -143,26 +143,30 @@ Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中
 
 ## 锚点与数字如何计算
 
-`snapshot` 将词与一个锚点放在同一个 0–100 尺度上比较，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 校准。锚点按窗口自动选择；`--anchor` / MCP `anchor` 可强制所有窗口使用同一个锚点。
+`snapshot` 和 `ask --validate` 把词和一个锚点放在同一个 0–100 尺度上，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 换算。锚点按时间窗口自动选择：
 
-| 窗口 | 锚点 | 基线 | 推导方式 |
+| 窗口 | 锚点 | 美国基线 | 为什么用它 |
 | --- | --- | --- | --- |
-| `now 1-H`、`now 4-H`、`now 1-d` | `sudoku` | 美国 **9,900/天**，±50% | 7 天共享尺度 sudoku/gpts = 18.035 → 18.035 × 550 ≈ 9,919；thesaurus 交叉校验 ≈9,857。两者都四舍五入到 ≈9,900。 |
-| `now 7-d`、`today 1-m`、`today 3-m`、`today 12-m`、`today 5-y`、`all` | `gpts` | 美国 **550/天**，±50% | 约 16.5k/月；长窗口的统一标尺。 |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **9,900/天**，±50% | 全天都有人搜（24 小时内 99.4% 的点非零），短窗口也能校准；`gpts` 在短窗口里太稀疏。 |
+| `now 7-d` 及更长 | `gpts` | **550/天**，±50% | 基准尺子，其他基线都由它推出。 |
 
-为什么是 9,900：7 天共享尺度比值 sudoku/gpts = 18.035，因此 18.035 × 550 ≈ 9,919。再通过 thesaurus 交叉校验：thesaurus/gpts 7.341 × 550 ≈ 4,038，sudoku/thesaurus 2.441 × 4,038 ≈ 9,857。两者都四舍五入到 ≈9,900，所以 1 小时/1 天与 7 天估计位于同一把尺子上（`gpts = 550`）。备选：thesaurus ≈4,000/天更接近小型 AI 词，但夜间会有零值点；chairs ≈22,500/天 100% 非零，但会压扁极小的词。过大的锚点（weather、calculator、pizza）同样会压扁小词。方法参考：[Krazydad 的 Trends 尺度比较](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
+**9,900 怎么来的：** 在 7 天共享尺度上，`sudoku` 平均是 `gpts` 的 18.035 倍，18.035 × 550 ≈ 9,919。经 `thesaurus` 中转（7.341 × 550 ≈ 4,038，再 × 2.441 ≈ 9,857）结果一致，所以短窗口和长窗口用的是同一把尺子。备选锚点与来源见[参考文档](docs/reference.md#calibration-and-the-anchor)。
 
-`baselines.json` 可以覆盖或新增锚点。只接受 version 2（`version: 1` 会被拒绝），且 `windowAnchors` 里的每个词都必须存在于 `anchors` 或内置锚点中：
+- `--anchor` / MCP `anchor` 可强制两个窗口都用同一个锚点。每次快照都会返回 `anchor`（请求窗口）和 `anchor7d`（7 天校验），写明用了哪个锚点和基线。
+- 用 version 2 的 `baselines.json` 覆盖或新增基线（模板：[examples/baselines.json](examples/baselines.json)）：
 
-```sh
-# baselines.json：覆盖 sudoku，保留短/长窗口的自动映射
-{"version":2,"anchors":[{"term":"sudoku","geo":"US","dailySearches":9900},{"term":"gpts","geo":"US","dailySearches":550}],"windowAnchors":{"short":"sudoku","long":"gpts"}}
-GTFA_BASELINES=/path/to/baselines.json gtfa snapshot Sora --json
+```json
+{ "version": 2,
+  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 9900, "tolerance": 0.5 }],
+  "windowAnchors": { "short": "sudoku", "long": "gpts" } }
 ```
 
-- 只有满足以下条件才会输出数值流量：至少一个非缺口锚点、`anchorLevel ≥ 1`、非缺口锚点中至少 25% 非零。更密集的 `sudoku` 锚点可避免短窗口频繁触发该门。
-- 这些是**基于锚点的估算**，不是 Google 实测搜索量。当请求不是 `now 7-d` 时，`traffic7d` / `chart7d` 来自另一次 7 天抓取，使用 7 天锚点（`gpts`），除非显式指定了锚点；`anchor7d` 会报告该窗口使用的基线。请求本身是 `now 7-d` 时，它们复用主快照和主图表。
-- 失败保持显式：用 `ok`、`status` 和 `error.code` 代替编造数字，partial 结果会如实报告，而不是隐藏。
+```sh
+GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读取
+```
+
+- 只有满足以下条件才输出数值流量：至少一个非缺口锚点、`anchorLevel ≥ 1`、非缺口锚点中至少 25% 非零。
+- 这些是**基于锚点的估算**，不是 Google 实测搜索量。失败保持显式：用 `ok`、`status` 和 `error.code` 代替编造数字。
 
 ## 文档
 
@@ -178,7 +182,7 @@ GTFA_BASELINES=/path/to/baselines.json gtfa snapshot Sora --json
 
 ```sh
 npm install
-npm test          # 238 个测试
+npm test          # 244 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

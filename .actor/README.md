@@ -56,7 +56,7 @@ Defaults are US, past 24 hours, web search and all categories. Use `trends_now` 
 ## Input
 
 - **Proxy configuration** — defaults to Apify Residential proxy, country US. Keep residential egress if Google rate-limits data-center IPs. The Actor rotates the proxy session when Google returns HTTP 429 or a challenge.
-- **Calibration anchor** — leave empty for automatic: `sudoku` for 1-hour/4-hour/1-day windows, `gpts` for 7 days and longer. An explicit term forces both the requested and 7-day windows. Set `GTFA_BASELINES=/path/baselines.json` to load a version 2 baselines file.
+- **Calibration anchor** — leave empty for automatic: `sudoku` for 1-hour/4-hour/1-day windows, `gpts` for 7 days and longer. A term here forces both the requested and 7-day windows; a per-call `anchor` argument to `trends_snapshot` still wins. Self-hosted builds can set `GTFA_BASELINES` to a version 2 baselines file.
 - **Default country** — default `US`; used when a tool call omits `geo`.
 
 ## Cost
