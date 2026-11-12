@@ -9,7 +9,7 @@ import { formatGTrendsExport } from './export.js';
 import { planTrendsRequest } from './input.js';
 import { publicInput } from './core.js';
 import { resolveFilter } from './filter.js';
-import { compareEnvelope, schemaRejectionEnvelope } from './mcp.js';
+import { compareEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { runDoctorCli } from './doctor-cli.js';
 
 const help = `gtfa — Search-interest signals for AI agents — an unofficial Google Trends client

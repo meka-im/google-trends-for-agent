@@ -22,8 +22,8 @@ describe('Actor proxy wiring', () => {
     expect(actorProxyInput(custom)).toBe(custom);
   });
 
-  it('writes newUrl() to HTTPS_PROXY and rotates the proxy session id', async () => {
-    const env: NodeJS.ProcessEnv = {};
+  it('rotates the proxy session id without mutating process.env', async () => {
+    const before = { ...process.env };
     const ids: string[] = [];
     const provider = {
       newUrl: vi.fn(async (id?: string | number) => {
@@ -31,36 +31,37 @@ describe('Actor proxy wiring', () => {
         return `http://user:secret@proxy.example:8000?session=${id}`;
       }),
     };
-    const session = new ApifyProxySession(provider, env, counter => `gtfa_test_${counter}`);
+    const session = new ApifyProxySession(provider, counter => `gtfa_test_${counter}`);
     await session.rotate();
     await session.rotate();
 
     expect(ids).toEqual(['gtfa_test_1', 'gtfa_test_2']);
-    expect(env.HTTPS_PROXY).toContain('session=gtfa_test_2');
-    expect(env.https_proxy).toBeUndefined();
+    expect(session.currentUrl).toContain('session=gtfa_test_2');
+    expect(process.env).toEqual(before);
+    expect(process.env.https_proxy).toBe(before.https_proxy);
   });
 
   it('rotates and rebuilds the existing transport on HTTP 429', async () => {
-    const env: NodeJS.ProcessEnv = {};
     const provider = {
       newUrl: vi.fn(async (id?: string | number) => `http://user:secret@proxy.example:8000?session=${id}`),
     };
-    const session = new ApifyProxySession(provider, env, counter => `gtfa_${counter}`);
+    const session = new ApifyProxySession(provider, counter => `gtfa_${counter}`);
     await session.rotate();
 
     mocks.fetch
       .mockResolvedValueOnce(new Response('rate limited', { status: 429 }))
       .mockResolvedValueOnce(new Response('ok', { status: 200 }));
     const reasons: string[] = [];
+    const urls: string[] = [];
     const transport = createRotatingTransport(session, {
-      createTransport: () => createDefaultTransport(env),
+      createTransport: url => { urls.push(url); return createDefaultTransport({ HTTPS_PROXY: url }); },
       onRotate: reason => reasons.push(reason),
     });
 
     expect((await transport(request)).status).toBe(429);
     expect(reasons).toEqual(['rate_limited']);
     expect(provider.newUrl).toHaveBeenCalledTimes(2);
-    expect(env.HTTPS_PROXY).toContain('session=gtfa_2');
+    expect(urls.at(-1)).toContain('session=gtfa_2');
     expect(mocks.agent).toHaveBeenCalledTimes(2);
 
     expect((await transport(request)).status).toBe(200);
@@ -68,15 +69,14 @@ describe('Actor proxy wiring', () => {
   });
 
   it('rotates on a CAPTCHA challenge without changing the returned response', async () => {
-    const env: NodeJS.ProcessEnv = {};
     const provider = { newUrl: vi.fn(async (id?: string | number) => `http://user:secret@proxy.example:8000?session=${id}`) };
-    const session = new ApifyProxySession(provider, env, counter => `gtfa_${counter}`);
+    const session = new ApifyProxySession(provider, counter => `gtfa_${counter}`);
     await session.rotate();
 
     mocks.fetch.mockResolvedValueOnce(new Response('<html>unusual traffic captcha</html>', { status: 200 }));
     const reasons: string[] = [];
     const transport = createRotatingTransport(session, {
-      createTransport: () => createDefaultTransport(env),
+      createTransport: url => createDefaultTransport({ HTTPS_PROXY: url }),
       onRotate: reason => reasons.push(reason),
     });
 

@@ -2,7 +2,7 @@ import { ProxyAgent, fetch as proxyFetch } from 'undici';
 import { CookieJar } from 'tough-cookie';
 import { GTrendsError } from './core.js';
 
-export interface TransportRequest { url: string; method?: string; body?: string; headers: Record<string, string>; timeoutMs: number }
+export interface TransportRequest { url: string; method?: string; body?: string; headers: Record<string, string>; timeoutMs: number; signal?: AbortSignal }
 export interface TransportResponse { status: number; headers: Record<string, string>; body: string }
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
 
@@ -61,7 +61,9 @@ export function createDefaultTransport(env: NodeJS.ProcessEnv = process.env): Tr
     }
   }
   return async req => {
-    const init = { method: req.method ?? 'GET', body: req.body, headers: req.headers, redirect: 'manual' as const, signal: AbortSignal.timeout(req.timeoutMs) };
+    const timeout = AbortSignal.timeout(req.timeoutMs);
+    const signal = req.signal ? AbortSignal.any([timeout, req.signal]) : timeout;
+    const init = { method: req.method ?? 'GET', body: req.body, headers: req.headers, redirect: 'manual' as const, signal };
     const res = dispatcher ? await proxyFetch(req.url, { ...init, dispatcher }) : await globalThis.fetch(req.url, init);
     const headers = Object.fromEntries(res.headers.entries());
     const cookies = res.headers.getSetCookie();
@@ -145,6 +147,7 @@ export class Session {
       this.upstreamRequests++;
       try { res = await this.transport({ ...req, headers: { ...req.headers, ...(cookie ? { cookie } : {}) } }); }
       catch (error) {
+        if (error instanceof GTrendsError) throw error;
         const timeout = error instanceof Error && /timeout|abort/i.test(error.name);
         const message = timeout
           ? `Google Trends request timed out after ${req.timeoutMs} ms. Retry, raise --timeout (max 60000), or set HTTPS_PROXY/HTTP_PROXY if this network blocks Google.`

@@ -2,7 +2,7 @@ import { Actor } from 'apify';
 import { createServer } from './mcp.js';
 import { startHttpMcpServer, resolveStandbyPort } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
-import type { Transport } from './transport.js';
+import { createDefaultTransport, type Transport } from './transport.js';
 import { loadBaselinesFromEnv } from './traffic.js';
 
 interface ActorInput {
@@ -34,6 +34,7 @@ try {
       const url = await session.rotate();
       if (url) {
         proxyTransport = createRotatingTransport(session, {
+          createTransport: proxyUrl => createDefaultTransport({ HTTPS_PROXY: proxyUrl }),
           onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : 'a Google challenge'}.`),
           onError: error => console.error(`Proxy rotation failed; keeping the current egress. ${error instanceof Error ? error.message : String(error)}`),
         });

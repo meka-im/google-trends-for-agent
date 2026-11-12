@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Native dsh plugin bundle (`google-trends-for-agent/dsh`) with `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` executed in-process by the core library: no MCP server, CLI subprocess, or Actor endpoint. Ships a `gtfa` skill and two egress modes (`local` or Apify Residential via `apifyProxyCountry`, with `APIFY_TOKEN` / `APIFY_PROXY_PASSWORD` from the environment and explicit proxy URLs instead of `process.env` mutation).
 - Built-in US anchors rescaled to `gpts` at 3,500 searches/day and `sudoku` at 63,000/day, derived from public keyword-tool volumes through measured Trends ratios. Window-aware anchoring still uses `sudoku` for short windows and `gpts` for 7 days and longer; snapshots report `anchor` and `anchor7d` with the baseline used by each window.
 - Version 2 baselines files (`anchors` plus optional `windowAnchors`) load through `GTFA_BASELINES` for the CLI, MCP server, and Actor; version 1 and unknown window-anchor terms are rejected with clear errors.
 

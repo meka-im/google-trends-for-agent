@@ -33,6 +33,14 @@ Use this generic stdio configuration (swap `#v0.1.0` for no tag to follow main):
 
 Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
 
+## dsh plugin
+
+```sh
+dsh plugin --profile <name> add github:meka-im/google-trends-for-agent
+```
+
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. It does not start an MCP server, run the `gtfa` CLI, or call the Actor. Egress defaults to `local`; set `egress: apify` on the `gtfa` profile row to use Apify Residential proxy directly from the core library, with `APIFY_TOKEN` (or `APIFY_PROXY_PASSWORD`) in the environment. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+
 ## Verify networking first
 
 Run the doctor once after install, or whenever a call fails unexpectedly:

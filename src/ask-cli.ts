@@ -5,7 +5,7 @@ import { validateTerms, parseLeadInput, type LeadInput } from './validate.js';
 import { resolveFilter } from './filter.js';
 import { SnapshotStore, askTerm, diffSnapshots } from './snapshot.js';
 import type { queryTrends } from './api.js';
-import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './mcp.js';
+import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 
 export const askHelp = `Usage: gtfa ask <term> [options]

@@ -8,7 +8,7 @@ import { SnapshotStore, snapshotTerm, askTerm, diffSnapshots, type TermSnapshot 
 import { validateTerms, parseLeadInput, detectFreshSpike } from '../src/validate.js';
 import { runAskCli } from '../src/ask-cli.js';
 import { trafficSnapshotEnvelope } from '../src/trends-snapshot.js';
-import { verdictEnvelope } from '../src/mcp.js';
+import { verdictEnvelope } from '../src/tools.js';
 import { loadBaselines } from '../src/traffic.js';
 import type { queryTrends } from '../src/api.js';
 const dirs: string[] = [];

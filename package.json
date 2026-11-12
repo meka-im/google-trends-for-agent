@@ -5,7 +5,8 @@
   "type": "module",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.3 <0.3.0"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,6 +14,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./dsh": {
+      "types": "./dist/dsh.d.ts",
+      "import": "./dist/dsh.js"
     }
   },
   "bin": {
@@ -21,6 +26,7 @@
   },
   "files": [
     "dist",
+    "dsh",
     "AGENTS.md",
     "README.md",
     "README.zh-CN.md",
@@ -62,8 +68,14 @@
     "trends",
     "search-interest",
     "cli",
-    "mcp"
+    "mcp",
+    "dsh-plugin"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh/cordis.patch.yml"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/meka-im/google-trends-for-agent.git"

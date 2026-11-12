@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { askEnvelope } from '../src/mcp.js';
+import { askEnvelope } from '../src/tools.js';
 import { SnapshotStore, type TermSnapshot } from '../src/snapshot.js';
 import { runAskCli } from '../src/ask-cli.js';
 const dirs: string[] = [];

@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { DEFAULT_TRENDING_GEOS, TRENDING_GEOS } from './geos.js';
 import { fetchTrending, listTrending, type TrendingHours, type TrendingResponse, type TrendingOptions } from './trending.js';
-import { nowEnvelope, schemaRejectionEnvelope } from './mcp.js';
+import { nowEnvelope, schemaRejectionEnvelope } from './tools.js';
 
 export function trendingExitCode(results: TrendingResponse[]): number {
   if (results.some(r => ['BLOCKED', 'RATE_LIMITED'].includes(r.error?.code ?? ''))) return 3;

@@ -1,0 +1,5 @@
+- insert:
+    - id: gtfa
+      name: 'google-trends-for-agent/dsh'
+      config:
+        egress: local
