@@ -28,7 +28,7 @@
     "terms": {
       "title": "Terms",
       "type": "array",
-      "description": "One or more search terms. Example: [\"Sora\"]. Ask and snapshot use one call per term; compare uses one call with 2–5 terms. Ignored by \"now\".",
+      "description": "One or more search terms. Example: [\"Sora\"]. Ask and snapshot use one call per term; compare uses one call with 1–5 distinct terms. Ignored by \"now\".",
       "editor": "stringList",
       "default": [],
       "prefill": [

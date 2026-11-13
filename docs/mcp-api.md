@@ -161,6 +161,8 @@
 }
 ```
 
+`trends_ask` compares the latest saved snapshot with the one saved before it, including on cache hits. A cache hit creates no snapshot; fewer than two snapshots means `diff: null` with `diffReason: "Need two snapshots"`. Set `fresh: true` to fetch and save a new comparison point. CLI `--diff` forces fresh data, saves the result, and implies JSON, overriding `--refresh` (including `never`).
+
 `validate: true` 且裁决为 blocked（例如锚点请求被封）时：`ok: false`，`status: "blocked"`，并带 `error`（可能含 `retryAfterSec`）。
 
 ### 字段说明
@@ -184,7 +186,9 @@
 | `meta.cached` | `true` = 复用了本地快照 |
 | `meta.warnings` | 上游 `partial` 响应会保留其 warnings；另有低样本缺口（`interest.gapCount > 0`）排除说明 |
 
-**低样本缺口（gap）规则：** Google 在低样本曲线（尤其 `now` / 1 天窗口）偶尔会把中间的点返回为 `0`。当整条曲线**超过 50% 的点非零**，且某个 `0` 点位于**第一个非零点与最后一个非零点之间**时，该点标记为 `gap: true`；开头/结尾连续为 `0` 的区间视为真实零，不标 gap。缺口点的原始 `value` 保持 `0`，但会从 `average`、`latest` / `settledLatest`、`peak` 以及裁决（verdict）计算中排除，并计入 `interest.gapCount`；`gapCount > 0` 时 `meta.warnings` 会提示。顶层 `filter.property` 在快照属性为空字符串时统一输出 `"web"`（MCP 与 CLI 相同）。
+**低样本缺口（gap）规则：** Google 在低样本曲线（尤其 `now` / 1 天窗口）偶尔会把中间的点返回为 `0`。当整条曲线**超过 50% 的点非零**，且某个 `0` 点位于**第一个非零点与最后一个非零点之间**时，该点标记为 `gap: true`；开头/结尾连续为 `0` 的区间保留为零，不标 gap。缺口点的原始 `value` 保持 `0`，但会从 `average`、`latest` / `settledLatest`、`peak` 以及裁决（verdict）计算中排除，并计入 `interest.gapCount`；`gapCount > 0` 时 `meta.warnings` 会提示。顶层 `filter.property` 在快照属性为空字符串时统一输出 `"web"`（MCP 与 CLI 相同）。
+
+In `now 1-d` windows, trailing points can be 0 or low while Google back-fills. Use settled values and the window average; do not report a trailing 0 alone as a real drop. `settledLatest` drops one tail point in `now *` windows, then excludes gaps; multiple trailing zeros can still remain. Non-`now` series with daily spacing drop two tail points; other series drop one. Averages exclude gaps but include unsettled tails. This applies to both interest and calibrated traffic; the calculation is unchanged.
 
 ---
 
@@ -339,7 +343,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `traffic` | `unit: "searches/day"`；`average` / `latest` / `settledLatest` / `peak` 排除 gap；`low` / `high` 由 `average × (1±tolerance)` 取整；`gapCount` |
 | `series.points` | 原始 0–100 `score` 与逐点 `traffic`；gap 点带 `gap: true`（原始 `score` 仍为 0） |
 | `series.anchorPoints` | 锚点原始 `{t, score}`；同一次对比、同一标尺 |
-| `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回约 720×280 的内联 SVG（时间轴使用规范化后的 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
+| `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回720×300 的内联 SVG（时间轴使用规范化后的 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
 | `chart.path` | 写入 `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` 的路径（时区 slug 如 `utc-bdfd4d8d`、`asia-shanghai-b485a3cf`；短 SHA-1 后缀基于规范化 IANA 名称并避免不同时区碰撞）；`null` 表示文件写入被禁用/失败 |
 | `chart7d` | 始终存在的 `now 7-d` 曲线，形状与 `chart` 相同（`{ svg, path }`）；`svg` 默认 `""`，`path` 仍写入。7d 拉取失败时为 `{ "svg": "", "path": null }` 并写入 warning |
 | `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用 `anchor7d` 的基线（默认 `gpts` 3,500 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
@@ -370,6 +374,8 @@ published.est = round(popular.value / 100 × average)
 
 **没有匹配 `geo + anchor` 的标定时**（例如 `geo: "JP"`），或**锚点可靠性门失败时**，`traffic` / `traffic7d` 的数值字段和 `estDaily` 全部为 `null`，`anchor.note` / `meta.warnings` 会说明原因，但 `summary`、`series`、`chart`、`chart7d` 仍会返回。`trends_ask`（`validate: true`）使用完全相同的公式与门，`verdict.anchor` 会显示 `dailySearches`，`verdict.traffic` 为日频。
 
+After changing `GTFA_BASELINES`, use CLI `--fresh` or MCP `fresh: true` to bypass saved snapshots.
+
 **English summary.** Anchors are automatic: `sudoku` (US 63,000/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 3,500/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
 
 **注意事项：**
@@ -385,7 +391,7 @@ published.est = round(popular.value / 100 × average)
 
 ---
 
-## `trends_compare` — 对比 2–5 个词
+## `trends_compare` — 对比 1–5 个词
 
 相对兴趣对比（例如候选词 vs 锚点）。只拉 `interestOverTime`，不附带 related 表。
 
@@ -393,7 +399,7 @@ published.est = round(popular.value / 100 × average)
 
 | 参数 | 类型 | 必填 | 默认 | 含义 |
 | --- | --- | --- | --- | --- |
-| `keywords` | string[2–5]，每项 1–100 | 是 | — | 要对比的词 |
+| `keywords` | string[1–5]，每项 1–100 | 是 | — | 要对比的不同关键词 |
 | `geo` | string | 否 | `US` | 国家 / 地区 |
 | `time` | Explore 枚举 | 否 | `now 1-d` | 时间窗 |
 

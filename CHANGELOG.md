@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fix persistent-install instructions with clone/build/local global install; document npx startup overhead and the exact dsh `allowBuilds` map.
+- CLI `--diff` forces a fresh saved snapshot; clarify MCP diffs on cache hits and `fresh: true`.
+- Document accepted `--from` JSON formats in CLI help and reference.
+- Accept 1–5 distinct compare keywords across CLI, MCP, and Actor; align schemas, help, and docs.
+- Correct SVG dimensions to 720×300, explain trailing back-fill zeros and settled values, and use fresh fetches in baseline examples.
+- npm audit fix: transitive security updates.
+
 ## 0.2.0 — 2026-11-13
 
 - `trends_now` reads Google's public Trending Now page again instead of the retired Explore feed. Unexpected page shapes return `TRENDS_PROTOCOL_CHANGED` instead of `INVALID_INPUT`; explicit country lists are uppercased, deduped in input order, and capped at 30.

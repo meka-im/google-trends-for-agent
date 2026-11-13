@@ -11,10 +11,14 @@ import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 export const askHelp = `Usage: gtfa ask <term> [options]
   Returns interest, popular (Top) and rising related queries, and regions for one term.
   --validate          Add a calibrated verdict (spiking, rising, steady, flat, no_data, blocked)
-  --from FILE|-       With --validate: read JSON leads (batch)
+  --from FILE|-       With --validate: read JSON from a file or stdin (-), e.g. ["sora",{"term":"nano banana"}]
+                      Accepts a string, object (name/term/keyword, in that order), or mixed array;
+                      wrappers: {leads|rows|keywords|table: [...]}. Optional metadata:
+                      variants (string[]), source, url, firstSeen (strings); preserved, not queried.
+                      All rows use CLI filters; per-row geo/time are ignored.
   --anchor TERM       Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+; --no-anchor to skip
   --trending          With --validate: also check Trending Now
-  --diff              Add changes vs the previous saved snapshot (output is always JSON with --diff)
+  --diff              Fetch fresh and save, then diff vs the previous snapshot; implies JSON, overrides --refresh
   --points            Include the full interest series (omitted by default to keep agent context small)
   --fresh             Force live data; --refresh always|never|if-stale
   --max-age MIN       Reuse saved snapshots younger than MIN minutes (default 360)
@@ -47,7 +51,7 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
     const filter = resolveFilter({ geo: v.geo, time: v.time, category: v.category === undefined ? undefined : Number(v.category), property: v.property });
     const store = new SnapshotStore(v.store), maxAgeMin = v['max-age'] === undefined ? 360 : Number(v['max-age']);
     if (!Number.isFinite(maxAgeMin) || maxAgeMin < 0) throw new Error('invalid max-age');
-    const refresh = v.fresh ? 'always' : v.refresh as 'always' | 'never' | 'if-stale' | undefined;
+    const refresh = v.fresh || v.diff ? 'always' : v.refresh as 'always' | 'never' | 'if-stale' | undefined;
     const withDiff = async (term: string) => { const h = await store.history(term, filter, 2); return h.length < 2 ? null : diffSnapshots(h[1], h[0]); };
     let stderr = '';
     if (v.validate) {

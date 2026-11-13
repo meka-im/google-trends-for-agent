@@ -91,6 +91,18 @@ describe('CLI flags and exit codes', () => {
 });
 
  describe('CLI help modes', () => {
+  it.each([['--help'], ['ask', '--help']])('documents batch JSON formats in %j', (...flags) => {
+    const r = runCli([...args, ...flags], { encoding: 'utf8', env });
+    expect(r.status).toBe(0);
+    const { help } = JSON.parse(r.stdout);
+    expect(help).toContain('--from FILE|-');
+    expect(help).toContain('["sora",{"term":"nano banana"}]');
+    expect(help).toContain('name/term/keyword');
+    expect(help).toContain('leads|rows|keywords|table');
+    expect(help).toContain('per-row geo/time are ignored');
+    if (flags[0] === '--help') expect(help).toContain('1-5 distinct keywords');
+    else expect(help).toContain('overrides --refresh');
+  });
   it.each([['--help'], ['help'], ['help', 'now'], ['now', '--help']])('returns JSON help for %j', (...flags) => {
     const r = runCli([...args, ...flags], { encoding: 'utf8', env });
     expect(r.status).toBe(0);

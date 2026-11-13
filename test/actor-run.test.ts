@@ -37,8 +37,8 @@ describe('runOnce validation', () => {
   it.each([
     [{ tool: 'nope', terms: ['a'] }, /Unknown tool/],
     [{ tool: 'ask', terms: [] }, /at least one term/],
-    [{ tool: 'compare', terms: ['a'] }, /2–5 terms/],
-    [{ tool: 'compare', terms: ['a', 'b', 'c', 'd', 'e', 'f'] }, /2–5 terms/],
+    [{ tool: 'compare', terms: [] }, /at least one term/],
+    [{ tool: 'compare', terms: ['a', 'b', 'c', 'd', 'e', 'f'] }, /1–5/],
     [{ tool: 'now', terms: [], geo: 'WORLDWIDE' }, /needs a country/],
     [{ tool: 'ask', terms: ['a'], window: 'yesterday' }, /Unknown window/],
     [{ tool: 'ask', terms: ['a'], anchor: 'chairs' }, /Unknown anchor/],
@@ -56,6 +56,13 @@ describe('runOnce validation', () => {
 });
 
 describe('runOnce mapping', () => {
+  it('accepts a single compare term', async () => {
+    const executeTool = vi.fn(async () => ({ ok: true, status: 'ok', series: [{ keyword: 'coffee', points: [], average: 20, latest: 20, peak: 20 }], meta: {} }));
+    const { deps } = harness(executeTool);
+    const result = await runOnce({ tool: 'compare', terms: ['coffee'] }, deps);
+    expect(result.failed).toBe(false);
+    expect(executeTool).toHaveBeenCalledWith('trends_compare', expect.objectContaining({ keywords: ['coffee'] }));
+  });
   it('calls ask once per term, sequentially, and maps interest plus verdict', async () => {
     const calls: { name: string; input: Record<string, unknown> }[] = [];
     const { deps, pushed, values, options, logs } = harness(async (name, input) => {

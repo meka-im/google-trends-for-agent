@@ -32,6 +32,8 @@ describe('MCP offline', () => {
     expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'validate'], trends_compare: ['geo', 'keywords', 'time'], trends_now: ['geos', 'hours', 'limit'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'tz'] });
     for (const t of tools) expect(t.description).toMatch(/Output: ok, schemaVersion/);
     expect(tools.find(t => t.name === 'trends_now')!.description).toMatch(/Supported geos: .*SG/);
+    const compare = tools.find(t => t.name === 'trends_compare')!;
+    expect((compare.inputSchema.properties as Record<string, unknown>).keywords).toMatchObject({ minItems: 1, maxItems: 5 });
   });
   it('trends_compare defaults to US and now 1-d', async () => {
     const urls: string[] = [];
@@ -85,12 +87,11 @@ describe('MCP offline', () => {
     const batch = await client.callTool({ name: 'trends_now', arguments: { geos: 'default', limit: 1 } });
     expect(batch.structuredContent).toMatchObject({ ok: true, status: 'ok', summary: { geos: 30, ok: 30, failed: 0 } });
     expect((batch.structuredContent!.byGeo as { items: unknown[] }[]).every(r => r.items.length === 1)).toBe(true);
-    expect((await client.callTool({ name: 'trends_compare', arguments: { keywords: ['only one'] } })).isError).toBe(true);
   });
   it('rejects invalid queries without HTTP' , async () => {
     const transport = vi.fn<Transport>();
     const client = await connect(transport);
-    for (const keywords of [[], ['a'], ['a', 'b', 'c', 'd', 'e', 'f'], [42, 43]]) {
+    for (const keywords of [[], ['a', 'b', 'c', 'd', 'e', 'f'], [42, 43]]) {
       const bad = await client.callTool({ name: 'trends_compare', arguments: { keywords } });
       expect(bad.isError).toBe(true);
       expect(bad.structuredContent).toMatchObject({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', error: { code: 'INVALID_INPUT' } });
@@ -141,11 +142,11 @@ describe('MCP offline', () => {
 
   it('schema rejection returns the shared envelope with structuredContent', async () => {
     const client = await connect();
-    const r = await client.callTool({ name: 'trends_compare', arguments: { keywords: ['only-one'] } });
+    const r = await client.callTool({ name: 'trends_compare', arguments: { keywords: [] } });
     expect(r.isError).toBe(true);
     expect(r.structuredContent).toMatchObject({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', error: { code: 'INVALID_INPUT' }, meta: { upstreamRequests: 0 } });
     expect(JSON.parse((r.content as { text: string }[])[0].text)).toEqual(r.structuredContent);
-    expect(String((r.structuredContent as { error: { message: string } }).error.message)).toMatch(/keywords|array|2/i);
+    expect(String((r.structuredContent as { error: { message: string } }).error.message)).toMatch(/keywords|array|1/i);
   });
 
 describe('output envelopes', () => {
@@ -181,6 +182,22 @@ describe('output envelopes', () => {
   });
 });
 describe('trends_compare input checks', () => {
+  it('accepts one keyword and returns a single series through the core', async () => {
+    const fx = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+    const transport = vi.fn<Transport>(async req => {
+      if (req.method === 'HEAD') return { status: 200, headers: {}, body: '' };
+      const path = new URL(req.url).pathname;
+      if (path.endsWith('/explore')) return { status: 200, headers: {}, body: fx('explore-single-world.txt') };
+      if (path.endsWith('/multiline')) return { status: 200, headers: {}, body: fx('multiline-single-custom.txt') };
+      throw new Error('unexpected ' + path);
+    });
+    const client = await connect(transport);
+    const r = await client.callTool({ name: 'trends_compare', arguments: { keywords: ['bitcoin'] } });
+    expect(r.isError).not.toBe(true);
+    expect(r.structuredContent).toMatchObject({ ok: true, series: [{ keyword: 'bitcoin', points: expect.any(Array) }] });
+    expect(r.structuredContent!.series).toHaveLength(1);
+    expect(transport).toHaveBeenCalled();
+  });
   it('rejects duplicate keywords after trim with a structured error and no HTTP', async () => {
     const transport = vi.fn<Transport>();
     const client = await connect(transport);
@@ -223,14 +240,20 @@ describe("trends_ask end-to-end offline", () => {
 
       const cached = await client.callTool({ name: "trends_ask", arguments: { term: "bitcoin" } });
       expect((cached.structuredContent as { meta: { cached: boolean } }).meta.cached).toBe(true);
+      expect(cached.structuredContent).toMatchObject({ diff: null, diffReason: 'Need two snapshots' });
 
       const withDiff = await client.callTool({ name: "trends_ask", arguments: { term: "bitcoin", fresh: true } });
-      // second live fetch creates a second snapshot so diff can be non-null (or null if identical)
-      expect(withDiff.structuredContent).toHaveProperty("diff");
+      const next = withDiff.structuredContent as { diff: unknown; meta: { snapshotId: string; cached: boolean } };
+      expect(next.diff).toMatchObject({ from: (body.meta as { snapshotId: string }).snapshotId, to: next.meta.snapshotId });
+      expect(withDiff.structuredContent).not.toHaveProperty('diffReason');
       expect((withDiff.structuredContent as { meta: { cached: boolean } }).meta.cached).toBe(false);
 
+      const cachedDiff = await client.callTool({ name: 'trends_ask', arguments: { term: 'bitcoin' } });
+      expect(cachedDiff.structuredContent).toMatchObject({ diff: next.diff, meta: { cached: true, snapshotId: next.meta.snapshotId } });
+      expect(cachedDiff.structuredContent).not.toHaveProperty('diffReason');
       const validated = await client.callTool({ name: "trends_ask", arguments: { term: "bitcoin", validate: true } });
       expect((validated.structuredContent as { verdict?: { label: string } }).verdict?.label).toMatch(/rising|steady|flat|spiking|no_data|blocked/);
+      expect(validated.structuredContent).toMatchObject({ diff: next.diff, meta: { cached: true } });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

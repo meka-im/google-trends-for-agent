@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-416%20passed-22c55e?style=flat-square" alt="416 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-422%20passed-22c55e?style=flat-square" alt="422 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-zh-dark.png"><img src="docs/assets/store-button-zh.png" alt="在 Apify Store 打开" width="224" height="44"></picture></a></p>
 
@@ -69,6 +69,14 @@
 npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
+零安装的 `npx` 路径首次从 git 构建约需 30–50 秒，之后每次调用仍增加约 7 秒启动开销。频繁使用建议持久安装或运行 MCP 服务器。
+
+持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）：
+
+```sh
+git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+```
+
 CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
 
 ```json
@@ -87,8 +95,16 @@ npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
-# 首次运行会打印 pnpm 的 allowBuilds key 并失败；把该 key 加到 ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑。
 ```
+
+首次运行会打印 key 并失败。将 pnpm 打印的完整 key（以 commit hash 结尾）复制到 `~/.dsh/profiles/web/pnpm-workspace.yaml`，然后重跑：
+
+```yaml
+allowBuilds:
+  "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
+```
+
+pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使用带 `: true` 的 `allowBuilds:` map（在 `allowBuilds` 下写列表会失败）。main 更新后 key 会变化，需要重新添加。
 
 安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**，再进入 **连接 → 出口**，选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**。该 bundle 把四个工具注册为进程内原生工具，并附带 `gtfa` skill；Token 保存、用量卡片和测试连接的细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 
@@ -108,7 +124,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 | --- | --- |
 | `trends_ask` | 兴趣、热门/上升查询、地区，可选 verdict 和 diff。 |
 | `trends_snapshot` | 校准后的每日搜索量、锚点/流量块、verdict、`chart7d` / `traffic7d`。 |
-| `trends_compare` | 2–5 个关键词在同一共享尺度上的相对 0–100 兴趣。 |
+| `trends_compare` | 1–5 个不同关键词在同一共享尺度上的相对 0–100 兴趣。 |
 | `trends_now` | 按国家/地区获取 Trending Now，含排名、增长、分类和链接。 |
 
 输入、时间窗、默认值和信封字段见[参考文档](docs/reference.md)和 [MCP 字段指南](docs/mcp-api.md)。
@@ -119,7 +135,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 | --- | --- |
 | `gtfa ask <term>` | 单个词，可选 `--validate`、`--diff`、`--points` 和批量 `--from`。 |
 | `gtfa snapshot <term>` | 校准流量、相关查询、verdict 和 SVG 图表。 |
-| `gtfa compare <kw> <kw> [...]` | 1–5 个关键词的相对兴趣（也支持 `--query` 模式）。 |
+| `gtfa compare <kw> [<kw> ...]` | 1–5 个不同关键词的相对兴趣（也支持 `--query` 模式）。 |
 | `gtfa now --geo US` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
 | `gtfa doctor` | 检查 Node、Google Trends 可达性、代理，并执行一次 `gpts` 美国 24 小时抓取；`--json` 供机器读取。 |
 
@@ -146,7 +162,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 ```sh
 npm install
-npm test          # 416 个测试
+npm test          # 422 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

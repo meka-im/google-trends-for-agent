@@ -5,7 +5,7 @@ Use the native `gtfa` tools for light, interactive search-interest research. The
 ## When to use which tool
 
 - **Verify a new term has real demand** — `trends_ask` with `{ "term": "<term>", "validate": true }`. Start with the default US / `now 1-d`; use `fresh: true` when a cached snapshot would be stale. If `status` is `no_data` or `error`, stop and report it. Only `validate: true` adds a searches/day estimate.
-- **Compare against an anchor or rival** — `trends_compare` with 2–5 keywords, for example `["<candidate>", "gpts"]`. All keywords share one 0–100 scale; use `latest` and `peak`, and confirm the candidate is not a rounding artifact.
+- **Compare against an anchor or rival** — `trends_compare` with 1–5 distinct keywords, for example `["<candidate>", "gpts"]`. All keywords share one 0–100 scale; use `latest` and `peak`, and confirm the candidate is not a rounding artifact.
 - **Calibrated searches/day + chart** — `trends_snapshot` with one term. It returns `traffic`, `series`, `chart`, and the always-on `anchor7d` / `chart7d` / `traffic7d` check.
 - **What is trending now** — `trends_now` by country. `geos` accepts a code list, `"default"`, or `"all"`; `hours` is the Trending Now window (`4`, `24`, `48`, `168`). It fetches sequentially and stops after the first block.
 

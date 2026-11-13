@@ -14,7 +14,13 @@ npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa --help
 npx -y -p github:meka-im/google-trends-for-agent gtfa --help
 ```
 
-The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The first run may take longer while TypeScript builds; later runs use the npx cache. For a persistent install, use `npm install -g github:meka-im/google-trends-for-agent#v0.2.0`.
+The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
+
+Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`):
+
+```sh
+git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+```
 
 ## MCP client config
 
@@ -37,9 +43,16 @@ Restart the client, then call `trends_ask` with a single term. `trends_ask` and 
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
-# First run prints pnpm's exact allowBuilds key; add it under allowBuilds: in
-# ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
 ```
+
+The first run prints a key and fails. Copy the exact key pnpm prints (ending in the commit hash) into `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run:
+
+```yaml
+allowBuilds:
+  "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
+```
+
+pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
 This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. After install, enable and configure it in dsh web → Plugins → Google Trends → gtfa → Configure (switch the bundle on if it shows Off): egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor. Set the Apify token there or leave it empty to use `APIFY_TOKEN`. A token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leaving it blank with `APIFY_TOKEN` keeps it out of the profile. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
 
@@ -78,10 +91,12 @@ Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryA
 | --- | --- | --- |
 | `trends_ask` | First look at a term; check whether interest exists and what people search next to it. | Interest summary, Popular/Rising related queries, regions, optional `validate` verdict, diff vs the previous saved snapshot. |
 | `trends_snapshot` | You need a calibrated searches/day estimate, a traffic curve, or a chart. | Primary-window traffic plus an always-on `now 7-d` check, with `anchor` / `anchor7d` showing each window's baseline. |
-| `trends_compare` | You need relative scale: candidate vs an established term or competitor (2–5 keywords). | One shared 0–100 scale, with gap-aware latest and peak per keyword. |
+| `trends_compare` | You need relative scale: candidate vs an established term or competitor (1–5 distinct keywords). | One shared 0–100 scale, with gap-aware latest and peak per keyword. |
 | `trends_now` | You need current demand: what is rising in a country today. | Ranked Trending Now items with volume bucket, growth, categories, related queries, and links. |
 
 Call `trends_ask` with `points: true` only when the full interest series is needed; it is omitted by default to save context. `trends_ask` (without `validate`), `trends_compare`, and `trends_now` return relative interest only; do not claim search volume from them. Only `trends_snapshot` and `trends_ask` with `validate: true` return searches/day, and those are anchor-based estimates.
+
+In `now 1-d` windows, trailing points can be 0 or low while Google back-fills. Use settled values and the window average; do not report a trailing 0 alone as a real drop. `settledLatest` excludes the last point in `now *` windows and then gaps; multiple trailing zeros can still remain. Non-`now` series with daily spacing exclude two tail points; other series exclude one. Averages exclude gaps but include unsettled tails.
 
 ## Anchors and baselines
 
@@ -94,7 +109,7 @@ Call `trends_ask` with `points: true` only when the full interest series is need
 
 The 63,000 baseline comes from the 7-day shared-scale ratio sudoku/gpts = 18.035: 18.035 × 3,500 ≈ 63,123. Cross-checking through thesaurus (7.341 × 3,500 ≈ 25,694, then × 2.441 ≈ 62,720) lands in the same place, so short and long windows sit on the same `gpts = 3,500` ruler. The 3,500 baseline is back-derived from public keyword-tool volumes for sudoku, thesaurus, and calculator through measured Trends ratios (sources in the reference). Alternates: thesaurus ≈25,700/day; chairs ≈143,000/day. The denser `sudoku` anchor avoids the sparse-24h failure that `gpts` often hits.
 
-`trends_snapshot` also fetches `now 7-d` (with `gpts` unless you force an anchor) and reports that window as `anchor7d`. Pass MCP `anchor` or CLI `--anchor` to force one term for both windows (a per-call `anchor` beats the Actor's anchor input). `GTFA_BASELINES=/path/baselines.json` loads a version 2 baselines file (`anchors` plus optional `windowAnchors.short` / `.long`) for `gtfa`, `gtfa-mcp` (stdio and `--http`), and the Actor; version 1 and unknown `windowAnchors` terms are rejected with a clear error. These are estimates, not measured Google volume.
+`trends_snapshot` also fetches `now 7-d` (with `gpts` unless you force an anchor) and reports that window as `anchor7d`. Pass MCP `anchor` or CLI `--anchor` to force one term for both windows (a per-call `anchor` beats the Actor's anchor input). `GTFA_BASELINES=/path/baselines.json` loads a version 2 baselines file (`anchors` plus optional `windowAnchors.short` / `.long`) for `gtfa`, `gtfa-mcp` (stdio and `--http`), and the Actor; version 1 and unknown `windowAnchors` terms are rejected with a clear error. After changing baselines, use CLI `--fresh` or MCP `fresh: true` to bypass saved snapshots. These are estimates, not measured Google volume.
 
 ## New-term verification workflow
 

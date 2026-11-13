@@ -207,6 +207,31 @@ it('ask CLI --validate --diff returns JSON with diff instead of a table', async 
   const rows = JSON.parse(r.stdout);
   expect(rows).toMatchObject({ term: 'x', diff: null }); // single term → envelope object, same as MCP
 });
+it.each([false, true])('ask CLI --diff bypasses cache and saves a snapshot (validate=%s)', async validate => {
+  const s = await store(), upstream = mock([10, 10, 20, 20, 0]);
+  let fetches = 0;
+  const start = Date.now() - 1000;
+  const query: typeof queryTrends = vi.fn(async input => {
+    const r = await upstream(input);
+    r.meta.fetchedAt = new Date(start + ++fetches).toISOString();
+    return r;
+  });
+  const args = ['x', '--json', '--store', s.dir, ...(validate ? ['--validate', '--no-anchor'] : [])];
+  const first = JSON.parse((await runAskCli(args, { query })).stdout);
+  expect(first.diff).toBeNull();
+  const cached = JSON.parse((await runAskCli(args, { query })).stdout);
+  expect(cached.meta.cached).toBe(true);
+  expect(fetches).toBe(1);
+
+  const result = await runAskCli([...args, '--diff', '--refresh', 'never'], { query });
+  expect(result.code).toBe(0);
+  const next = JSON.parse(result.stdout);
+  expect(next.meta.cached).toBe(false);
+  expect(next.diff).toMatchObject({ from: first.meta.snapshotId, to: next.meta.snapshotId });
+  expect(next).not.toHaveProperty('diffReason');
+  expect(fetches).toBe(2);
+  expect(await s.history('x')).toHaveLength(2);
+});
 it('keeps retryAfterSec when the anchor comparison is rate limited', async () => {
   const ok = mock([10, 10, 20, 20, 30, 30]);
   const query = vi.fn<typeof queryTrends>(async input => (input as { queries: string[] }).queries.length > 1

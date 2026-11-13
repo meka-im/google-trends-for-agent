@@ -367,7 +367,7 @@ function validate(input: ActorRunInput): ValidatedInput | string {
     if (!GEO_CODES.includes(geo)) return `Trending now does not support "${geo}".`;
   }
   if (tool !== 'now' && terms.length === 0) return `Add at least one term for the ${tool} tool.`;
-  if (tool === 'compare' && (terms.length < 2 || terms.length > 5)) return `Compare needs 2–5 terms (got ${terms.length}).`;
+  if (tool === 'compare' && terms.length > 5) return `Compare needs 1–5 distinct terms (got ${terms.length}).`;
   return { tool, terms, geo, window, anchor };
 }
 

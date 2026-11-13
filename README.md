@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-416%20passed-22c55e?style=flat-square" alt="416 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-422%20passed-22c55e?style=flat-square" alt="422 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-en-dark.png"><img src="docs/assets/store-button-en.png" alt="Open in Apify Store" width="231" height="44"></picture></a></p>
 
@@ -67,6 +67,14 @@ Node.js 20+ is required. Nothing is published to npm; `npx` builds the package f
 npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
+The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
+
+Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`):
+
+```sh
+git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+```
+
 The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
@@ -85,8 +93,16 @@ npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
-# First run prints pnpm's allowBuilds key and fails; add it under allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run.
 ```
+
+The first run prints a key and fails. Copy the exact key pnpm prints (ending in the commit hash) into `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run:
+
+```yaml
+allowBuilds:
+  "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
+```
+
+pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
 After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**, then **Connection → Egress** and pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. The bundle adds the four tools as native in-process tools plus a `gtfa` skill; token storage, the usage card, and Test connection are covered in the [dsh plugin reference](docs/reference.md#dsh-plugin).
 
@@ -106,7 +122,7 @@ After install, open **dsh web → Plugins → Google Trends → gtfa → Configu
 | --- | --- |
 | `trends_ask` | Interest, Popular/Rising queries, regions, optional verdict and diff. |
 | `trends_snapshot` | Calibrated searches/day, anchor/traffic blocks, verdict, `chart7d` / `traffic7d`. |
-| `trends_compare` | Relative 0–100 interest for 2–5 keywords on one shared scale. |
+| `trends_compare` | Relative 0–100 interest for 1–5 distinct keywords on one shared scale. |
 | `trends_now` | Trending Now by country, with rank, growth, categories, and links. |
 
 Inputs, time windows, defaults, and envelope fields are in the [reference](docs/reference.md) and the [MCP field guide](docs/mcp-api.md).
@@ -117,7 +133,7 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 | --- | --- |
 | `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, and batch `--from`. |
 | `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, and SVG charts. |
-| `gtfa compare <kw> <kw> [...]` | Relative interest for 1–5 keywords (also `--query` mode). |
+| `gtfa compare <kw> [<kw> ...]` | Relative interest for 1–5 distinct keywords (also `--query` mode). |
 | `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window. |
 | `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch; `--json` for machines. |
 
@@ -144,7 +160,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 416 tests
+npm test          # 422 tests
 npm run typecheck
 npm run build
 npm run trends -- --help

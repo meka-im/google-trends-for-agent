@@ -17,10 +17,15 @@ const help = `gtfa — Search-interest signals for AI agents — an unofficial G
 Usage:
   gtfa ask <term> [--validate] [--diff] [--fresh] [--points]   One term: interest, Popular + Rising, regions (ask --help)
   gtfa snapshot <term> [--json] [--svg] [--tz IANA]        Calibrated searches/day + chart path (snapshot --help)
-  gtfa compare <kw> <kw> [...] [options]            Relative interest for 2-5 keywords
+  gtfa compare <kw> [<kw> ...] [options]            Relative interest for 1-5 distinct keywords
   gtfa --query coffee [--query tea] [options]       Same as compare (default mode)
   gtfa now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168
   gtfa doctor [--json]                              Check Node, Google Trends reachability, proxy, and one gpts fetch
+Ask batch input (--validate --from FILE|-):
+  JSON string, object (name/term/keyword, in that order), or mixed array;
+  wrappers: {leads|rows|keywords|table: [...]}. Example: ["sora",{"term":"nano banana"}]
+  Optional metadata: variants (string[]), source, url, firstSeen (strings); preserved, not queried.
+  All rows use CLI filters; per-row geo/time are ignored. See ask --help.
 Options for compare / default mode:
   --url URL           Explore URL (repeatable; multiple URLs run sequentially)
   --geo US            Country or region

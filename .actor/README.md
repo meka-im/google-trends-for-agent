@@ -23,7 +23,7 @@ Paste this input and press **Start**. The run executes one tool and exits with d
 }
 ```
 
-Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 2–5 terms; `now` ignores `terms` and returns trending searches for `geo`. In an `ask`/`snapshot` batch, a block or rate limit stops the batch and later terms are written as `skipped` rows.
+Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 1–5 distinct terms; `now` ignores `terms` and returns trending searches for `geo`. In an `ask`/`snapshot` batch, a block or rate limit stops the batch and later terms are written as `skipped` rows.
 
 ### MCP client
 
@@ -71,7 +71,7 @@ Source: https://github.com/meka-im/google-trends-for-agent
 
 - **`trends_ask`** — interest summary, Popular/Rising related queries, regions, an optional verdict and a diff against the previous saved snapshot.
 - **`trends_snapshot`** — calibrated searches/day, primary and 7-day anchor blocks, traffic series, verdict and charts.
-- **`trends_compare`** — relative 0–100 interest for 2–5 keywords on one shared scale.
+- **`trends_compare`** — relative 0–100 interest for 1–5 distinct keywords on one shared scale.
 - **`trends_now`** — Trending Now by country with rank, volume bucket, growth, categories and links.
 - **Stable output** — a JSON envelope with `ok`, `status`, `schemaVersion` and explicit error codes; null traffic when calibration fails instead of guessed numbers.
 - **Three transports** — remote MCP, plain HTTP, and dataset/KV output for one-off runs.
@@ -81,7 +81,7 @@ Source: https://github.com/meka-im/google-trends-for-agent
 | Field | Behavior |
 | --- | --- |
 | `tool` | `ask`, `snapshot`, `compare` or `now`. Default `ask`. |
-| `terms` | One or more terms for `ask`/`snapshot`; 2–5 for `compare`; ignored by `now`. |
+| `terms` | One or more terms for `ask`/`snapshot`; 1–5 for `compare`; ignored by `now`. |
 | `geo` | Country code. `WORLDWIDE` maps to Worldwide for `ask`/`snapshot`/`compare`; `now` needs a country. Default `US`. |
 | `window` | Explore window (`now 1-H` through `all`); default `now 1-d`. For `now`, see the mapping below. |
 | `anchor` | Blank = automatic (`sudoku` for ≤1 day, `gpts` for 7 days+), or `gpts` / `sudoku`. |
