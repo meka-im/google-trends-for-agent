@@ -2,9 +2,10 @@
 
 ## Unreleased
 
+- New Actor icon: the Google Trends arrow with an AI spark (`.actor/icon.svg` source, 512×512 `.actor/icon.png`).
 - The Actor is published in the Apify Store as `meka.im/google-trends-for-agent`, and the plugin's Public Actor route links to its Store page.
 - Store-ready Actor: one-off runs execute one tool (`ask`, `snapshot`, `compare`, or `now`), write one flat dataset row per term (one per Trending Now item, capped at 25), store charts under `chart-*`, and write an `OUTPUT` summary with `completed` / `partial` / `failed` semantics. Validation failures write `OUTPUT` and fail the run with a clear message.
-- `.actor/` now ships actor, input, dataset, output, key-value store, and OpenAPI web-server schemas, a Store README, `store.json` metadata (SEO, categories, run defaults, single-tenant Standby), and an original icon (SVG source plus a 512×512 PNG referenced from `actor.json`). `actor.json` uses 256–1024 MB with a 512 MB default and drops `meta.generatedBy`.
+- `.actor/` now ships actor, input, dataset, output, key-value store, and OpenAPI web-server schemas, a Store README, `store.json` metadata (SEO, categories, run defaults, single-tenant Standby), and an icon (SVG source plus a 512×512 PNG referenced from `actor.json`). `actor.json` uses 256–1024 MB with a 512 MB default and drops `meta.generatedBy`.
 - The dsh plugin's egress select has three routes: `local`, `actor-public` (`meka.im/google-trends-for-agent`), and `actor-own` (the existing Actor dropdown, Refresh, and Deploy). The public route needs only a token and shows a source link and cost estimate; the old single-value egress setting is gone.
 - Actor relay compatibility: `GET /health` returns `{ ok, version, relay: 1 }`; the relay transport checks it once per transport, and Test connection checks health plus one HEAD relay. Version mismatches and old builds map to `version-mismatch` with an update/rebuild message.
 - Repository READMEs describe the three routes in one table, keep self-deploy instructions, and point Actor endpoint details at `.actor/README.md`.
