@@ -1,10 +1,21 @@
 import { TRENDING_GEOS } from './geos.js';
 
-/** `local` sends Google requests from this machine; `apify` relays them through the user's own Actor. */
-export type EgressMode = 'local' | 'apify';
+/** `local` sends Google requests from this machine; the Actor routes relay them through Apify. */
+export type EgressMode = 'local' | 'actor-public' | 'actor-own';
+/** Every supported egress value, in display order. */
+export const EGRESS_MODES = ['local', 'actor-public', 'actor-own'] as const;
 
 /** The Actor this package ships; the plugin deploys or selects this name. */
 export const GTFA_ACTOR_NAME = 'google-trends-for-agent';
+/** Public Store Actor API id (username~name, as Apify returns it). */
+export const GTFA_PUBLIC_ACTOR_ID = 'meka.im~google-trends-for-agent';
+/** Human-readable public Actor id. */
+export const GTFA_PUBLIC_ACTOR_LABEL = 'meka.im/google-trends-for-agent';
+/** Open-source repository; also the Git source used for one-click and manual deploys. */
+export const GTFA_SOURCE_URL = 'https://github.com/meka-im/google-trends-for-agent';
+/** Apify Store page; keep out of the UI until the Actor is published. */
+// not published yet
+export const GTFA_STORE_URL = 'https://apify.com/meka.im/google-trends-for-agent';
 /** Git repository the one-click deploy and the manual Git-repo deploy build from. */
 export const GTFA_ACTOR_GIT_URL = 'https://github.com/meka-im/google-trends-for-agent';
 /** Standby idle timeout in the deploy payload, seconds. Keep in sync with GTFA_IDLE_EXIT_SECS. */

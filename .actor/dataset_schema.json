@@ -1,0 +1,181 @@
+{
+  "actorSpecification": 1,
+  "title": "Google Trends results",
+  "description": "One row per term (or per Trending Now item), with interest, calibrated searches/day, related queries and chart links.",
+  "fields": {
+    "type": "object",
+    "properties": {
+      "term": {
+        "type": "string",
+        "title": "Term",
+        "description": "Search term, or the trending query title.",
+        "example": "Sora"
+      },
+      "tool": {
+        "type": "string",
+        "title": "Tool",
+        "description": "Tool that produced this row.",
+        "enum": ["ask", "snapshot", "compare", "now"],
+        "example": "snapshot"
+      },
+      "geo": {
+        "type": "string",
+        "title": "Country",
+        "description": "Google Trends country code; an empty string means Worldwide.",
+        "example": "US"
+      },
+      "window": {
+        "type": "string",
+        "title": "Window",
+        "description": "Explore time window requested for this run.",
+        "example": "now 1-d"
+      },
+      "status": {
+        "type": "string",
+        "title": "Status",
+        "description": "Outcome for this row: ok, no_data, blocked, rate_limited, or error.",
+        "enum": ["ok", "no_data", "blocked", "rate_limited", "error"],
+        "example": "ok"
+      },
+      "interestLatest": {
+        "type": ["number", "null"],
+        "title": "Latest interest",
+        "description": "Latest relative interest on the 0–100 scale, or null when unavailable.",
+        "example": 43
+      },
+      "interestSettled": {
+        "type": ["number", "null"],
+        "title": "Settled interest",
+        "description": "Settled relative interest; null when the tool does not return it.",
+        "example": 43
+      },
+      "interestAverage": {
+        "type": ["number", "null"],
+        "title": "Average interest",
+        "description": "Average relative interest, or null.",
+        "example": 38.6
+      },
+      "interestPeak": {
+        "type": ["number", "null"],
+        "title": "Peak interest",
+        "description": "Peak relative interest, or null.",
+        "example": 100
+      },
+      "searchesPerDay": {
+        "type": ["number", "null"],
+        "title": "Searches/day",
+        "description": "Anchor-calibrated searches/day estimate; null without calibration.",
+        "example": 1520
+      },
+      "verdict": {
+        "type": ["string", "null"],
+        "title": "Verdict",
+        "description": "Trend verdict (rising, spiking, steady, fading, no_data) or null.",
+        "example": "steady"
+      },
+      "anchor": {
+        "type": ["string", "null"],
+        "title": "Anchor",
+        "description": "Calibration anchor term used for this row, or null.",
+        "example": "sudoku"
+      },
+      "topRelated": {
+        "type": "array",
+        "title": "Top related",
+        "description": "Up to 10 popular related queries.",
+        "items": { "type": "string" },
+        "example": ["sora 2", "sora video"]
+      },
+      "topRising": {
+        "type": "array",
+        "title": "Top rising",
+        "description": "Up to 10 rising related queries.",
+        "items": { "type": "string" },
+        "example": ["sora 2 api"]
+      },
+      "chartKey": {
+        "type": ["string", "null"],
+        "title": "Chart key",
+        "description": "Key-value store key for the chart image, or null.",
+        "example": "chart-sora"
+      },
+      "chartUrl": {
+        "type": ["string", "null"],
+        "title": "Chart URL",
+        "description": "Public key-value store record URL for the chart image, or null.",
+        "example": "https://api.apify.com/v2/key-value-stores/EXAMPLE_STORE_ID/records/chart-sora"
+      },
+      "error": {
+        "type": ["object", "null"],
+        "title": "Error",
+        "description": "Error code and message when the row failed, otherwise null.",
+        "properties": {
+          "code": { "type": "string", "example": "RATE_LIMITED" },
+          "message": { "type": "string", "example": "Google Trends rate limit (HTTP 429); wait and retry." }
+        },
+        "example": null
+      },
+      "fetchedAt": {
+        "type": "string",
+        "title": "Fetched at",
+        "description": "ISO timestamp when the upstream data was fetched.",
+        "example": "2026-11-12T09:30:00.000Z"
+      }
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": ["term", "tool", "geo", "window", "status", "interestLatest", "interestAverage", "interestPeak", "searchesPerDay", "chartUrl"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "term": { "label": "Term", "format": "text" },
+          "tool": { "label": "Tool", "format": "text" },
+          "geo": { "label": "Country", "format": "text" },
+          "window": { "label": "Window", "format": "text" },
+          "status": { "label": "Status", "format": "text" },
+          "interestLatest": { "label": "Latest", "format": "number" },
+          "interestAverage": { "label": "Average", "format": "number" },
+          "interestPeak": { "label": "Peak", "format": "number" },
+          "searchesPerDay": { "label": "Searches/day", "format": "number" },
+          "chartUrl": { "label": "Chart", "format": "image" }
+        }
+      }
+    },
+    "related": {
+      "title": "Related queries",
+      "transformation": {
+        "fields": ["term", "geo", "topRelated", "topRising"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "term": { "label": "Term", "format": "text" },
+          "geo": { "label": "Country", "format": "text" },
+          "topRelated": { "label": "Top related", "format": "array" },
+          "topRising": { "label": "Rising", "format": "array" }
+        }
+      }
+    },
+    "calibration": {
+      "title": "Calibration",
+      "transformation": {
+        "fields": ["term", "anchor", "searchesPerDay", "verdict", "status", "error"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "term": { "label": "Term", "format": "text" },
+          "anchor": { "label": "Anchor", "format": "text" },
+          "searchesPerDay": { "label": "Searches/day", "format": "number" },
+          "verdict": { "label": "Verdict", "format": "text" },
+          "status": { "label": "Status", "format": "text" },
+          "error": { "label": "Error", "format": "object" }
+        }
+      }
+    }
+  }
+}

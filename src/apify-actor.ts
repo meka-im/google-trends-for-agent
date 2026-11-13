@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { GTrendsError } from './core.js';
+import { RELAY_PROTOCOL_VERSION } from './http.js';
 import { abortError, raceAbort, throwIfAborted, type Transport, type TransportRequest, type TransportResponse } from './transport.js';
 import { GTFA_ACTOR_GIT_URL, GTFA_ACTOR_NAME, GTFA_ACTOR_STANDBY_IDLE_SECS } from './options.js';
 
@@ -333,7 +334,7 @@ export function deployActor(token: string): Promise<ApifyDeployResult> {
 export interface CreateActorRelayTransportOptions {
   /** Saved config token or APIFY_TOKEN. */
   token: string;
-  /** The user's google-trends-for-agent Actor id. */
+  /** The google-trends-for-agent Actor id (public constant or the user's own). */
   actorId: string;
   /** Fetch implementation for tests. */
   fetch?: typeof globalThis.fetch;
@@ -341,21 +342,30 @@ export interface CreateActorRelayTransportOptions {
   resolveStandbyUrl?: (token: string, actorId: string) => Promise<string>;
   /** First request timeout (cold Standby start). Default 120 s. */
   coldStartTimeoutMs?: number;
+  /** Relay protocol this plugin speaks; defaults to RELAY_PROTOCOL_VERSION. */
+  relayVersion?: number;
+}
+
+/** A relay transport that can also run the one-time /health compatibility check. */
+export interface ActorRelayTransport extends Transport {
+  checkHealth: () => Promise<void>;
 }
 
 /**
- * Relay transport for `apify` egress. Each Google request is POSTed to the
+ * Relay transport for the Actor egress routes. Each Google request is POSTed to the
  * user's Actor at `/egress/fetch`, which performs it with its on-platform
  * residential proxy. The Apify token only travels in the Authorization header
  * and is never included in error messages.
  */
-export function createActorRelayTransport(options: CreateActorRelayTransportOptions): Transport {
+export function createActorRelayTransport(options: CreateActorRelayTransportOptions): ActorRelayTransport {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const resolve = options.resolveStandbyUrl ?? ((token: string, actorId: string) => sharedClient.resolveStandbyUrl(token, actorId));
   const coldStartTimeoutMs = options.coldStartTimeoutMs ?? COLD_START_TIMEOUT_MS;
+  const relayVersion = options.relayVersion ?? RELAY_PROTOCOL_VERSION;
   let standby: string | undefined;
   let resolving: Promise<string> | undefined;
   let first = true;
+  let health: Promise<void> | undefined;
 
   const baseUrl = async (): Promise<string> => {
     if (standby) return standby;
@@ -366,14 +376,55 @@ export function createActorRelayTransport(options: CreateActorRelayTransportOpti
     return resolving;
   };
 
-  return async (request: TransportRequest): Promise<TransportResponse> => {
+  const checkHealth = async (): Promise<void> => {
+    health ??= (async () => {
+      const base = await baseUrl();
+      const timeout = AbortSignal.timeout(coldStartTimeoutMs);
+      let response: Response;
+      try {
+        response = await raceAbort(fetchImpl(`${base}/health`, {
+          method: 'GET',
+          headers: { authorization: `Bearer ${options.token.trim()}`, accept: 'application/json' },
+          redirect: 'manual',
+          signal: timeout,
+        }), timeout);
+      } catch (error) {
+        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        throw new GTrendsError('NETWORK_ERROR', timedOut
+          ? `Your Apify Actor did not answer the health check within ${Math.round(coldStartTimeoutMs / 1000)} seconds. Retry; a cold Standby start can take up to two minutes.`
+          : 'Could not reach your Apify Actor health endpoint. Check its Standby URL and connectivity, then retry.');
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.');
+      }
+      if (response.status === 404) {
+        throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
+      }
+      if (!response.ok) {
+        throw new GTrendsError('NETWORK_ERROR', `Your Apify Actor health check returned HTTP ${response.status}. Retry in a moment.`);
+      }
+      let body: unknown;
+      try { body = await response.json(); }
+      catch { throw new GTrendsError('NETWORK_ERROR', 'Your Apify Actor returned a non-JSON health response. Redeploy the Actor and retry.'); }
+      const relay = record(body).relay;
+      if (relay !== relayVersion) {
+        const speaks = typeof relay === 'number' && Number.isFinite(relay) ? String(relay) : '?';
+        throw new GTrendsError('INVALID_INPUT', `This Actor build speaks relay v${speaks}; this plugin needs v${relayVersion}. Update the plugin or rebuild the Actor.`);
+      }
+    })();
+    return health;
+  };
+
+  const transport = async (request: TransportRequest): Promise<TransportResponse> => {
     throwIfAborted(request.signal);
     if (!options.token.trim()) {
-      throw new GTrendsError('INVALID_INPUT', 'Add an Apify token (or set APIFY_TOKEN) to use apify egress.');
+      throw new GTrendsError('INVALID_INPUT', 'Add an Apify token (or set APIFY_TOKEN) to use an Actor egress.');
     }
     if (!options.actorId.trim()) {
       throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
     }
+    await checkHealth();
+    throwIfAborted(request.signal);
     const base = await baseUrl();
     const timeoutMs = first ? Math.max(request.timeoutMs, coldStartTimeoutMs) : request.timeoutMs;
     first = false;
@@ -430,4 +481,6 @@ export function createActorRelayTransport(options: CreateActorRelayTransportOpti
     }
     return { status: row.status, headers, body: row.body };
   };
+  transport.checkHealth = checkHealth;
+  return transport;
 }

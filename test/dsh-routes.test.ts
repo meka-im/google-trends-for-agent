@@ -26,7 +26,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 function settings(overrides: Partial<RouteSettings> = {}): RouteSettings {
-  return { egress: 'apify', apifyToken: TOKEN, apifyActor: ACTOR, ...overrides };
+  return { egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR, ...overrides };
 }
 
 function routeHarness(getSettings: () => RouteSettings, overrides: Parameters<typeof registerRoutes>[2] = {}) {
@@ -256,7 +256,7 @@ describe('dsh host routes', () => {
     expect(transport.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'HEAD' });
   });
 
-  it('tests apify egress with exactly one relay call through the saved Actor', async () => {
+  it('tests actor-own egress with exactly one relay call through the saved Actor', async () => {
     const target = vi.fn(async () => ({ status: 200, headers: {}, body: '<html></html>' }));
     let seen: { token: string; actorId: string } | undefined;
     const harness = routeHarness(() => settings(), {
@@ -269,39 +269,76 @@ describe('dsh host routes', () => {
     harness.connect();
     const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
     expect(await response.json()).toEqual({
-      ok: true, egress: 'apify', status: 200, latencyMs: 0, actorId: ACTOR,
+      ok: true, egress: 'actor-own', status: 200, latencyMs: 0, actorId: ACTOR,
     });
     expect(seen).toEqual({ token: TOKEN, actorId: ACTOR });
     expect(target).toHaveBeenCalledTimes(1);
     expect(target.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'HEAD' });
   });
 
-  it('maps apify test-connection codes: no-token, no-actor, invalid-token, network, http', async () => {
-    vi.stubEnv('APIFY_TOKEN', '');
-    expect(await testConnection({ egress: 'apify', apifyToken: '' })).toMatchObject({ ok: false, code: 'no-token' });
+  it('uses the public Actor id for actor-public and needs no Actor select', async () => {
+    const target = vi.fn(async () => ({ status: 200, headers: {}, body: '<html></html>' }));
+    let seen: { token: string; actorId: string } | undefined;
+    const harness = routeHarness(() => settings({ egress: 'actor-public', apifyActor: undefined }), {
+      relayTransport: (token, actorId) => {
+        seen = { token, actorId };
+        return target as Transport;
+      },
+      now: () => 1_000,
+    });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
+    expect(await response.json()).toEqual({
+      ok: true, egress: 'actor-public', status: 200, latencyMs: 0, actorId: 'meka.im~google-trends-for-agent',
+    });
+    expect(seen).toEqual({ token: TOKEN, actorId: 'meka.im~google-trends-for-agent' });
+    expect(target).toHaveBeenCalledTimes(1);
+  });
 
-    expect(await testConnection({ egress: 'apify', apifyToken: TOKEN })).toMatchObject({ ok: false, code: 'no-actor' });
+  it('maps relay version mismatches to version-mismatch', async () => {
+    const target = Object.assign(
+      async () => ({ status: 200, headers: {}, body: '' }),
+      { checkHealth: async () => { throw new GTrendsError('INVALID_INPUT', 'This Actor build speaks relay v2; this plugin needs v1. Update the plugin or rebuild the Actor.'); } },
+    );
+    const result = await testConnection({
+      egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR,
+      relayTransport: () => target as unknown as Transport,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      egress: 'actor-own',
+      code: 'version-mismatch',
+      message: expect.stringMatching(/speaks relay v2; this plugin needs v1/),
+      actorId: ACTOR,
+    });
+  });
+
+  it('maps Actor test-connection codes: no-token, no-actor, invalid-token, network, http', async () => {
+    vi.stubEnv('APIFY_TOKEN', '');
+    expect(await testConnection({ egress: 'actor-own', apifyToken: '' })).toMatchObject({ ok: false, code: 'no-token' });
+
+    expect(await testConnection({ egress: 'actor-own', apifyToken: TOKEN })).toMatchObject({ ok: false, code: 'no-actor' });
 
     const invalid = await testConnection({
-      egress: 'apify', apifyToken: TOKEN, apifyActor: ACTOR,
+      egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR,
       relayTransport: () => (async () => { throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token (HTTP 401).'); }) as Transport,
     });
     expect(invalid).toMatchObject({ ok: false, code: 'invalid-token', actorId: ACTOR });
 
     const noActor = await testConnection({
-      egress: 'apify', apifyToken: TOKEN, apifyActor: ACTOR,
+      egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR,
       relayTransport: () => (async () => { throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor.'); }) as Transport,
     });
     expect(noActor).toMatchObject({ ok: false, code: 'no-actor', actorId: ACTOR });
 
     const network = await testConnection({
-      egress: 'apify', apifyToken: TOKEN, apifyActor: ACTOR,
+      egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR,
       relayTransport: () => (async () => { throw new Error('fetch failed'); }) as Transport,
     });
     expect(network).toMatchObject({ ok: false, code: 'network', actorId: ACTOR });
 
     const http = await testConnection({
-      egress: 'apify', apifyToken: TOKEN, apifyActor: ACTOR,
+      egress: 'actor-own', apifyToken: TOKEN, apifyActor: ACTOR,
       relayTransport: () => (async () => ({ status: 503, headers: {}, body: '' })) as Transport,
     });
     expect(http).toMatchObject({ ok: false, code: 'http', status: 503, actorId: ACTOR });

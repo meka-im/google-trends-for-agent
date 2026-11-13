@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ConfigPage, EN, deployApifyActor, loadApifyActors, loadApifyUsage, withPendingAnchor,
+  ConfigPage, EN, ZH, deployApifyActor, loadApifyActors, loadApifyUsage, withPendingAnchor,
   type ApifyActorsView, type ApifyUsageView, type Draft,
 } from '../src/client/index.js';
 import {
@@ -119,7 +120,7 @@ describe('dsh settings form', () => {
   it('renders choices as selects, a segmented control, and switches', () => {
     const html = render();
     expect(html).toContain('role="tablist"');
-    expect(html.match(/role="tab"/g)).toHaveLength(2);
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
     expect(html).toContain('aria-selected="true"');
     expect(html.match(/role="switch"/g)).toHaveLength(3);
     expect(html).not.toContain('type="checkbox"');
@@ -141,8 +142,8 @@ describe('dsh settings form', () => {
     expect(html).not.toContain('>Actor<');
   });
 
-  it('shows the usage card, token, and Actor select with build status when egress is apify', () => {
-    const html = render({ draft: { egress: 'apify', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
+  it('shows the usage card, token, and Actor select with build status for actor-own', () => {
+    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
     expect(html).toContain('Apify usage');
     expect(html).toContain('$8.06 / $19.00');
     expect(html).toContain('role="progressbar"');
@@ -156,14 +157,14 @@ describe('dsh settings form', () => {
   });
 
   it('never renders the removed proxy group or country fields', () => {
-    const html = render({ draft: { egress: 'apify', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
+    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
     for (const text of ['Proxy group', 'Proxy country', 'apifyProxyGroup', 'apifyProxyCountry', 'proxyGroup', 'proxyCountry']) {
       expect(html).not.toContain(text);
     }
   });
 
   it('shows the sign-up bar with the measured-cost estimate only when there is no token', () => {
-    const html = render({ draft: { egress: 'apify' }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
+    const html = render({ draft: { egress: 'actor-own' }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
     expect(html).toContain('No Apify account? Sign up free');
     expect(html).toContain('$5 monthly credit');
     expect(html).toContain(`roughly ${new Intl.NumberFormat('en').format(apifyEstimatedCalls())} calls a month at about $0.0025 per call, estimated`);
@@ -175,7 +176,7 @@ describe('dsh settings form', () => {
   });
 
   it('hides the sign-up bar when a token exists or egress is local', () => {
-    const paid = render({ draft: { egress: 'apify', actor: 'actor-1' }, usage: paidUsage, actors: oneActor });
+    const paid = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: paidUsage, actors: oneActor });
     expect(paid).not.toContain('No Apify account?');
     expect(paid).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
 
@@ -184,27 +185,39 @@ describe('dsh settings form', () => {
   });
 
   it('does not warn that Apify egress needs a paid plan', () => {
-    const html = render({ draft: { egress: 'apify', actor: 'actor-1' }, usage: freeUsage, actors: oneActor });
+    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: freeUsage, actors: oneActor });
     expect(html).not.toContain('needs a paid plan');
     expect(html).not.toContain('Free plan:');
     expect(html).not.toContain('Upgrade →');
   });
 
+  it('keeps the public route read-only with a source link and no deploy controls', () => {
+    const html = render({ draft: { egress: 'actor-public' }, usage: readyUsage, actors: oneActor });
+    expect(html).toContain('Public Actor');
+    expect(html).toContain('Actor: meka.im/google-trends-for-agent');
+    expect(html).toContain('View source on GitHub →');
+    expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent"');
+    expect(html).toContain('About $0.0025 of platform usage per isolated call');
+    expect(html).toContain('Apify token');
+    expect(html).not.toContain('aria-label="Actor"');
+    expect(html).not.toContain('Deploy to my Apify account');
+  });
+
   it('offers one-click deploy and a manual link when the account has no matching Actor', () => {
-    const html = render({ draft: { egress: 'apify' }, usage: readyUsage, actors: { status: 'ready', actors: [] } });
+    const html = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'ready', actors: [] } });
     expect(html).toContain('No google-trends-for-agent Actor in your account yet.');
     expect(html).toContain('Deploy to my Apify account →');
     expect(html).toContain('or deploy manually');
-    expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent#deploy-to-apify"');
+    expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent#deploy-it-yourself"');
     expect(html).toContain('aria-label="Actor"');
   });
 
-  it('shows Actor list loading and error states', () => {
-    const loading = render({ draft: { egress: 'apify' }, usage: readyUsage, actors: { status: 'loading' } });
+  it('shows Actor list loading and error states for actor-own', () => {
+    const loading = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'loading' } });
     expect(loading).toContain('Loading your Actors…');
-    const invalid = render({ draft: { egress: 'apify' }, usage: readyUsage, actors: { status: 'error', code: 'invalid-token' } });
+    const invalid = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'invalid-token' } });
     expect(invalid).toContain('Apify rejected the token');
-    const network = render({ draft: { egress: 'apify' }, usage: readyUsage, actors: { status: 'error', code: 'network' } });
+    const network = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'network' } });
     expect(network).toContain('Could not load your Actors');
   });
 
@@ -246,7 +259,7 @@ describe('dsh settings form', () => {
   });
 
   it('warns about a token prefix without blocking Save', () => {
-    const html = render({ draft: { egress: 'apify', token: 'not-an-apify-token' } });
+    const html = render({ draft: { egress: 'actor-own', token: 'not-an-apify-token' } });
     expect(html).toContain('Apify API tokens usually start with apify_api_. Double-check this one.');
     expect(html).not.toMatch(/type="submit"[^>]*disabled/);
   });
@@ -270,7 +283,7 @@ describe('dsh settings form', () => {
     expect(localInputs).toHaveLength(5);
     expect(local).not.toContain('<textarea');
 
-    const apify = render({ draft: { egress: 'apify', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
+    const apify = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
     const apifyInputs = [...apify.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
     expect(apifyInputs.filter(input => input.includes('type="password"'))).toHaveLength(1);
     expect(apifyInputs).toHaveLength(6);
@@ -294,6 +307,24 @@ describe('dsh settings form', () => {
     ] } } });
     expect(html).toContain('<option value="0.2" selected="">±20%</option>');
     expect(html).toMatch(/aria-label="Tolerance pizza"><option value="" selected="">Default \(±50%\)<\/option>/);
+  });
+});
+
+describe('settings i18n and egress compatibility', () => {
+  it('has the same keys in English and Chinese', () => {
+    expect(Object.keys(ZH).sort()).toEqual(Object.keys(EN).sort());
+    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'testVersionMismatch', 'publicActorCost', 'viewSource']) {
+      expect(EN[key], key).toBeTruthy();
+      expect(ZH[key], key).toBeTruthy();
+    }
+  });
+
+  it('no longer uses the old apify egress value', () => {
+    for (const path of ['../src/options.ts', '../src/dsh.ts', '../src/dsh-routes.ts', '../src/client/index.tsx']) {
+      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+      expect(source, path).not.toMatch(/egress[^\n]*'apify'/);
+      expect(source, path).not.toContain("'apify'");
+    }
   });
 });
 

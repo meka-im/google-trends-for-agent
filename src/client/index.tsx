@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
   APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
-  BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, apifyEstimatedCalls, regionLabel,
+  BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
+  apifyEstimatedCalls, regionLabel, type EgressMode,
 } from '../options.js';
 
 /** Cordis service name used by the client bundle. */
@@ -32,7 +33,7 @@ const USAGE_URL = 'api/gtfa.apify-usage';
 const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const TEST_URL = 'api/gtfa.test-connection';
-const DEPLOY_MANUAL_URL = 'https://github.com/meka-im/google-trends-for-agent#deploy-to-apify';
+const DEPLOY_MANUAL_URL = `${GTFA_SOURCE_URL}#deploy-it-yourself`;
 
 type Translate = (key: string) => string;
 
@@ -116,7 +117,7 @@ export interface AnchorDraft {
 }
 
 export interface Draft {
-  egress: 'local' | 'apify';
+  egress: EgressMode;
   token: string;
   clearToken: boolean;
   actor: string;
@@ -159,10 +160,10 @@ export type ApifyUsageView =
 
 export interface TestConnectionView {
   ok: boolean;
-  egress: 'local' | 'apify';
+  egress: EgressMode;
   status: number | null;
   latencyMs: number;
-  code?: 'no-token' | 'no-actor' | 'invalid-token' | 'network' | 'http' | 'busy';
+  code?: 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy';
   message?: string;
   actorId?: string;
 }
@@ -193,24 +194,27 @@ export const EN: Record<string, string> = {
   connection: 'Connection',
   connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
   egress: 'Egress',
-  egressHint: 'Local: requests leave from the machine running dsh. Apify: requests go through your own google-trends-for-agent Actor, which uses its on-platform residential proxy (works on the Free plan).',
+  egressHint: 'Local: requests leave from the machine running dsh. Public Actor: relay through the meka.im Actor; runs and billing stay in your Apify account, nothing to deploy. My own Actor: deploy the same open-source code into your account and pick it below.',
   egressLocal: 'Local (this machine)',
-  egressApify: 'Apify Actor',
+  egressPublic: 'Public Actor (meka.im)',
+  egressOwn: 'My own Actor',
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
+  testNote: 'Two tiny requests: /health (no proxy traffic) and one HEAD relay.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
-  testApifyOk: 'Apify Actor OK — HTTP {status}, {ms} ms',
-  testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to use apify egress.',
+  testActorOk: 'Apify Actor OK — HTTP {status}, {ms} ms',
+  testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to use an Actor egress.',
   testNoActor: 'Select or deploy your google-trends-for-agent Actor first.',
+  testVersionMismatch: 'This Actor build speaks a different relay version. Update the plugin or rebuild the Actor.',
   testInvalidToken: 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.',
   testNetworkLocal: 'Could not reach Google Trends from this machine.',
   testDetail: ' Details: {detail}',
-  testNetworkApify: 'Could not reach your Apify Actor (or it returned no Standby response).',
+  testNetworkActor: 'Could not reach your Apify Actor (or it returned no Standby response).',
   testHttp: 'Target returned HTTP {status}.',
   testBusy: 'A test is already running. Try again in a moment.',
-  apify: 'Apify',
-  apifyDescription: 'Token, your Actor, and this cycle\'s Apify usage.',
+  actorConnection: 'Apify Actor',
+  actorDescription: 'Token, the Actor, and this cycle\'s Apify usage.',
   usageTitle: 'Apify usage',
   usageLoading: 'Loading Apify usage…',
   usageNoToken: 'Add an Apify token (or set APIFY_TOKEN) to see usage.',
@@ -239,6 +243,10 @@ export const EN: Record<string, string> = {
   tokenEmpty: 'No token stored.',
   clearToken: 'Clear the stored token',
   actor: 'Actor',
+  publicActor: 'Public Actor',
+  publicActorHint: 'Fixed public Actor. Runs and billing stay in your Apify account; nothing to deploy.',
+  publicActorCost: 'About ${cost} of platform usage per isolated call (estimate); no Actor fee.',
+  viewSource: 'View source on GitHub →',
   actorHint: 'Your google-trends-for-agent Actor. It fetches Google Trends with its on-platform residential proxy and exits after 60 s idle.',
   actorNone: 'Select an Actor',
   actorRefresh: 'Refresh',
@@ -324,24 +332,27 @@ export const ZH: Record<string, string> = {
   connection: '连接',
   connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
   egress: '出口',
-  egressHint: '本机直连：请求从运行 dsh 的机器发出；Apify：请求经你自己的 google-trends-for-agent Actor 转发，使用平台内住宅代理（免费版可用）。',
+  egressHint: '本机直连：请求从运行 dsh 的机器发出。公共 Actor：经 meka.im 的 Actor 转发，运行和计费都在你的 Apify 账号内，无需部署。我自己的 Actor：把同一份开源代码部署到你的账号，并在下方选择。',
   egressLocal: '本机直连',
-  egressApify: 'Apify Actor',
+  egressPublic: '公共 Actor（meka.im）',
+  egressOwn: '我自己的 Actor',
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
+  testNote: '两次极小请求：/health（不耗代理流量）和一次 HEAD 转发。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
-  testApifyOk: 'Apify Actor 正常 — HTTP {status}，{ms} ms',
-  testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可使用 Apify 出口。',
+  testActorOk: 'Apify Actor 正常 — HTTP {status}，{ms} ms',
+  testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可使用 Actor 出口。',
   testNoActor: '请先选择或部署你的 google-trends-for-agent Actor。',
+  testVersionMismatch: '该 Actor 构建的 relay 版本不匹配。请更新插件或重新构建 Actor。',
   testInvalidToken: 'Apify 拒绝了该 Token。请在 Apify Console → Settings → API & Integrations 中检查。',
   testNetworkLocal: '本机无法连接 Google Trends。',
   testDetail: '详情：{detail}',
-  testNetworkApify: '无法连接你的 Apify Actor（或它没有返回 Standby 响应）。',
+  testNetworkActor: '无法连接你的 Apify Actor（或它没有返回 Standby 响应）。',
   testHttp: '目标返回 HTTP {status}。',
   testBusy: '已有测试正在进行，请稍后再试。',
-  apify: 'Apify',
-  apifyDescription: 'Token、你的 Actor 和本计费周期的 Apify 用量。',
+  actorConnection: 'Apify Actor',
+  actorDescription: 'Token、Actor 和本计费周期的 Apify 用量。',
   usageTitle: 'Apify 用量',
   usageLoading: '正在加载 Apify 用量…',
   usageNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可查看用量。',
@@ -370,6 +381,10 @@ export const ZH: Record<string, string> = {
   tokenEmpty: '未保存 Token。',
   clearToken: '清除已保存的 Token',
   actor: 'Actor',
+  publicActor: '公共 Actor',
+  publicActorHint: '固定的公共 Actor。运行和计费都在你的 Apify 账号内，无需部署。',
+  publicActorCost: '单次独立调用约 ${cost} 平台用量（估算），无 Actor 费用。',
+  viewSource: '在 GitHub 查看源码 →',
   actorHint: '你的 google-trends-for-agent Actor。它使用平台内住宅代理访问 Google Trends，并在空闲 60 秒后退出。',
   actorNone: '选择 Actor',
   actorRefresh: '刷新',
@@ -470,11 +485,11 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, transparent)', color: 'var(--dsw-alias-label-primary, inherit)', font: 'inherit', fontSize: 14,
   },
   segmented: {
-    boxSizing: 'border-box', display: 'grid', gap: 2, width: '100%', maxWidth: 420, padding: 3, borderRadius: 9,
+    boxSizing: 'border-box', display: 'grid', gap: 2, width: '100%', maxWidth: 620, padding: 3, borderRadius: 9,
     background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.12))',
   },
   segment: {
-    height: 28, padding: '0 16px', border: 0, borderRadius: 7, background: 'transparent',
+    height: 28, padding: '0 10px', border: 0, borderRadius: 7, background: 'transparent',
     color: 'var(--dsw-alias-label-secondary, inherit)', font: 'inherit', fontSize: 13, lineHeight: '20px', fontWeight: 500,
     whiteSpace: 'nowrap', cursor: 'pointer',
   },
@@ -611,7 +626,7 @@ export function fromSnapshot(value: Record<string, unknown> | undefined): Draft 
   const windows = record(baselines.windowAnchors);
   const chartDir = source.chartDir === null ? '' : text(source.chartDir, '.gtfa/charts');
   return {
-    egress: source.egress === 'apify' ? 'apify' : 'local',
+    egress: source.egress === 'actor-public' || source.egress === 'actor-own' ? source.egress : 'local',
     token: '',
     clearToken: false,
     actor: text(source.apifyActor),
@@ -650,11 +665,12 @@ export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
   if (draft.token && draft.clearToken) return t('tokenConflict');
   set(['egress'], draft.egress);
   // Local egress leaves the saved Apify token and Actor untouched.
-  if (draft.egress === 'apify') {
+  if (draft.egress !== 'local') {
     if (draft.token.trim()) set(['apifyToken'], draft.token.trim());
     else if (draft.clearToken) unset(['apifyToken']);
-    textOrUnset(['apifyActor'], draft.actor);
   }
+  // The Actor select is only meaningful for the user's own deployment.
+  if (draft.egress === 'actor-own') textOrUnset(['apifyActor'], draft.actor);
   if (!GEO_SET.has(draft.geo)) return t('invalidGeo');
   set(['geo'], draft.geo);
   textOrUnset(['anchor'], draft.anchor);
@@ -796,19 +812,22 @@ function usageErrorText(state: Extract<ApifyUsageView, { status: 'error' }>, t: 
 
 function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text: string } {
   if (result.ok) {
-    if (result.egress === 'apify') {
-      return { ok: true, text: template(t('testApifyOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
+    if (result.egress !== 'local') {
+      return { ok: true, text: template(t('testActorOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
     }
     return { ok: true, text: template(t('testLocalOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
   }
-  let key = result.egress === 'apify' ? 'testNetworkApify' : 'testNetworkLocal';
+  let key = result.egress !== 'local' ? 'testNetworkActor' : 'testNetworkLocal';
   if (result.code === 'no-token') key = 'testNoToken';
   else if (result.code === 'no-actor') key = 'testNoActor';
   else if (result.code === 'invalid-token') key = 'testInvalidToken';
+  else if (result.code === 'version-mismatch') key = 'testVersionMismatch';
   else if (result.code === 'http') key = 'testHttp';
   else if (result.code === 'busy') key = 'testBusy';
   const base = key === 'testHttp' ? template(t(key), { status: statusLabel(result.status) }) : t(key);
-  const detail = result.code === 'network' && result.message ? template(t('testDetail'), { detail: result.message }) : '';
+  const detail = (result.code === 'network' || result.code === 'version-mismatch') && result.message
+    ? template(t('testDetail'), { detail: result.message })
+    : '';
   return { ok: false, text: base + detail };
 }
 
@@ -924,7 +943,7 @@ export async function deployApifyActor(): Promise<DeployActorView> {
 }
 
 /** Send exactly one owner-authenticated test request for the saved egress. */
-export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Promise<TestConnectionView> {
+export async function runConnectionTest(egress: EgressMode = 'local'): Promise<TestConnectionView> {
   try {
     const response = await fetch(TEST_URL, {
       method: 'POST',
@@ -935,7 +954,7 @@ export async function runConnectionTest(egress: 'local' | 'apify' = 'local'): Pr
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
     const row = record(body);
-    if (typeof row.ok === 'boolean' && (row.egress === 'local' || row.egress === 'apify')) {
+    if (typeof row.ok === 'boolean' && (row.egress === 'local' || row.egress === 'actor-public' || row.egress === 'actor-own')) {
       return {
         ok: row.ok,
         egress: row.egress,
@@ -1215,7 +1234,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   }, [notice]);
 
   useEffect(() => {
-    if (draft.egress !== 'apify') {
+    if (draft.egress === 'local') {
       setUsage({ status: 'idle' });
       return;
     }
@@ -1228,7 +1247,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   }, [draft.egress, usageRequest]);
 
   useEffect(() => {
-    if (draft.egress !== 'apify') {
+    if (draft.egress !== 'actor-own') {
       setActors({ status: 'idle' });
       return;
     }
@@ -1312,7 +1331,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
       return;
     }
     if (typeof ops === 'string') { setFailure(ops); return; }
-    const savedEgress = snapshot.value?.egress === 'apify' ? 'apify' : 'local';
+    const savedEgress: EgressMode = snapshot.value?.egress === 'actor-public' || snapshot.value?.egress === 'actor-own'
+      ? snapshot.value.egress
+      : 'local';
     const tokenChanged = Boolean(draft.token.trim() || draft.clearToken);
     const egressChanged = draft.egress !== savedEgress;
     setBusy(true);
@@ -1324,9 +1345,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
         setDraft(cleaned);
         setBaseline(draftKey(cleaned));
         setNotice(t('saved'));
-        if (draft.egress === 'apify' && (tokenChanged || egressChanged)) {
+        if (draft.egress !== 'local' && (tokenChanged || egressChanged)) {
           requestUsage(false);
-          requestActors(true);
+          if (draft.egress === 'actor-own') requestActors(true);
         }
       }
     } catch (error) {
@@ -1425,6 +1446,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   const canSave = editable && dirty && !blocking;
   const newAnchorReady = Boolean(draft.newAnchor.term.trim()) && isPositiveNumber(draft.newAnchor.dailySearches) && !validation.newAnchorTerm && !validation.newAnchorDaily;
   const line = testResult ? testLine(testResult, t) : null;
+  const actorEgress = draft.egress !== 'local';
+  const ownEgress = draft.egress === 'actor-own';
+  const publicCost = APIFY_EST_COST_PER_CALL_USD.toFixed(4);
 
   return <form style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
     <p style={styles.intro}>{t('intro')}</p>
@@ -1435,7 +1459,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
         <Segmented label={t('egress')} value={draft.egress} disabled={!editable}
           options={[
             { value: 'local', label: t('egressLocal') },
-            { value: 'apify', label: t('egressApify') },
+            { value: 'actor-public', label: t('egressPublic') },
+            { value: 'actor-own', label: t('egressOwn') },
           ]}
           onChange={value => { edit({ egress: value }); setTestResult(null); }} />
       </Field>
@@ -1444,7 +1469,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
           <button type="button" style={dim(styles.button, !editable || testing)} disabled={!editable || testing} onClick={() => { void test(); }}>
             {testing ? t('testing') : t('testConnection')}
           </button>
-          {dirty ? <span style={styles.hint}>{t('testSavedNote')}</span> : null}
+          {dirty
+            ? <span style={styles.hint}>{t('testSavedNote')}</span>
+            : actorEgress ? <span style={styles.hint}>{t('testNote')}</span> : null}
         </div>
         {line ? <p style={{ ...styles.testLine, color: line.ok ? 'var(--dsw-alias-state-success-primary, #2f9e5f)' : 'var(--dsw-alias-state-error-primary, #d14343)' }} role="status">
           {line.ok ? '✓ ' : '✗ '}{line.text}
@@ -1452,8 +1479,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
       </div>
     </section>
 
-    {draft.egress === 'apify' ? <section style={styles.section}>
-      <SectionHeader title={t('apify')} description={t('apifyDescription')} />
+    {actorEgress ? <section style={styles.section}>
+      <SectionHeader title={t('actorConnection')} description={t('actorDescription')} />
       {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
       <div style={styles.usageBlock}>
         <ApifyUsageCard state={usage} t={t} locale={intlLocale}
@@ -1473,37 +1500,43 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
             onChange={checked => edit({ clearToken: checked })} />
         </div> : null}
       </Field>
-      <div style={styles.field}>
-        <div style={styles.switchRow}>
-          <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
-          <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
-            onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
+      {ownEgress ? <>
+        <div style={styles.field}>
+          <div style={styles.switchRow}>
+            <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
+            <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
+              onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
+          </div>
+          <select style={styles.select} aria-label={t('actor')} value={draft.actor}
+            disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
+            onChange={event => edit({ actor: event.target.value })}>
+            <option value="">{t('actorNone')}</option>
+            {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <p style={styles.hint}>{t('actorHint')}</p>
+          {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
+            status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
+          })}</p> : null}
+          {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
+          {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
         </div>
-        <select style={styles.select} aria-label={t('actor')} value={draft.actor}
-          disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
-          onChange={event => edit({ actor: event.target.value })}>
-          <option value="">{t('actorNone')}</option>
-          {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <p style={styles.hint}>{t('actorHint')}</p>
-        {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
-          status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
-        })}</p> : null}
-        {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
-        {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
-      </div>
-      {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
-        <p style={styles.usageMeta}>{t('actorEmpty')}</p>
-        <div>
-          <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
-            disabled={!editable || deploying} onClick={() => { void deploy(); }}>
-            {deploying ? t('deploying') : t('deploy')}
-          </button>
-        </div>
-        <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
-      </div> : null}
-      {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
-      {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
+        {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
+          <p style={styles.usageMeta}>{t('actorEmpty')}</p>
+          <div>
+            <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
+              disabled={!editable || deploying} onClick={() => { void deploy(); }}>
+              {deploying ? t('deploying') : t('deploy')}
+            </button>
+          </div>
+          <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
+        </div> : null}
+        {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
+        {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
+      </> : <Field label={t('publicActor')} hint={t('publicActorHint')}>
+        <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
+        <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a></p>
+        <p style={styles.hint}>{template(t('publicActorCost'), { cost: publicCost })}</p>
+      </Field>}
     </section> : null}
 
     <section style={styles.section}>

@@ -79,7 +79,7 @@ describe('Streamable HTTP MCP transport', () => {
     const { http } = await start(transport, { version: '9.9.9' });
     const response = await realFetch(`http://127.0.0.1:${http.port}/health`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, version: '9.9.9' });
+    expect(await response.json()).toEqual({ ok: true, version: '9.9.9', relay: 1 });
     expect(transport).not.toHaveBeenCalled();
   });
 

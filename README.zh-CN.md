@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-345%20passed-22c55e?style=flat-square" alt="345 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-379%20passed-22c55e?style=flat-square" alt="379 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -84,6 +84,20 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 # MCP 端点：http://127.0.0.1:4321/mcp
 ```
 
+## 选择路线
+
+同一套四个工具支持三种出口：
+
+| 路线 | 配置 | 费用 |
+| --- | --- | --- |
+| 本机直连 | 用 `npx` 运行 CLI/MCP 服务器，或安装 dsh 插件；请求从你的 IP 发出。 | 免费；无需 Apify 账号。 |
+| 公共 Actor（meka.im） | MCP 客户端使用 Standby URL 和你的 Apify Token，或在插件里选择**公共 Actor**；无需部署。 | 你的 Apify 账号内的平台用量；无 Actor 费用（单次独立调用约 $0.0025，估算）。 |
+| 自行部署 | 把同一份开源代码放进你的账号：dsh 插件一键部署、Console 关联 Git 仓库，或 `apify push`。 | 你的账号内同样的平台用量。 |
+
+开源：同一份代码服务全部三种路线。
+
+Apify Store 页面：即将上线
+
 ## dsh 插件
 
 ```sh
@@ -92,47 +106,23 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 # ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑同一条命令。
 ```
 
-安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**；如果 bundle 显示 Off，请先开启。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库。默认不启动 MCP 服务器、不运行 `gtfa` CLI 子进程，也不经过 Actor 端点；选择 `apify` 出口时会经过你自己的 Actor。随包提供的 `gtfa` skill 会告诉 Agent 何时使用哪个工具，并如实报告 `no_data` / `blocked`。
+安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**（如果 bundle 显示 Off，请先开启）。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库，并随包提供 `gtfa` skill；无需 MCP 服务器或 CLI 子进程。
 
-可配置出口（`local` 或 `apify`）、Apify Token、你的 Actor、默认地区、基线和快照缓存；可选项均使用下拉框、分段控件或开关，修改即时生效。选择 Apify 后，设置页会显示本计费周期的用量（套餐、美元、住宅流量）、Token 输入框和带最新构建状态的 **Actor** 下拉框。**测试连接**通过已保存的出口发出一次请求；用量、Actor 列表、部署和测试都在 Host 运行，浏览器看不到 Token。在界面输入的 Token 会以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回给客户端。留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
+在 **Connection → Egress** 选择一种路线：
 
-`local` 从运行 dsh 的机器发出请求（仍支持 `HTTPS_PROXY`）。`apify` 会把每个请求发到**你自己 Apify 账号**里的 `google-trends-for-agent` Actor 的 `/egress/fetch`；Actor 用平台内住宅代理执行请求，并在 HTTP 429 或 Google 验证页时轮换会话。代理在 Actor 内使用，所以免费版也可以工作。Apify 住宅流量按 GB 从你的 Apify 额度中扣除。实测估算：单次独立的 `trends_ask` 约 $0.0025（约 65 KB 住宅流量加一次短时 512 MB 运行），免费版每月 $5 约够 2,000 次；同一次运行内的连续调用更便宜。
+- **本机直连** — 请求从运行 dsh 的机器发出（仍支持 `HTTPS_PROXY`）。
+- **公共 Actor（meka.im）** — 经公共 Actor 转发；运行和计费都在你的 Apify 账号内，无需部署。填入 Apify Token 或设置 `APIFY_TOKEN`。
+- **我自己的 Actor** — 在你的账号里部署或选择 `google-trends-for-agent`。一键启动 Git 构建，等待 `succeeded`；也可在 Console 关联仓库或自行运行 `apify push`。
 
-先部署一次 Actor，然后在下拉框里选中它：
+两种 Actor 路线共用 Token 输入、用量卡片、测试连接和同一套住宅代理转发；设置页显示实测约 $0.0025/次的估算。**测试连接**会先请求 `GET /health`（检查 relay 版本，不耗代理流量），再发一次极小的 HEAD 转发。所有可选项都使用下拉框、分段控件或开关，修改即时生效。Token 以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回；留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
 
-- **一键**：在 **Plugins → Google Trends → Configure → Apify** 中点击 **部署到我的 Apify 账号 →**。等待**构建中…（约 1–2 分钟）**和 `succeeded` 状态，新 Actor 会自动选中。
-- **手动**：Apify Console → Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**；或克隆仓库后运行 `apify push`。
+## 自行部署
 
-如果 `apify` 出口没有选择 Actor，工具会返回明确的 `INVALID_INPUT` 错误，而不会调用 Google。
+- **插件一键部署：** **Plugins → Google Trends → Configure → My own Actor → Deploy to my Apify account →**。
+- **Console：** Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**。
+- **CLI：** 克隆仓库后运行 `apify push`。
 
-## 部署到 Apify
-
-
-该 Actor 以 **Standby 模式**通过 **Streamable HTTP** 运行 MCP 服务器，并默认通过**美国 Apify 住宅代理**访问 Google Trends。它既是无法运行本地进程、也无法访问 `localhost` 的远程 Agent 的接入方式，也是 dsh 插件 `apify` 出口的转发层；两者都可以在免费版使用。
-
-可用插件里的“一键部署”按钮（见上），也可在 Apify Console 新建 Actor 并关联 `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**；或克隆仓库后运行 `apify push`。然后把 Standby URL 和 Apify API Token 交给客户端：
-
-```text
-https://<user>--google-trends-for-agent.apify.actor/mcp
-Authorization: Bearer APIFY_TOKEN
-```
-
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://<user>--google-trends-for-agent.apify.actor/mcp",
-      "headers": { "Authorization": "Bearer APIFY_TOKEN" }
-    }
-  }
-}
-```
-
-主机名里的用户名会把点号换成连字符（例如 `meka.im` 变为 `meka-im`，即 `https://meka-im--google-trends-for-agent.apify.actor/mcp`）。也可在 Actor 控制台复制准确的 Standby URL。
-
-该 Actor 还在同一主机提供纯 HTTP API：`POST /egress/fetch`（插件的 Google Trends 转发）、`POST /tools/{name}`（四个工具）、`GET /health` 和 `GET /mcp`（MCP）。所有请求都使用 `Authorization: Bearer APIFY_TOKEN`。Actor 只记录方法和路径，不记录查询串、请求头或请求体。
-
-Actor 本身不收费。Apify 住宅代理流量按 GB 从你的 Apify 额度中扣除，费率以你的套餐和 Apify 控制台为准。单租户 Standby 空闲时仍会产生计算费用，因此无请求 60 秒后 Actor 会退出（`GTFA_IDLE_EXIT_SECS`）。请保持轻量调用：`trends_now` 查询多个国家比单次 `trends_ask` 消耗更多代理流量。Actor 配置和商店说明见 [`.actor/README.md`](.actor/README.md)。
+Standby/MCP/HTTP 细节、一次性运行输入、数据集和商店说明见 [`.actor/README.md`](.actor/README.md)。
 
 ## MCP 工具
 
@@ -198,7 +188,7 @@ GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读
 
 ```sh
 npm install
-npm test          # 345 个测试
+npm test          # 379 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

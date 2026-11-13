@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createActorRelayTransport, resolveApifyApiToken, type CreateActorRelayTransportOptions } from './apify-actor.js';
 import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
-import { DEFAULT_GEO, GEO_CODES, normalizeGeo, type EgressMode } from './options.js';
+import { DEFAULT_GEO, EGRESS_MODES, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, type EgressMode } from './options.js';
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 
@@ -21,11 +21,11 @@ export const inject = ['tools'];
 
 /** Editable settings shape shown by dsh's Plugins → Configure page. */
 export interface GtfaConfig {
-  /** `local` sends Google requests from this machine; `apify` relays them through your own Actor. */
+  /** `local` sends Google requests from this machine; the two Actor routes relay them through Apify. */
   egress?: EgressMode;
   /** Apify API token; saved in the profile's cordis.patch.yml and hidden from reads. */
   apifyToken?: string;
-  /** Actor id of your google-trends-for-agent Actor (Standby); required for apify egress. */
+  /** Actor id of your google-trends-for-agent Actor (Standby); used by the actor-own route. */
   apifyActor?: string;
   /** Snapshot directory, resolved against the dsh process working directory. */
   snapshotDir?: string;
@@ -80,8 +80,8 @@ function createConfig(Schema: SchemaFactory) {
 
   /** Host Config schema. Volatile fields apply live; dsh-settings redacts token reads. */
   return Schema.object({
-    egress: Schema.union(['local', 'apify']).default('local')
-      .description('local sends Google requests from the dsh machine; apify relays them through your own google-trends-for-agent Actor (works on the Free plan).').volatile(),
+    egress: Schema.union(['local', 'actor-public', 'actor-own']).default('local')
+      .description('local sends Google requests from the dsh machine. actor-public relays through the meka.im Actor; actor-own relays through your own deployment (both work on the Free plan).').volatile(),
     apifyToken: Schema.string().role('secret')
       .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
     apifyActor: Schema.string()
@@ -119,7 +119,7 @@ export interface RegisterOverrides {
   /** Test seam: use a fixture transport instead of the configured egress. */
   transport?: Transport;
   /** Test seam: override Actor relay construction (fetch and standby resolver). */
-  apify?: Omit<CreateActorRelayTransportOptions, 'token' | 'actorId'>;
+  relay?: Omit<CreateActorRelayTransportOptions, 'token' | 'actorId'>;
   /** Test seam: provide baselines instead of reading GTFA_BASELINES. */
   baselines?: Baselines;
   /** Test seam: request spacing; production uses 1500 ms like MCP. */
@@ -168,7 +168,7 @@ export function baselinesFromConfig(value: unknown): Baselines | undefined {
 /** Normalize one config object (plain or volatile) into the values the tools read per call. */
 export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines): GtfaRuntimeSettings {
   const egress = read(config.egress) ?? 'local';
-  if (egress !== 'local' && egress !== 'apify') throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local" or "apify"`);
+  if (!(EGRESS_MODES as readonly string[]).includes(egress)) throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local", "actor-public", or "actor-own"`);
   const geo = normalizeGeo(read(config.geo) ?? DEFAULT_GEO);
   const chartDirValue = read(config.chartDir);
   const charts = read(config.charts) ?? chartDirValue !== null;
@@ -189,19 +189,19 @@ export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines
 /** Rebuild the egress transport only when its connection-relevant settings change. */
 function createLiveTransport(
   get: () => GtfaRuntimeSettings,
-  overrides?: RegisterOverrides['apify'],
+  overrides?: RegisterOverrides['relay'],
 ): Transport {
   let current: Transport | undefined;
   let key = '';
   return async request => {
     const settings = get();
     const resolved = resolveApifyApiToken(settings.apifyToken);
-    const actorId = settings.apifyActor ?? '';
+    const actorId = settings.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : settings.apifyActor ?? '';
     const next = JSON.stringify([settings.egress, resolved.token ?? null, actorId]);
     if (!current || next !== key) {
-      current = settings.egress === 'apify'
-        ? createActorRelayTransport({ ...overrides, token: resolved.token ?? '', actorId })
-        : createDefaultTransport();
+      current = settings.egress === 'local'
+        ? createDefaultTransport()
+        : createActorRelayTransport({ ...overrides, token: resolved.token ?? '', actorId });
       key = next;
     }
     return current(request);
@@ -288,7 +288,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   // dsh's volatile settings take effect without remounting the plugin.
   resolveGtfaSettings(config, envBaselines);
   const settings = () => resolveGtfaSettings(config, envBaselines);
-  const transport = overrides.transport ?? createLiveTransport(settings, overrides.apify);
+  const transport = overrides.transport ?? createLiveTransport(settings, overrides.relay);
   const tools = createTools({
     transport,
     settings: () => {

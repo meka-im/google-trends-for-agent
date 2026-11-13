@@ -1,0 +1,38 @@
+{
+  "actorKeyValueStoreSchemaVersion": 1,
+  "title": "Google Trends key-value store",
+  "description": "Run summary and chart images.",
+  "collections": {
+    "runSummary": {
+      "title": "Run summary",
+      "description": "One OUTPUT record per run.",
+      "key": "OUTPUT",
+      "contentTypes": ["application/json"],
+      "jsonSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["completed", "partial", "failed"] },
+          "tool": { "type": "string", "enum": ["ask", "snapshot", "compare", "now"] },
+          "geo": { "type": "string" },
+          "window": { "type": "string" },
+          "terms": { "type": "array", "items": { "type": "string" } },
+          "delivered": { "type": "integer", "minimum": 0 },
+          "noData": { "type": "integer", "minimum": 0 },
+          "blocked": { "type": "integer", "minimum": 0 },
+          "errors": { "type": "integer", "minimum": 0 },
+          "durationMs": { "type": "integer", "minimum": 0 },
+          "completed": { "type": "boolean" },
+          "partial": { "type": "boolean" },
+          "message": { "type": "string" }
+        },
+        "required": ["status", "tool", "geo", "window", "terms", "delivered", "noData", "blocked", "errors", "durationMs", "completed", "partial", "message"]
+      }
+    },
+    "charts": {
+      "title": "Charts",
+      "description": "SVG or PNG charts referenced from the dataset.",
+      "keyPrefix": "chart-",
+      "contentTypes": ["image/png", "image/svg+xml"]
+    }
+  }
+}

@@ -11,6 +11,8 @@ export const DEFAULT_HTTP_PORT = 4321;
 export const DEFAULT_MCP_PATH = '/mcp';
 export const EGRESS_FETCH_PATH = '/egress/fetch';
 export const HEALTH_PATH = '/health';
+/** Relay protocol version reported by GET /health and required by the dsh plugin. */
+export const RELAY_PROTOCOL_VERSION = 1;
 const MAX_TIMEOUT_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -346,7 +348,7 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
         return;
       }
       if (pathname === HEALTH_PATH) {
-        writeJson(res, 200, { ok: true, version: options.version ?? '0.0.0' });
+        writeJson(res, 200, { ok: true, version: options.version ?? '0.0.0', relay: RELAY_PROTOCOL_VERSION });
         return;
       }
       const probe = header(req, 'x-apify-container-server-readiness-probe');

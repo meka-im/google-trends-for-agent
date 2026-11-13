@@ -131,18 +131,18 @@ describe('dsh plugin execution', () => {
     expect(result.interest).not.toHaveProperty('points');
   });
 
-  it('returns the shared error envelope when apify egress has no token', async () => {
+  it('returns the shared error envelope when an Actor egress has no token', async () => {
     vi.stubEnv('APIFY_TOKEN', '');
     const { ctx, tools } = fakeCtx();
-    await register(ctx, config({ egress: 'apify' }));
+    await register(ctx, config({ egress: 'actor-own' }));
     const result = await tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: new AbortController().signal });
     expect(result).toMatchObject({ ok: false, status: 'error', error: { code: 'INVALID_INPUT', message: expect.stringMatching(/APIFY_TOKEN/) } });
   });
 
-  it('returns a clear error when apify egress has a token but no Actor', async () => {
+  it('returns a clear error when actor-own egress has a token but no Actor', async () => {
     vi.stubEnv('APIFY_TOKEN', '');
     const { ctx, tools } = fakeCtx();
-    await register(ctx, config({ egress: 'apify', apifyToken: 'apify_api_token', chartDir: null }));
+    await register(ctx, config({ egress: 'actor-own', apifyToken: 'apify_api_token', chartDir: null }));
     const result = await tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: new AbortController().signal });
     expect(result).toMatchObject({
       ok: false,
@@ -151,9 +151,12 @@ describe('dsh plugin execution', () => {
     });
   });
 
-  it('uses the Actor relay transport when apify egress has an Actor', async () => {
+  it('uses the Actor relay transport when actor-own egress has an Actor', async () => {
     const relayCalls: string[] = [];
-    const relayFetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/health')) {
+        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
+      }
       const request = JSON.parse(String(init!.body)) as { url: string };
       relayCalls.push(request.url);
       const path = new URL(request.url).pathname;
@@ -165,8 +168,8 @@ describe('dsh plugin execution', () => {
       return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
     });
     const { ctx, tools } = fakeCtx();
-    await register(ctx, config({ egress: 'apify', apifyToken: 'apify_api_token', apifyActor: 'actor-1' }), {
-      apify: {
+    await register(ctx, config({ egress: 'actor-own', apifyToken: 'apify_api_token', apifyActor: 'actor-1' }), {
+      relay: {
         fetch: relayFetch as unknown as typeof fetch,
         resolveStandbyUrl: async () => 'https://actor.test',
       },
@@ -176,7 +179,35 @@ describe('dsh plugin execution', () => {
     expect(result).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 1-d' } });
     expect(relayCalls.length).toBeGreaterThan(0);
     expect(relayCalls.every(url => url.startsWith('https://trends.google.com/'))).toBe(true);
-    expect(relayFetch.mock.calls.every(call => String(call[0]) === 'https://actor.test/egress/fetch')).toBe(true);
+    expect(relayFetch.mock.calls.every(call => ['https://actor.test/health', 'https://actor.test/egress/fetch'].includes(String(call[0])))).toBe(true);
+    expect(relayFetch.mock.calls.some(call => String(call[0]) === 'https://actor.test/health')).toBe(true);
+  });
+
+  it('uses the public Actor id for actor-public without an apifyActor setting', async () => {
+    let seenActor: string | undefined;
+    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/health')) {
+        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
+      }
+      const request = JSON.parse(String(init!.body)) as { url: string };
+      const body = request.url.includes('/explore')
+        ? fixture('explore-multi.txt')
+        : request.url.includes('/multiline')
+          ? fixture('multiline-multi.txt')
+          : '';
+      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
+    });
+    const { ctx, tools } = fakeCtx();
+    await register(ctx, config({ egress: 'actor-public', apifyToken: 'apify_api_token', chartDir: null }), {
+      relay: {
+        fetch: relayFetch as unknown as typeof fetch,
+        resolveStandbyUrl: async (_token, actorId) => { seenActor = actorId; return 'https://actor.test'; },
+      },
+      minIntervalMs: 0,
+    });
+    const result = await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, { signal: new AbortController().signal });
+    expect(result).toMatchObject({ ok: true, status: 'ok' });
+    expect(seenActor).toBe('meka.im~google-trends-for-agent');
   });
 
   it('respects an aborted exec.signal', async () => {

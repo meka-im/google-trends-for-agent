@@ -202,8 +202,10 @@ describe('Actor relay transport', () => {
     timeoutMs: 8000,
   };
 
-  it('POSTs the TransportRequest to /egress/fetch and returns the TransportResponse', async () => {
-    const fetchMock = vi.fn(async () => json({ status: 200, headers: { 'content-type': 'text/html' }, body: '<html>ok</html>' }));
+  it('checks /health once, then POSTs the TransportRequest to /egress/fetch', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => String(url) === 'https://actor.test/base/health'
+      ? json({ ok: true, version: '0.1.0', relay: 1 })
+      : json({ status: 200, headers: { 'content-type': 'text/html' }, body: '<html>ok</html>' }));
     const transport = createActorRelayTransport({
       token: TOKEN,
       actorId: 'a1',
@@ -212,8 +214,9 @@ describe('Actor relay transport', () => {
     });
     const response = await transport(request);
     expect(response).toEqual({ status: 200, headers: { 'content-type': 'text/html' }, body: '<html>ok</html>' });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://actor.test/base/health');
+    const [url, init] = fetchMock.mock.calls[1]!;
     expect(url).toBe('https://actor.test/base/egress/fetch');
     expect(init).toMatchObject({
       method: 'POST',
@@ -236,7 +239,9 @@ describe('Actor relay transport', () => {
     const build = (status: number) => createActorRelayTransport({
       token: TOKEN,
       actorId: 'a1',
-      fetch: (async () => json({ status: 200, body: '' }, status)) as unknown as typeof fetch,
+      fetch: (async (url: string | URL | Request) => String(url).endsWith('/health')
+        ? json({ ok: true, version: '0.1.0', relay: 1 })
+        : json({ status: 200, body: '' }, status)) as unknown as typeof fetch,
       resolveStandbyUrl: async () => 'https://actor.test',
     });
     await expect(build(401)(request)).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringMatching(/rejected the token/) });
@@ -284,10 +289,50 @@ describe('Actor relay transport', () => {
     const transport = createActorRelayTransport({
       token: TOKEN,
       actorId: 'a1',
-      fetch: (async () => json({ nope: true })) as unknown as typeof fetch,
+      fetch: (async (url: string | URL | Request) => String(url).endsWith('/health')
+        ? json({ ok: true, version: '0.1.0', relay: 1 })
+        : json({ nope: true })) as unknown as typeof fetch,
       resolveStandbyUrl: async () => 'https://actor.test',
     });
     await expect(transport(request)).rejects.toMatchObject({ code: 'NETWORK_ERROR', message: expect.stringMatching(/invalid relay response/) });
+  });
+
+  it('requires relay v1 and caches the health check per transport', async () => {
+    let health = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith('/health')) {
+        health += 1;
+        return json({ ok: true, version: '0.1.0', relay: 1 });
+      }
+      return json({ status: 200, headers: {}, body: '' });
+    });
+    const transport = createActorRelayTransport({
+      token: TOKEN, actorId: 'a1', fetch: fetchMock as unknown as typeof fetch,
+      resolveStandbyUrl: async () => 'https://actor.test',
+    });
+    await transport(request);
+    await transport({ ...request, url: 'https://trends.google.com/trends/api/explore?hl=en-US&q=two' });
+    expect(health).toBe(1);
+
+    const mismatch = createActorRelayTransport({
+      token: TOKEN, actorId: 'a1',
+      fetch: (async () => json({ ok: true, version: '9.9.9', relay: 2 })) as unknown as typeof fetch,
+      resolveStandbyUrl: async () => 'https://actor.test',
+    });
+    await expect(mismatch(request)).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: 'This Actor build speaks relay v2; this plugin needs v1. Update the plugin or rebuild the Actor.',
+    });
+
+    const missing = createActorRelayTransport({
+      token: TOKEN, actorId: 'a1',
+      fetch: (async () => json({ ok: true, version: '0.0.1' })) as unknown as typeof fetch,
+      resolveStandbyUrl: async () => 'https://actor.test',
+    });
+    await expect(missing(request)).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: expect.stringMatching(/speaks relay v\?; this plugin needs v1/),
+    });
   });
 });
 

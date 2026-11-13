@@ -3,10 +3,11 @@ import {
   createActorRelayTransport,
   createApifyActorClient,
   resolveApifyApiToken,
+  type ActorRelayTransport,
   type ApifyActorClientOptions,
 } from './apify-actor.js';
 import { abortError, createDefaultTransport, raceAbort, type Transport } from './transport.js';
-import type { EgressMode } from './options.js';
+import { GTFA_PUBLIC_ACTOR_ID, type EgressMode } from './options.js';
 
 export const APIFY_USAGE_PATH = '/api/gtfa.apify-usage';
 export const APIFY_ACTORS_PATH = '/api/gtfa.apify-actors';
@@ -27,7 +28,7 @@ export interface RouteOverrides {
   fetch?: typeof globalThis.fetch;
   /** Local transport used by the local test-connection check in tests. */
   localTransport?: Transport;
-  /** Relay transport factory used by the apify test-connection check in tests. */
+  /** Relay transport factory used by the Actor test-connection check in tests. */
   relayTransport?: (token: string, actorId: string) => Transport;
   /** Actor client overrides (cache clock). */
   actorOptions?: ApifyActorClientOptions;
@@ -35,7 +36,7 @@ export interface RouteOverrides {
   now?: () => number;
 }
 
-export type TestConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'network' | 'http' | 'busy';
+export type TestConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy';
 
 export interface TestConnectionResult {
   ok: boolean;
@@ -105,10 +106,9 @@ function json(data: unknown, status = 200): Response {
 }
 
 /**
- * One reachability check for the saved egress: one target request per call.
- * It sends `HEAD https://trends.google.com/trends/` (no page body, so almost no
- * residential traffic); apify relays it through the selected Actor, the same
- * path the tools use.
+ * One reachability check for the saved egress. Local sends one HEAD. Actor
+ * routes first call GET {standby}/health (relay compatibility, no proxy
+ * traffic), then send one HEAD relay, so a test is two tiny requests.
  */
 export async function testConnection(options: {
   egress: EgressMode;
@@ -146,27 +146,34 @@ export async function testConnection(options: {
     }
   }
 
-  if (options.egress !== 'apify') {
+  if (options.egress !== 'actor-public' && options.egress !== 'actor-own') {
     return failure(options.egress, 'network', `Unsupported egress "${String(options.egress)}".`, 0);
   }
 
   const resolved = resolveApifyApiToken(options.apifyToken);
   if (!resolved.token) {
-    return failure('apify', 'no-token', 'Add an Apify token (or set APIFY_TOKEN) to use apify egress.', 0);
+    return failure(options.egress, 'no-token', 'Add an Apify token (or set APIFY_TOKEN) to use an Actor egress.', 0);
   }
-  const actorId = options.apifyActor?.trim();
+  const actorId = options.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : options.apifyActor?.trim();
   if (!actorId) {
-    return failure('apify', 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', 0);
+    return failure(options.egress, 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', 0);
   }
   const startedAt = clock();
   let transport: Transport;
   try {
     transport = options.relayTransport?.(resolved.token, actorId)
       ?? createActorRelayTransport({ token: resolved.token, actorId });
+    const health = (transport as Partial<ActorRelayTransport>).checkHealth;
+    if (typeof health === 'function') await health.call(transport);
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
     const message = scrubSecrets(errorText(error), resolved.token);
-    return failure('apify', 'invalid-token', message || 'Could not build the Actor relay transport.', 0, null, actorId);
+    const code: TestConnectionCode = /relay v|needs v1|Update the plugin or rebuild/i.test(message)
+      ? 'version-mismatch'
+      : /rejected the token|HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
+        ? 'invalid-token'
+        : 'network';
+    return failure(options.egress, code, message || 'Could not build the Actor relay transport.', 0, null, actorId);
   }
 
   try {
@@ -179,24 +186,26 @@ export async function testConnection(options: {
     }), options.signal);
     const latencyMs = elapsed(clock, startedAt);
     if (response.status === 401 || response.status === 403) {
-      return failure('apify', 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status, actorId);
+      return failure(options.egress, 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status, actorId);
     }
     if (response.status === 404) {
-      return failure('apify', 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', latencyMs, response.status, actorId);
+      return failure(options.egress, 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', latencyMs, response.status, actorId);
     }
     if (response.status < 200 || response.status >= 400) {
-      return failure('apify', 'http', `Your Apify Actor returned HTTP ${response.status}.`, latencyMs, response.status, actorId);
+      return failure(options.egress, 'http', `Your Apify Actor returned HTTP ${response.status}.`, latencyMs, response.status, actorId);
     }
-    return { ok: true, egress: 'apify', status: response.status, latencyMs, actorId };
+    return { ok: true, egress: options.egress, status: response.status, latencyMs, actorId };
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
     const message = scrubSecrets(errorText(error), resolved.token);
-    const code: TestConnectionCode = /rejected the token|HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
-      ? 'invalid-token'
-      : /Select or deploy|HTTP 404|Standby URL|no Actor/i.test(message)
-        ? 'no-actor'
-        : 'network';
-    return failure('apify', code, message || 'Could not reach your Apify Actor. Check the Standby URL and connectivity.', elapsed(clock, startedAt), null, actorId);
+    const code: TestConnectionCode = /relay v|needs v1|Update the plugin or rebuild/i.test(message)
+      ? 'version-mismatch'
+      : /rejected the token|HTTP 401|HTTP 403|invalid token|token is invalid/i.test(message)
+        ? 'invalid-token'
+        : /Select or deploy|HTTP 404|Standby URL|no Actor/i.test(message)
+          ? 'no-actor'
+          : 'network';
+    return failure(options.egress, code, message || 'Could not reach your Apify Actor. Check the Standby URL and connectivity.', elapsed(clock, startedAt), null, actorId);
   }
 }
 

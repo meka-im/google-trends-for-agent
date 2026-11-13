@@ -57,7 +57,13 @@ describe('dsh Config schema', () => {
   });
 
   it('rejects an unsupported egress value', () => {
-    expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "apify"/);
+    expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "actor-public" \| "actor-own"/);
+  });
+
+  it('accepts all three egress values', () => {
+    for (const egress of ['local', 'actor-public', 'actor-own'] as const) {
+      expect(resolveGtfaSettings(Config!({ egress }) as never).egress).toBe(egress);
+    }
   });
 
   it('accepts and trims the Actor id, and leaves it unset by default', () => {
@@ -149,8 +155,8 @@ describe('Apify Actor transport', () => {
     const tools = await (async () => {
       const registered: { execute: (args: unknown, exec: { signal?: AbortSignal }) => Promise<Record<string, unknown>> }[] = [];
       const ctx = { tools: { register: (definition: unknown) => registered.push(definition as never) } };
-      await register(ctx, { egress: 'apify', apifyToken: token, apifyActor: 'actor-1', chartDir: null }, {
-        apify: {
+      await register(ctx, { egress: 'actor-own', apifyToken: token, apifyActor: 'actor-1', chartDir: null }, {
+        relay: {
           fetch: fetchMock as unknown as typeof fetch,
           resolveStandbyUrl: async () => 'https://actor.test',
         },
@@ -175,7 +181,7 @@ describe('dsh Config as the browser settings form sees it', () => {
     const schema = browserSchema();
     expect(() => schema({ egress: 'local' })).not.toThrow();
     expect(() => schema({
-      egress: 'apify', apifyActor: 'actor-1', geo: '', anchor: 'gpts', cache: false, charts: false,
+      egress: 'actor-own', apifyActor: 'actor-1', geo: '', anchor: 'gpts', cache: false, charts: false,
       baselines: { anchors: [{ term: 'genie', geo: 'GB', dailySearches: 120, tolerance: 0.2 }], windowAnchors: { short: 'genie', long: 'gpts' } },
     })).not.toThrow();
   });

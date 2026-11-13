@@ -1,0 +1,28 @@
+{
+  "seoTitle": "Google Trends MCP Server & API for AI Agents",
+  "seoDescription": "Open-source Google Trends MCP server and HTTP API for AI agents: interest, comparisons, calibrated searches/day and trending searches. No Actor fee.",
+  "categories": ["MCP_SERVERS", "AI", "OPEN_SOURCE"],
+  "defaultRunOptions": {
+    "build": "latest",
+    "timeoutSecs": 300,
+    "memoryMbytes": 512
+  },
+  "actorStandby": {
+    "isEnabled": true,
+    "tenancy": "single-tenant",
+    "idleTimeoutSecs": 60,
+    "memoryMbytes": 512,
+    "desiredRequestsPerActorRun": 3,
+    "maxRequestsPerActorRun": 4,
+    "build": "latest"
+  },
+  "isSourceCodeHidden": false,
+  "exampleRunInput": {
+    "tool": "snapshot",
+    "terms": ["Sora"],
+    "geo": "US",
+    "window": "now 1-d",
+    "anchor": ""
+  },
+  "pricing": "usage-only (no Actor fee) — not configured on Apify yet"
+}

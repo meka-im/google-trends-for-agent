@@ -4,10 +4,11 @@ import { createServer } from './mcp.js';
 import { startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
 import { createDefaultTransport, type Transport } from './transport.js';
-import { createTools } from './tools.js';
+import { createTools, type GtfaTool } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
+import { runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
 
-interface ActorInput {
+interface ActorInput extends ActorRunInput {
   proxyConfiguration?: Record<string, unknown>;
   anchor?: string;
   geo?: string;
@@ -19,11 +20,24 @@ const version = (() => {
   catch { return '0.1.0'; }
 })();
 
+/** Standby is signalled by the platform origin or by the port it injects. */
+const standby = process.env.APIFY_META_ORIGIN === 'STANDBY' || Boolean(process.env.ACTOR_STANDBY_PORT?.trim());
+
 await Actor.init();
 
 try {
   const input = (await Actor.getInput<ActorInput>()) ?? {};
-  const geo = text(input.geo, 'US');
+  if (!standby && validateActorRunInput(input)) {
+    // Fail fast without building a proxy or tools for an input we cannot run.
+    const result = await runOnce(input, {
+      pushData: item => Actor.pushData(item),
+      setValue: (key, value, options) => Actor.setValue(key, value, options),
+      log: message => console.log(message),
+    });
+    await Actor.fail(result.output.message);
+  }
+  const geoInput = text(input.geo, 'US');
+  const geo = geoInput.toUpperCase() === 'WORLDWIDE' ? '' : geoInput;
   const anchor = text(input.anchor, '');
   const baselines = await loadBaselinesFromEnv();
   const proxyInput = actorProxyInput(input.proxyConfiguration);
@@ -58,9 +72,8 @@ try {
 
   const snapshotDir = process.env.GTFA_SNAPSHOT_DIR || '/tmp/gtfa/snapshots';
   const chartDir = process.env.GTFA_CHART_DIR || '/tmp/gtfa/charts';
-  const port = resolveStandbyPort();
   const relayTransport = proxyTransport ?? createDefaultTransport();
-  const tools = createTools({
+  const tools: GtfaTool[] = createTools({
     transport: relayTransport,
     defaultGeo: geo,
     ...(anchor ? { anchor } : {}),
@@ -70,51 +83,64 @@ try {
     minIntervalMs: 1500,
   });
 
-  const idleEnv = process.env.GTFA_IDLE_EXIT_SECS?.trim();
-  const idleSecsRaw = idleEnv ? Number(idleEnv) : 60;
-  const idleSecs = Number.isFinite(idleSecsRaw) && idleSecsRaw >= 0 ? idleSecsRaw : 60;
-  let http: HttpMcpServer | undefined;
-
-  http = await startHttpMcpServer({
-    port,
-    host: '0.0.0.0',
-    path: '/mcp',
-    version,
-    tools,
-    transport: relayTransport,
-    idleExit: {
-      enabled: process.env.APIFY_META_ORIGIN === 'STANDBY',
-      timeoutMs: idleSecs * 1000,
+  if (!standby) {
+    // One-off run: one tool, one dataset row per term, then exit.
+    const result = await runOnce(input, {
+      tools,
+      pushData: item => Actor.pushData(item),
+      setValue: (key, value, options) => Actor.setValue(key, value, options),
       log: message => console.log(message),
-      exit: async () => {
-        await http?.close();
-        await Actor.exit();
-      },
-    },
-    log: message => console.log(message),
-    createMcpServer: () => createServer({
-      defaultGeo: geo,
-      ...(anchor ? { anchor } : {}),
-      ...(baselines ? { baselines } : {}),
-      snapshotDir,
-      chartDir,
+    });
+    if (result.failed) await Actor.fail(result.output.message);
+    else await Actor.exit();
+  } else {
+    const port = resolveStandbyPort();
+    const idleEnv = process.env.GTFA_IDLE_EXIT_SECS?.trim();
+    const idleSecsRaw = idleEnv ? Number(idleEnv) : 60;
+    const idleSecs = Number.isFinite(idleSecsRaw) && idleSecsRaw >= 0 ? idleSecsRaw : 60;
+    let http: HttpMcpServer | undefined;
+
+    http = await startHttpMcpServer({
+      port,
+      host: '0.0.0.0',
+      path: '/mcp',
+      version,
+      tools,
       transport: relayTransport,
-    }),
-  });
+      idleExit: {
+        enabled: true,
+        timeoutMs: idleSecs * 1000,
+        log: message => console.log(message),
+        exit: async () => {
+          await http?.close();
+          await Actor.exit();
+        },
+      },
+      log: message => console.log(message),
+      createMcpServer: () => createServer({
+        defaultGeo: geo,
+        ...(anchor ? { anchor } : {}),
+        ...(baselines ? { baselines } : {}),
+        snapshotDir,
+        chartDir,
+        transport: relayTransport,
+      }),
+    });
 
-  // Never charge: this Actor only proxies MCP/HTTP requests and has no PPE events.
-  console.log(`Standby MCP + HTTP ready on port ${http.port}: /mcp, /egress/fetch, /tools/{name}, /health (geo=${geo}, anchor=${anchor || 'auto'}).`);
+    // Never charge: this Actor only proxies MCP/HTTP requests and has no PPE events.
+    console.log(`Standby MCP + HTTP ready on port ${http.port}: /mcp, /egress/fetch, /tools/{name}, /health (geo=${geo}, anchor=${anchor || 'auto'}).`);
 
-  let shuttingDown = false;
-  const shutdown = async (signal: string) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`Received ${signal}; shutting down.`);
-    await http!.close();
-    await Actor.exit();
-  };
-  process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
-  process.once('SIGINT', () => { void shutdown('SIGINT'); });
+    let shuttingDown = false;
+    const shutdown = async (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`Received ${signal}; shutting down.`);
+      await http!.close();
+      await Actor.exit();
+    };
+    process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+    process.once('SIGINT', () => { void shutdown('SIGINT'); });
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Actor failed to start');
   await Actor.exit({ exitCode: 1 });

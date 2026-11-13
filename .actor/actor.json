@@ -1,15 +1,23 @@
 {
   "actorSpecification": 1,
   "name": "google-trends-for-agent",
-  "title": "Google Trends for AI Agents (MCP + HTTP)",
-  "description": "Google Trends search-interest signals for AI agents: MCP at /mcp plus plain HTTP endpoints (/egress/fetch, /tools/{name}, /health) in Standby mode, using the Actor's on-platform residential proxy.",
+  "title": "Google Trends MCP & API for AI Agents — Open Source",
+  "description": "Google Trends for AI agents: search interest, comparisons, calibrated searches/day estimates and trending searches as an MCP server, HTTP API or one-off run. Open source (MIT). Runs in your Apify account: no Actor fee, about $0.0025 of platform usage per call.",
   "version": "0.1",
-  "meta": {
-    "generatedBy": "DeepSeek Harness with deepseek-v4.1-flash"
-  },
+  "buildTag": "latest",
+  "minMemoryMbytes": 256,
+  "maxMemoryMbytes": 1024,
+  "defaultMemoryMbytes": 512,
   "usesStandbyMode": true,
   "webServerMcpPath": "/mcp",
+  "readme": "./README.md",
+  "changelog": "../CHANGELOG.md",
   "input": "./input_schema.json",
-  "dockerfile": "./Dockerfile",
-  "readme": "./README.md"
+  "output": "./output_schema.json",
+  "storages": {
+    "dataset": "./dataset_schema.json",
+    "keyValueStore": "./key_value_store_schema.json"
+  },
+  "webServerSchema": "./web_server_schema.json",
+  "dockerfile": "./Dockerfile"
 }

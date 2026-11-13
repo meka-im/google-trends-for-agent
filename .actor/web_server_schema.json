@@ -1,0 +1,146 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Google Trends MCP & HTTP API",
+    "version": "0.1.0",
+    "description": "Standby server for Google Trends. MCP clients use the Streamable HTTP endpoint at /mcp. Plain HTTP clients use GET /health, POST /tools/{name} and POST /egress/fetch. All requests use Authorization: Bearer <APIFY_TOKEN>. The Actor logs only the method and path."
+  },
+  "servers": [
+    { "url": "https://meka-im--google-trends-for-agent.apify.actor" }
+  ],
+  "security": [{ "apifyToken": [] }],
+  "components": {
+    "securitySchemes": {
+      "apifyToken": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["error"]
+      },
+      "ToolResult": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "result": { "type": "object" },
+          "error": { "type": "object" }
+        },
+        "required": ["ok"]
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Cheap health check",
+        "description": "Returns the build version and relay protocol version. Makes no Google request.",
+        "responses": {
+          "200": {
+            "description": "Healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "version": { "type": "string", "example": "0.1.0" },
+                    "relay": { "type": "integer", "example": 1 }
+                  },
+                  "required": ["ok", "version", "relay"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/{name}": {
+      "post": {
+        "summary": "Run one Google Trends tool",
+        "description": "Runs trends_ask, trends_snapshot, trends_compare or trends_now with the same JSON arguments as the MCP tools.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "enum": ["trends_ask", "trends_snapshot", "trends_compare", "trends_now"] }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool result; check ok",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ToolResult" } } }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/egress/fetch": {
+      "post": {
+        "summary": "Relay one Google Trends request",
+        "description": "Only https://trends.google.com URLs are allowed. The Actor performs the request with its on-platform residential proxy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string", "example": "https://trends.google.com/trends/api/explore?hl=en-US" },
+                  "method": { "type": "string", "example": "GET" },
+                  "headers": { "type": "object" },
+                  "body": { "type": "string" },
+                  "timeoutMs": { "type": "integer", "example": 10000 }
+                },
+                "required": ["url"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relayed response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "integer" },
+                    "headers": { "type": "object" },
+                    "body": { "type": "string" }
+                  },
+                  "required": ["status", "headers", "body"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    }
+  }
+}
