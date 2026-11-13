@@ -63,10 +63,10 @@
 
 ## 安装与快速开始
 
-需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。
+CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 零安装的 `npx` 路径首次从 git 构建约需 30–50 秒，之后每次调用仍增加约 7 秒启动开销。频繁使用建议持久安装或运行 MCP 服务器。
@@ -74,30 +74,49 @@ npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa snapshot Sora --geo
 持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）。用打包后的 tarball 安装，之后可以删除 clone 目录：
 
 ```sh
-git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
+git clone --branch v0.2.2 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.2", "gtfa-mcp"] } }
+}
+```
+
+持久安装后可直接使用下面的配置（或 `gtfa-mcp` 的绝对路径），避免每次启动都由 npx 解析 GitHub 包：
+
+```json
+{
+  "mcpServers": { "google-trends": { "command": "gtfa-mcp", "args": [] } }
 }
 ```
 
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
+检查包下载和数据抓取两段连通性：
+
+```sh
+curl -I https://github.com
+curl -I https://trends.google.com
+```
+
+若 `npx …` 退出 128 且 stdout/stderr 为空，说明 gtfa 启动前 GitHub 包获取失败；查看 npm debug 日志（通常在 `~/.npm/_logs/`）。**MCP 无法启动**表现为 npx/git 错误、握手前 EOF；**MCP 已启动但工具取数失败**则握手和 `tools/list` 成功，工具返回 `NETWORK_ERROR`、`RATE_LIMITED` 等上游错误。后者可用 `gtfa doctor --json` 排查。
+
 ## dsh 插件
+
+前置条件：dsh 需要 **Node >=24.9**，并确保 **pnpm >=10** 在 PATH 中（`allowBuilds` 需要 pnpm 10；测试版本为 10.34.6）。用 `npm i -g @deepseek-ai/dsh` 安装 dsh，用 `npm i -g pnpm@10` 安装 pnpm。仅使用 gtfa CLI/MCP 时仍只需 Node 20+（`engines.node: >=20`）。PATH 中没有 pnpm 时，插件安装会报 `spawn pnpm ENOENT` / `pnpm was not found`。
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-首次运行会打印 key 并失败。将 pnpm 打印的完整 key（以 commit hash 结尾）复制到 `~/.dsh/profiles/web/pnpm-workspace.yaml`，然后重跑：
+首次运行通常会打印 key 并失败；pnpm store 已缓存构建时可能直接成功。将下方代码块以 pnpm 打印的完整 key（以 commit hash 结尾）**追加**到 dsh 已生成的 `$DSH_HOME/profiles/web/pnpm-workspace.yaml`（`DSH_HOME` 默认为 `~/.dsh`），保留已有键，不要覆盖文件，然后重跑。使用其他 profile 时，同时替换命令和路径中的 `web`：
 
 ```yaml
 allowBuilds:
@@ -106,7 +125,9 @@ allowBuilds:
 
 pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使用带 `: true` 的 `allowBuilds:` map（在 `allowBuilds` 下写列表会失败）。main 更新后 key 会变化，需要重新添加。
 
-安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**，再进入 **连接 → 出口**，选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**。该 bundle 把四个工具注册为进程内原生工具，并附带 `gtfa` skill；Token 保存、用量卡片和测试连接的细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
+插件安装后默认启用。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接）** 区块用 **Egress（出口）** 三段控件选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**。点击 **Save（保存）** 后生效，无需重启。该 bundle 把四个工具注册为进程内原生工具，并附带 `gtfa` skill；Token 保存、用量卡片和测试连接的细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
+
+相对 `snapshotDir` / `chartDir` 路径以启动 `dsh web` 的目录（cwd）为基准；图表默认写入 `<cwd>/.gtfa/charts/`。
 
 ## 词条图库
 

@@ -4,11 +4,11 @@ Guidance for AI agents using `google-trends-for-agent` (`gtfa`). It queries undo
 
 ## Install from GitHub
 
-Node.js 20+ is required. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
+The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
 # Pinned release (recommended)
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa --help
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa --help
 
 # Latest main
 npx -y -p github:meka-im/google-trends-for-agent gtfa --help
@@ -19,21 +19,29 @@ The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdi
 Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
+git clone --branch v0.2.2 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 ## MCP client config
 
-Use this generic stdio configuration (swap `#v0.2.1` for no tag to follow main):
+Use this generic stdio configuration (swap `#v0.2.2` for no tag to follow main):
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"]
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.2", "gtfa-mcp"]
     }
   }
+}
+```
+
+After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
+
+```json
+{
+  "mcpServers": { "google-trends": { "command": "gtfa-mcp", "args": [] } }
 }
 ```
 
@@ -41,11 +49,13 @@ Restart the client, then call `trends_ask` with a single term. `trends_ask` and 
 
 ## dsh plugin
 
+Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
+
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-The first run prints a key and fails. Copy the exact key pnpm prints (ending in the commit hash) into `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run:
+The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
 
 ```yaml
 allowBuilds:
@@ -54,15 +64,17 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. After install, enable and configure it in dsh web → Plugins → Google Trends → gtfa → Configure (switch the bundle on if it shows Off): egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor. Set the Apify token there or leave it empty to use `APIFY_TOKEN`. A token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leaving it blank with `APIFY_TOKEN` keeps it out of the profile. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor. Set the Apify token there or leave it empty to use `APIFY_TOKEN`. A token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leaving it blank with `APIFY_TOKEN` keeps it out of the profile. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+
+Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
 ## Verify networking first
 
 Run the doctor once after install, or whenever a call fails unexpectedly:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa doctor
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa doctor --json
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa doctor
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa doctor --json
 ```
 
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
@@ -73,7 +85,7 @@ Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY
 
 Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
 
-1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
+1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
 3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
 
@@ -97,6 +109,8 @@ Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryA
 Call `trends_ask` with `points: true` only when the full interest series is needed; it is omitted by default to save context. `trends_ask` (without `validate`), `trends_compare`, and `trends_now` return relative interest only; do not claim search volume from them. Only `trends_snapshot` and `trends_ask` with `validate: true` return searches/day, and those are anchor-based estimates.
 
 In `now 1-d` windows, trailing points can be 0 or low while Google back-fills. Use settled values and the window average; do not report a trailing 0 alone as a real drop. `settledLatest` excludes the last point in `now *` windows and then gaps; multiple trailing zeros can still remain. Non-`now` series with daily spacing exclude two tail points; other series exclude one. Averages exclude gaps but include unsettled tails.
+
+If `interest.average` < 1 and both Popular/Rising tables are empty, treat the result as `no_data`: low confidence, no rising/high verdict, and null numeric traffic fields (including peaks and series traffic). Related-query evidence keeps a low-average term eligible for validation.
 
 ## Anchors and baselines
 

@@ -9,6 +9,8 @@ Use the native `gtfa` tools for light, interactive search-interest research. The
 - **Calibrated searches/day + chart** — `trends_snapshot` with one term. It returns `traffic`, `series`, `chart`, and the always-on `anchor7d` / `chart7d` / `traffic7d` check.
 - **What is trending now** — `trends_now` by country. `geos` accepts a code list, `"default"`, or `"all"`; `hours` is the Trending Now window (`4`, `24`, `48`, `168`). It fetches sequentially and stops after the first block.
 
+If `interest.average` < 1 and both Popular/Rising tables are empty, treat the result as `no_data`: low confidence, no rising/high verdict, and null numeric traffic fields (including peaks and series traffic). Related-query evidence keeps a low-average term eligible for validation.
+
 ## Anchors
 
 `trends_snapshot` and `trends_ask` with `validate: true` calibrate relative interest into estimated searches/day:

@@ -209,7 +209,7 @@ export interface DeployBuildResolution {
 
 export const EN: Record<string, string> = {
   summary: 'Configure egress, the Apify token and Actor, usage, default geo, anchors, and snapshot cache.',
-  intro: 'Changes apply live, no restart needed. Usage, Actor listing, deploy, and Test connection run on the dsh host, so the token never reaches the browser.',
+  intro: 'Click Save to apply changes; no restart needed. Usage, Actor listing, deploy, and Test connection run on the dsh host, so the token never reaches the browser.',
   connection: 'Connection',
   connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
   egress: 'Egress',
@@ -350,7 +350,7 @@ export const EN: Record<string, string> = {
 
 export const ZH: Record<string, string> = {
   summary: '配置出口、Apify Token 与 Actor、用量、默认地区、基线和快照缓存。',
-  intro: '修改即时生效，无需重启。用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
+  intro: '点击保存后生效，无需重启。用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
   connection: '连接',
   connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
   egress: '出口',
@@ -490,7 +490,7 @@ export const ZH: Record<string, string> = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'grid', gap: 28, maxWidth: 760, padding: '4px 0 24px' },
+  page: { display: 'grid', gap: 28, maxWidth: 760, padding: '4px 0 120px' },
   intro: { margin: 0, opacity: 0.75, lineHeight: 1.5 },
   section: { display: 'grid', gap: 20, paddingTop: 0 },
   sectionHeader: { display: 'grid', gap: 4 },
@@ -543,7 +543,7 @@ const styles: Record<string, CSSProperties> = {
   windowRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   saveBar: {
     position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 4, padding: '12px 0 4px', borderTop: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
+    marginTop: 96, padding: '12px 0 4px', borderTop: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
     background: 'var(--dsw-alias-bg-layer-1, rgba(255,255,255,.96))',
   },
   button: {

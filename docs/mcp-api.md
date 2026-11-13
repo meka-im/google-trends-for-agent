@@ -1,6 +1,8 @@
 # google-trends-for-agent · Agent API
 
-面向 Agent 的公开表面只有 **四个 MCP 工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点把 0–100 兴趣换算成每日搜索量估计；锚点按窗口自动选择（`now 1-H` / `now 4-H` / `now 1-d` 用 `sudoku`，`now 7-d` 及以上用 `gpts`），并始终附带一条 **`now 7-d`** 曲线（`chart7d` / `traffic7d` / `anchor7d`）。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述当前 HEAD 的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
+面向 Agent 的公开表面只有 **四个 MCP 工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点把 0–100 兴趣换算成每日搜索量估计；锚点按窗口自动选择（`now 1-H` / `now 4-H` / `now 1-d` 用 `sudoku`，`now 7-d` 及以上用 `gpts`），并始终附带一条 **`now 7-d`** 曲线（`chart7d` / `traffic7d` / `anchor7d`）。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述本版本的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
+
+**低样本门**：`interest.average` < 1 且 Popular/Rising 两表都为空时，按 `no_data` 处理，置信度为 `low`，流量数值（含峰值和序列流量）为 `null`，不判为 rising/high。低均值但有相关查询证据时不触发此门。ask 与 snapshot 的 `verdict.label` 统一为 `spiking` · `rising` · `steady` · `flat` · `no_data` · `blocked`；`flat` 包含下降情况。
 
 ---
 
@@ -161,7 +163,7 @@
 }
 ```
 
-`trends_ask` 会把最近一次保存的快照与再上一次对比，缓存命中时也一样。缓存命中不会新建快照；不足两份快照时 `diff` 为 `null`，`diffReason` 为 `"Need two snapshots"`。设置 `fresh: true` 可拉取并保存一个新的对比点。CLI 的 `--diff` 会强制拉取新数据并保存结果，同时隐含 JSON 输出，并覆盖 `--refresh`（包括 `never`）。
+`trends_ask` 将本次快照与最近一份可用的成功快照对比，缓存命中时也一样。存储键和匹配统一对关键词去除首尾空白并转小写，展示保留本次请求的拼写。只有无错误且通过低样本门的完整 `status: "ok"` 快照参与差分。失败、partial、blocked 和 no_data 快照仍写入磁盘供诊断，但不作为比较基线；仅 `ok` / `no_data` 可复用为缓存响应（默认 360 分钟），失败/partial/blocked 会重新抓取。缓存命中不会新建快照。无可用快照对时返回 `diff: null` 和明确的 `diffReason`；首次成功为 `"Need two snapshots"`，本次失败为 `"Current snapshot has no usable successful data"`，没有可用历史成功或历史不兼容时也会说明原因，不会抛出 INVALID_INPUT 或中断批量处理。设置 `fresh: true` 可拉取并保存一个新的对比点。CLI 的 `--diff` 强制拉取、保存并输出 JSON，覆盖 `--refresh`（包括 `never`）。
 
 `validate: true` 且裁决为 blocked（例如锚点请求被封）时：`ok: false`，`status: "blocked"`，并带 `error`（可能含 `retryAfterSec`）。
 
@@ -180,8 +182,8 @@
 | `verdict.traffic` | **searches/day**，字段与 `trends_snapshot.traffic` 相同；与 snapshot 共用 `traffic = score ÷ anchorLevel × dailySearches`。无标定或锚点可靠性门失败时数值字段为 `null` |
 | `verdict.anchor` | 本窗口使用的锚点：`term` / `dailySearches`（基线，便于直接看到换算尺子）/ `ratio` / `band` / `note` |
 | `verdict.warnings` | 可选；锚点过稀/过弱时包含 `anchor too sparse/weak for calibration; traffic omitted` |
-| `diff` | 相对同 term+filter 的上一份快照；始终返回（或 `null`） |
-| `diff` 字段 | 即库函数 `diffSnapshots(prev, next)` 原样返回（MCP 不裁剪）：`term`、`filter{geo,time,category,property,hl?}`（快照内部 filter，web 搜索时 `property` 为 `""`，与顶层 `filter.property: "web"` 不同）、`from` / `to`（上一 / 本次快照 id）、`newPopular[]`（query 字符串）、`droppedPopular[]`、`newRising[{rank,query,value,breakout}]`、`risingUp[{query,from,to}]`、`regionMoves[{code,fromRank,toRank}]`、`interestDelta{latestFrom,latestTo,delta}`（基于 `settledLatest`） |
+| `diff` | 相对同 term+filter 的最近一份可用成功快照；始终返回（或 `null`） |
+| `diff` 字段 | 有效快照对由库函数 `diffSnapshots(prev, next)` 返回（MCP 不裁剪）：`term`、`filter{geo,time,category,property,hl?}`（快照内部 filter，web 搜索时 `property` 为 `""`，与顶层 `filter.property: "web"` 不同）、`from` / `to`（上一 / 本次快照 id）、`newPopular[]`（query 字符串）、`droppedPopular[]`、`newRising[{rank,query,value,breakout}]`、`risingUp[{query,from,to}]`、`regionMoves[{code,fromRank,toRank}]`、`interestDelta{latestFrom,latestTo,delta}`（基于 `settledLatest`） |
 | `interest` 一致性 | `peak` = 所有非缺口点最大值；`latest` = 最后一个非缺口点；`settledLatest` = 去掉未定型尾点并排除缺口后的最后一点（`now *` 窗口去掉 1 点）；`summary` 里的 latest 即 `settledLatest` |
 | `meta.cached` | `true` = 复用了本地快照 |
 | `meta.warnings` | 上游 `partial` 响应会保留其 warnings；另有低样本缺口（`interest.gapCount > 0`）排除说明 |
@@ -349,7 +351,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `traffic7d` | 始终存在的 `now 7-d` 流量块，字段与 `traffic` 完全相同；用 `anchor7d` 的基线（默认 `gpts` 3,500 次/日，±50%）和同一 gap 排除规则标定；7d 拉取失败时数值字段为 `null`、`gapCount: 0` |
 | `tables.popular[].estDaily` | 以 term 窗口平均日流量为顶行基准：`round(value / 100 × traffic.average)` |
 | `tables.rising[]` | 保留 `formattedValue` / `breakout`；`estDaily` 仅当同一查询也出现在 Popular 中时可推导，否则 `null` |
-| `verdict.label` | `rising` · `spiking` · `steady` · `fading` · `no_data` |
+| `verdict.label` | `spiking` · `rising` · `steady` · `flat` · `no_data` · `blocked` |
 | `verdict.prioritize` | `traffic.settledLatest >= 300`；无标定时为 `false` |
 | `meta` | `cached` / `ageMin` / `fetchedAt` / `snapshotId` / `exploreUrl` / 可选 `warnings`（上游 partial、7d 不可用、gap 排除等） |
 
@@ -384,7 +386,7 @@ published.est = round(popular.value / 100 × average)
 - 锚点与被查词的 0–100 标尺来自同一次 `[term, anchor]` 对比；不同 `geo` / `time` / `anchor` 的流量不可直接横比。
 - 请求窗口不是 `now 7-d` 时，会额外做一次 `[term, 7d anchor]` 的 `now 7-d` Explore 对比（与主窗口并行；默认 7d 锚点为 `gpts`，显式 `anchor` 时改用该锚点）；Popular / Rising 表仍只来自主窗口，不会为 7d 重复拉表。主窗口本身就是 `now 7-d` 时，`chart7d` 直接复用主 `chart`，不产生第二次上游请求。
 - gap 点（见上一节规则）不参与 `anchorLevel`、流量聚合、裁决和折线连接；主窗口与 7d 窗口各自独立排除 gap。
-- `fresh: false` 只复用同 term + filter + anchor 的快照；缓存键同时包含窗口和锚点词，因此 1d `sudoku` 与 7d `gpts` 快照不会互相命中；`blocked` 快照永不复用。
+- `fresh: false` 只复用同 term + filter + anchor 的快照；缓存键同时包含窗口和锚点词，因此 1d `sudoku` 与 7d `gpts` 快照不会互相命中；失败、partial 和 `blocked` 快照永不复用为缓存响应。
 - 图表时间轴默认 `UTC`；显式 `tz`（MCP）/ `--tz`（CLI）/ `timeZone`（库）优先于 `GTFA_TZ`，都没有时为 `UTC`。时区通过 `Intl.DateTimeFormat` 的 `timeZone` 计算日历字段（正确处理 DST），而不是固定偏移；非法 IANA 名称返回 `INVALID_INPUT`。
 - 图文件写在 `.gtfa/charts/`（MCP 进程可用 `GTFA_CHART_DIR` 覆盖，快照目录可用 `GTFA_SNAPSHOT_DIR` 覆盖）；`chart` 与 `chart7d` 各自使用对应快照 ID 加时区 slug 与短 SHA-1 哈希的 `.svg`（如 `traffic-fixture-utc-bdfd4d8d.svg` / `traffic-fixture-asia-shanghai-b485a3cf.svg`；主窗口为 `now 7-d` 时共用同一文件）。哈希基于规范化 IANA 时区名，大小写变体共享同一文件，而 `Etc/GMT+1` 与 `Etc/GMT-1` 会得到不同文件名。若目录不可写，对应 `path` 为 `null`；默认不内联 SVG，需要文本时设置 `svg: true` / `--svg`。
 - 7d 拉取失败（`weekError` 或没有 7d 快照）时，`chart7d` / `traffic7d` / `anchor7d` **仍会返回**：`chart7d: { svg: "", path: null }`，`traffic7d` 数值全为 `null`、`gapCount: 0`，`anchor7d` 只含 `term` / `dailySearches` / `tolerance` / `source` / `note`（`level` / `ratio` 为 `null`），并在 `meta.warnings` 说明原因。

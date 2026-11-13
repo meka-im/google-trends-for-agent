@@ -61,10 +61,10 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 
 ## Install & quick start
 
-Node.js 20+ is required. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
+The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
@@ -72,30 +72,49 @@ The zero-install `npx` path builds from git on first run (~30–50 s); each late
 Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
+git clone --branch v0.2.2 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.2", "gtfa-mcp"] } }
+}
+```
+
+After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
+
+```json
+{
+  "mcpServers": { "google-trends": { "command": "gtfa-mcp", "args": [] } }
 }
 ```
 
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
+Check both package-download and data-fetch connectivity:
+
+```sh
+curl -I https://github.com
+curl -I https://trends.google.com
+```
+
+If `npx …` exits 128 with empty stdout/stderr, the GitHub package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/git errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
+
 ## dsh plugin
+
+Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-The first run prints a key and fails. Copy the exact key pnpm prints (ending in the commit hash) into `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run:
+The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
 
 ```yaml
 allowBuilds:
@@ -104,7 +123,9 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**, then **Connection → Egress** and pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. The bundle adds the four tools as native in-process tools plus a `gtfa` skill; token storage, the usage card, and Test connection are covered in the [dsh plugin reference](docs/reference.md#dsh-plugin).
+The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply changes; no restart is needed. The bundle adds the four tools as native in-process tools plus a `gtfa` skill; token storage, the usage card, and Test connection are covered in the [dsh plugin reference](docs/reference.md#dsh-plugin).
+
+Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
 ## Term gallery
 

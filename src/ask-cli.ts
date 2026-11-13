@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { validateTerms, parseLeadInput, type LeadInput } from './validate.js';
 import { resolveFilter } from './filter.js';
-import { SnapshotStore, askTerm, diffSnapshots } from './snapshot.js';
+import { SnapshotStore, askTerm, snapshotDiff, type TermSnapshot } from './snapshot.js';
 import type { queryTrends } from './api.js';
 import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
@@ -52,7 +52,7 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
     const store = new SnapshotStore(v.store), maxAgeMin = v['max-age'] === undefined ? 360 : Number(v['max-age']);
     if (!Number.isFinite(maxAgeMin) || maxAgeMin < 0) throw new Error('invalid max-age');
     const refresh = v.fresh || v.diff ? 'always' : v.refresh as 'always' | 'never' | 'if-stale' | undefined;
-    const withDiff = async (term: string) => { const h = await store.history(term, filter, 2); return h.length < 2 ? null : diffSnapshots(h[1], h[0]); };
+    const withDiff = async (snap: TermSnapshot) => snapshotDiff(snap, await store.history(snap.term, snap.filter));
     let stderr = '';
     if (v.validate) {
       const leads: (string | LeadInput)[] = positionals.length ? [positionals.join(' ')] : [];
@@ -63,10 +63,11 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
       if (rows.some(r => r.verdict === 'blocked')) stderr = 'Warning: BLOCKED/RATE_LIMITED; validation stopped. No volumes invented.';
       const snapshots = await Promise.all(rows.map(r => store.latest(r.term, r.filter)));
       const out = await Promise.all(rows.map(async (r, i) => {
-        const snap = snapshots[i];
-        const diff = await withDiff(r.term);
-        if (!snap) return r;
-        return blockedVerdict(askEnvelope(snap, { cached: r.source === 'cache', ageMin: Math.max(0, (Date.now() - Date.parse(r.fetchedAt)) / 60000), verdict: verdictEnvelope(r), diff, ...(diff ? {} : { diffReason: 'Need two snapshots' }), includePoints: v.points, ...(r.anchor.warning ? { warnings: [r.anchor.warning] } : {}) }));
+        const saved = snapshots[i];
+        if (!saved) return r;
+        const snap = { ...saved, term: r.term };
+        const diff = await withDiff(snap);
+        return blockedVerdict(askEnvelope(snap, { cached: r.source === 'cache', ageMin: Math.max(0, (Date.now() - Date.parse(r.fetchedAt)) / 60000), verdict: verdictEnvelope(r), ...diff, includePoints: v.points, ...(r.anchor.warning ? { warnings: [r.anchor.warning] } : {}) }));
       }));
       const code = rows.some(r => r.verdict === 'blocked') ? 3 : out.reduce((max, e) => Math.max(max, envelopeExitCode(e as { ok?: boolean; status?: string; error?: { code?: string } })), 0);
       if (!v.json && !v.diff) return { code, stdout: ['term | verdict | conf | est/day | band | latest/peak | top popular | top rising | top region', ...rows.map(r => [r.term, r.verdict, r.confidence, r.anchor.traffic.average === null ? '无法估' : String(r.anchor.traffic.average), r.anchor.band ?? '-', String(r.interest.settledLatest) + (r.freshSpike ? ' ⚡' + r.freshSpike.ratio.toFixed(0) + '× recheck ~' + r.freshSpike.recheckAfterMin + 'm' : '') + '/' + r.interest.peak, r.popular[0]?.query ?? '-', r.rising[0]?.query ?? '-', r.regions[0]?.name ?? '-'].join(' | '))].join('\n'), stderr };
@@ -75,8 +76,8 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
     if (v.from) throw new Error('--from requires --validate');
     const term = positionals.join(' '); if (!term) throw new Error('provide a term');
     const a = await askTerm(term, { filter, store, maxAgeMin, query: options.query, refresh });
-    const diff = await withDiff(term);
-    const envelope = blockedVerdict(askEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, diff, ...(diff ? {} : { diffReason: 'Need two snapshots' }), includePoints: v.points }));
+    const diff = await withDiff(a.snapshot);
+    const envelope = blockedVerdict(askEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, ...diff, includePoints: v.points }));
     if (a.snapshot.status === 'blocked') stderr = 'Warning: BLOCKED/RATE_LIMITED';
     return { code: envelopeExitCode(envelope), stdout: JSON.stringify(envelope), stderr };
   } catch (e) {

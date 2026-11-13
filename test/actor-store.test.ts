@@ -22,7 +22,7 @@ describe('Actor Store metadata', () => {
     expect(actor.title).toBe('Google Trends MCP & API for AI Agents — Open Source');
     expect(String(actor.description).length).toBeGreaterThan(0);
     expect(String(actor.description).length).toBeLessThanOrEqual(300);
-    expect(actor.version).toBe('0.2.1');
+    expect(actor.version).toBe('0.2.2');
     expect(actor.buildTag).toBe('latest');
     expect(actor.minMemoryMbytes).toBe(256);
     expect(actor.maxMemoryMbytes).toBe(1024);

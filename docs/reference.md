@@ -7,7 +7,7 @@ Operational detail for the CLI, the MCP server, the dsh plugin, and the numbers 
 The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server. Keep `npx` for zero-install use. For a persistent install, clone first because npm global git installs can omit build devDependencies during `prepare`. Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
+git clone --branch v0.2.2 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 | Command | Flags | Purpose |
@@ -18,7 +18,7 @@ git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for
 | `gtfa now --geo US` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
 | `gtfa doctor` | `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 gtfa ask "nano banana" --validate --diff --json
@@ -38,7 +38,7 @@ gtfa help snapshot
 ["sora", {"term": "nano banana"}]
 ```
 
-`--diff` implies a fresh fetch and JSON output, overrides `--refresh` (including `never`), and still saves the new snapshot. With a previous snapshot for the same term + filter, it returns a diff; the first fetch returns `diff: null` with `diffReason: "Need two snapshots"`.
+`--diff` implies a fresh fetch and JSON output, overrides `--refresh` (including `never`), and still saves the new snapshot. It compares the current successful snapshot with the latest usable prior success for the same term + filter; the first successful fetch returns `diff: null` with `diffReason: "Need two snapshots"`.
 
 `--json` selects the agent envelope. Without it, `snapshot` prints human-readable summary lines, and `ask --validate` prints a compact table (unless `--diff`, which implies JSON). `compare`/default mode prints JSON by default, but the agent envelope requires `--json`; `now` prints raw JSON unless `--json` is set. Help prints plain text on an interactive TTY and JSON when piped or with `--json`. Diagnostics go to stderr.
 
@@ -55,15 +55,34 @@ The stdio server exposes exactly four tools. HTTP and Actor tool calls share the
 
 `time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live. Anchors are automatic by window: `sudoku` for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` for `now 7-d` and longer. An explicit MCP `anchor` or CLI `--anchor` overrides both the requested and the extra 7-day window.
 
-`trends_ask` always returns `diff`: the latest saved snapshot against the one saved before it, even on cache hits. With fewer than two saved snapshots it returns `null` and `diffReason: "Need two snapshots"`; a cache hit creates no snapshot. Use `fresh: true` to fetch and save a new comparison point (the MCP equivalent of CLI `--diff` forcing fresh data).
+`trends_ask` always returns `diff`, comparing the current snapshot with the latest usable prior success, even on cache hits. Store keys and matching trim and lowercase keywords; responses preserve the requested spelling. Only complete `status: "ok"` snapshots without errors or the low-sample gate participate. Failed, partial, blocked, and no-data snapshots are still saved on disk for diagnostics, but never used as diff baselines. Only `ok` / `no_data` snapshots are reused as cached responses (default 360 minutes); failed/partial/blocked fetches are fetched again. A cache hit creates no snapshot. With no usable pair, `diff` is `null` with a clear `diffReason` (first success: `"Need two snapshots"`; failed current fetch: `"Current snapshot has no usable successful data"`; no usable prior success or incompatible history gets its own reason). Incompatible history never rejects valid input or aborts a batch. Use `fresh: true` to fetch and save a new comparison point (CLI `--diff` forces this).
 
 Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
+After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
+
+```json
+{
+  "mcpServers": { "google-trends": { "command": "gtfa-mcp", "args": [] } }
+}
+```
+
+Check both package-download and data-fetch connectivity:
+
+```sh
+curl -I https://github.com
+curl -I https://trends.google.com
+```
+
+If `npx …` exits 128 with empty stdout/stderr, the GitHub package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/git errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
+
 ## dsh plugin
+
+Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
 
 `dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
 
-The first run prints a key and fails. Copy the exact key pnpm prints (ending in the commit hash) into `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run:
+The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
 
 ```yaml
 allowBuilds:
@@ -72,7 +91,9 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile. The usage card shows this cycle's plan and usage; the public-Actor line shows the measured cost. A saved legacy `egress: apify` loads as `actor-own` with a rename notice; an unknown value loads as `local` with a notice, and Save rewrites the profile. The deploy poll follows only the returned `actorId`/`buildId` until that exact build succeeds or fails, so an unrelated successful build never auto-selects.
+The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply changes; no restart is needed. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile. The usage card shows this cycle's plan and usage; the public-Actor line shows the measured cost. A saved legacy `egress: apify` loads as `actor-own` with a rename notice; an unknown value loads as `local` with a notice, and Save rewrites the profile. The deploy poll follows only the returned `actorId`/`buildId` until that exact build succeeds or fails, so an unrelated successful build never auto-selects.
+
+When **Public Actor** is selected without a token, the prompt bar offers **“Sign up free”**: the Free plan's $5 monthly credit covers roughly **2,100 calls a month at about $0.0024 per call** (estimated, consistent with the cost table below). Links: [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). The usage card says **“Add an Apify token (or set APIFY_TOKEN) to see usage.”** Local mode needs no token and does not show this bar.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -87,6 +108,8 @@ Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (s
 | `chartDir` | `.gtfa/charts` | Advanced: chart output directory. |
 | `charts` | `true` | Advanced: write SVG chart files; `false` returns null chart paths. |
 
+Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
+
 Every setting with a fixed set of values is a select, segmented control, or switch; only the token, a new anchor term, `dailySearches`, and the two directories are typed inputs.
 
 Both Actor routes work on the Apify Free plan because the residential proxy runs **inside the Actor**. `actor-public` needs only a token and nothing to deploy. `actor-own` deploys the same open-source code once: use **Deploy to my Apify account →** on the settings page, link `https://github.com/meka-im/google-trends-for-agent` (branch `main`) in Apify Console with **Standby** enabled (Settings → Server), or run `apify push` from a clone. Then pick it in the **Actor** select.
@@ -98,7 +121,7 @@ The settings page also calls four owner-authenticated Host routes through dsh's 
 | `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. The saved config token wins, then `APIFY_TOKEN`. |
 | `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with Standby URL and latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
 | `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby enabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
-| `/api/gtfa.test-connection` | `POST` | For `actor-public`/`actor-own`, calls `GET {standby}/health` once (relay version check, no proxy traffic), then sends one HEAD `GET https://trends.google.com/trends/` through `/egress/fetch`. `local` sends the HEAD directly. Returns `{ ok, egress, status, latencyMs, actorId }`; codes `no-token` / `no-actor` / `invalid-token` / `version-mismatch` / `network` / `http` / `busy`. |
+| `/api/gtfa.test-connection` | `POST` | For `actor-public`/`actor-own`, calls `GET {standby}/health` once (relay version check, no proxy traffic), then sends one HEAD `GET https://trends.google.com/trends/` through `/egress/fetch`. `local` sends the HEAD directly. Returns `{ ok, egress, status, latencyMs, actorId? }` (`actorId` is present only on Actor routes); codes `no-token` / `no-actor` / `invalid-token` / `version-mismatch` / `network` / `http` / `busy`. |
 
 These routes require dsh's authenticated browser session and are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, Actor metadata, and status/latency; account identity, the raw `/users/me` object, and the token are dropped Host-side.
 
@@ -111,6 +134,8 @@ The Actor's HTTP API (`/egress/fetch`, `/tools/{name}`, `/health`, `/mcp`) also 
 ## Output contract
 
 The MCP results and the CLI agent envelopes (`ask`, `snapshot --json`, and compare/default mode with `--json`) share the outer keys `ok`, `schemaVersion` (currently `1`), `status`, the tool-specific body, optional `error`, and `meta`. `trends_now` can return a partial result with `ok: true` and still include the first per-country `error`. For `ask`/`snapshot`, `status` is `ok`, `no_data`, or `partial` on success; `blocked` and `error` set `ok: false` and include `error.code`. `trends_compare` and `trends_now` use `ok`, `partial`, and `error`; schema rejections can set `ok: false` with `error.code`. MCP results also set `isError: true` for `ok: false`. Without `--json`, compare/default mode prints the lower-level response described below.
+
+Both ask and snapshot use `verdict.label`: `spiking`, `rising`, `steady`, `flat`, `no_data`, or `blocked` (`flat` includes declining interest).
 
 Tool bodies:
 
@@ -140,6 +165,8 @@ Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`
 Batch exit precedence for compare/default mode and `now` is blocked/rate-limited, invalid input, partial success, then other errors. `ask --validate --from` instead takes the maximum per-item exit code, so one success plus one upstream failure exits 1 (not 2); any blocked verdict still short-circuits to 3.
 
 ## Calibration and the anchor
+
+If `interest.average` < 1 and both Popular/Rising tables are empty, treat the result as `no_data`: low confidence, no rising/high verdict, and null numeric traffic fields (including peaks and series traffic). Related-query evidence keeps a low-average term eligible for validation.
 
 `snapshot` and `ask --validate` use the same gap-aware calibration:
 

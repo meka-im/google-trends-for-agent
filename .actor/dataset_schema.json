@@ -70,7 +70,7 @@
       "verdict": {
         "type": ["string", "null"],
         "title": "Verdict",
-        "description": "Trend verdict (rising, spiking, steady, fading, no_data) or null.",
+        "description": "Trend verdict (spiking, rising, steady, flat, no_data, blocked) or null.",
         "example": "steady"
       },
       "anchor": {

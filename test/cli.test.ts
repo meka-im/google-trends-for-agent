@@ -80,7 +80,7 @@ describe('CLI flags and exit codes', () => {
   });
   it('supports help and version offline', () => {
     expect((runCli([...args, '--help'], { encoding: 'utf8', env })).stdout).toContain('gtfa ask <term>');
-    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.2.1' });
+    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.2.2' });
   });
   it.each(['--unknown', '--types', '--timeout', '--retries', '--min-interval'])('rejects invalid %s offline', flag => {
     const invalid = runCli([...args, '--query', 'x', flag, 'bogus'], { encoding: 'utf8', env });

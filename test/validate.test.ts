@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { resolveFilter, DEFAULT_FILTER, settledPoints } from '../src/filter.js';
-import { SnapshotStore, snapshotTerm, askTerm, diffSnapshots, type TermSnapshot } from '../src/snapshot.js';
+import { SnapshotStore, snapshotTerm, askTerm, diffSnapshots, snapshotDiff, type TermSnapshot } from '../src/snapshot.js';
 import { validateTerms, parseLeadInput, detectFreshSpike } from '../src/validate.js';
 import { runAskCli } from '../src/ask-cli.js';
-import { trafficSnapshotEnvelope } from '../src/trends-snapshot.js';
+import { snapshotTrafficTerm, trafficSnapshotEnvelope } from '../src/trends-snapshot.js';
 import { verdictEnvelope } from '../src/tools.js';
 import { loadBaselines } from '../src/traffic.js';
 import type { queryTrends } from '../src/api.js';
@@ -76,7 +76,7 @@ it('matches trends_snapshot traffic for the same fixture comparison', async () =
 it('omits traffic and warns for a sparse/near-zero anchor', async () => {
   const start = Date.parse('2026-10-31T00:00:00.000Z');
   const anchorPoints = Array.from({ length: 180 }, (_, i) => ({ time: new Date(start + i * 60000).toISOString(), value: i < 3 ? 11 : 0 }));
-  const termPoints = anchorPoints.map((p, i) => ({ time: p.time, value: i < 3 ? 20 : 0 }));
+  const termPoints = anchorPoints.map((p, i) => ({ time: p.time, value: i < 3 ? 100 : 0 }));
   const timeline = anchorPoints.map((p, i) => ({ time: p.time, values: [termPoints[i].value, p.value] }));
   const query: typeof queryTrends = vi.fn(async input => ({ status: 'ok' as const, input, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 1, durationMs: 0, warnings: [] },
     data: { interestOverTime: { timeline: input.queries.length > 1 ? timeline : termPoints.map(p => ({ time: p.time, values: [p.value] })) }, relatedQueries: { top: [], rising: [] }, interestBySubregion: { rows: [] } } }));
@@ -247,4 +247,106 @@ it('calibrates a term that equals the anchor against itself instead of sending i
   expect(comparisons.map(i => i.queries)).toEqual([['GPTs']]);
   expect(r.anchor).toMatchObject({ term: 'gpts', dailySearches: 3500, ratio: 1 });
   expect(r.anchor.traffic.average).toBe(3500);
+});
+
+
+it('gates a low-average noisy peak before verdict and calibration across shared ask/snapshot paths', async () => {
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/low-sample.json', import.meta.url), 'utf8'));
+  const query: typeof queryTrends = vi.fn(async input => {
+    const r = await mock(fixture.values)(input);
+    r.data!.relatedQueries = { top: [], rising: [] };
+    return r;
+  });
+  const s = await store();
+  const plain = await snapshotTerm('unlikelyterm', {}, { query });
+  expect(plain.status).toBe('no_data');
+  const [v] = await validateTerms(['unlikelyterm'], { store: s, query });
+  expect(v).toMatchObject({ verdict: 'no_data', confidence: 'low', anchor: { ratio: null, band: null, traffic: { average: null, peak: null } } });
+  // No anchor comparison is scheduled for this term.
+  expect(vi.mocked(query).mock.calls.every(([i]) => i.queries.length === 1)).toBe(true);
+  const cli = JSON.parse((await runAskCli(['unlikelyterm', '--validate', '--json', '--store', s.dir], { query })).stdout);
+  expect(cli).toMatchObject({ status: 'no_data', interest: { average: 0.6 }, verdict: { label: 'no_data', confidence: 'low', traffic: { average: null, peak: null } } });
+  const snap = await snapshotTrafficTerm('unlikelyterm', { query });
+  expect(snap.status).toBe('no_data');
+  const e = await trafficSnapshotEnvelope(snap, { cached: false, ageMin: 0, chartDir: null, week: snap });
+  expect(e).toMatchObject({ status: 'no_data', verdict: { label: 'no_data', confidence: 'low', prioritize: false }, anchor: { ratio: null }, traffic: { average: null, peak: null }, traffic7d: { peak: null } });
+  expect(e.series.points.every(p => p.traffic === null)).toBe(true);
+  expect(e.meta.warnings).toContainEqual(expect.stringContaining('Interest average < 1'));
+});
+
+it.each(['popular', 'rising', 'boundary'])('keeps low-interest terms with evidence or average >= 1 eligible (%s)', async evidence => {
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/low-sample.json', import.meta.url), 'utf8'));
+  const values = evidence === 'boundary' ? Array(180).fill(1) : fixture.values;
+  const query: typeof queryTrends = async input => {
+    const r = await mock(values)(input);
+    r.data!.relatedQueries = {
+      top: evidence === 'popular' ? [{ query: 'term app', value: 100 }] : [],
+      rising: evidence === 'rising' ? [{ query: 'term news', value: 5000, formattedValue: 'Breakout' }] : [],
+    };
+    return r;
+  };
+  const [v] = await validateTerms(['term'], { store: await store(), query });
+  expect(v.verdict).not.toBe('no_data');
+  expect(v.anchor.traffic.peak).not.toBeNull();
+  const snap = await snapshotTrafficTerm('term', { query });
+  const e = await trafficSnapshotEnvelope(snap, { cached: false, ageMin: 0, chartDir: null });
+  expect(e.status).toBe('ok');
+  expect(e.traffic.peak).not.toBeNull();
+});
+
+it.each([false, true])('CLI preserves spelling and compares case-only changes, including a reused-store batch (validate=%s)', async validate => {
+  const s = await store();
+  let count = 0;
+  const upstream = mock([10, 10, 20, 20, 0]);
+  const query: typeof queryTrends = async input => {
+    const r = await upstream(input);
+    r.meta.fetchedAt = new Date(Date.UTC(2026, 10, 13) + ++count).toISOString();
+    return r;
+  };
+  const args = ['--diff', '--store', s.dir, ...(validate ? ['--validate', '--no-anchor'] : [])];
+  const first = JSON.parse((await runAskCli(['Sora', ...args], { query })).stdout);
+  const second = await runAskCli(['sora', ...args], { query });
+  expect(second.code).toBe(0);
+  expect(JSON.parse(second.stdout)).toMatchObject({ term: 'sora', diff: { term: 'sora', from: first.meta.snapshotId } });
+  const batch = await runAskCli(['--validate', '--from', '-', '--diff', '--no-anchor', '--store', s.dir], { stdin: '["sora", {"term":"nano banana"}]', query });
+  expect(batch.code).toBe(0);
+  expect(JSON.parse(batch.stdout)).toMatchObject([{ term: 'sora', diff: { term: 'sora' } }, { term: 'nano banana', diff: null }]);
+  expect(await s.history(' SORA ')).toHaveLength(3);
+});
+
+it.each([false, true])('CLI saves failed fetches for diagnostics, skips them in diff, and resumes from a prior success (validate=%s)', async validate => {
+  const s = await store();
+  let count = 0, fail = true;
+  const upstream = mock([10, 10, 20, 20, 0]);
+  const query: typeof queryTrends = vi.fn(async input => {
+    const r = fail ? { status: 'error' as const, input, error: { code: 'NETWORK_ERROR', message: 'offline' }, meta: { fetchedAt: '', upstreamRequests: 1, durationMs: 0, warnings: [] } } : await upstream(input);
+    r.meta.fetchedAt = new Date(Date.UTC(2026, 10, 13) + ++count).toISOString();
+    return r;
+  });
+  const args = ['Sora', '--json', '--store', s.dir, ...(validate ? ['--validate', '--no-anchor'] : [])];
+  for (let i = 0; i < 2; i++) {
+    const result = await runAskCli(args, { query });
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ diff: null, diffReason: 'Current snapshot has no usable successful data', meta: { cached: false }, error: { code: 'NETWORK_ERROR' } });
+  }
+  expect(query).toHaveBeenCalledTimes(2);
+  expect(await s.history('sora')).toHaveLength(2);
+  fail = false;
+  const firstSuccess = JSON.parse((await runAskCli([...args, '--diff'], { query })).stdout);
+  expect(firstSuccess).toMatchObject({ diff: null, diffReason: 'No usable prior successful snapshot' });
+  fail = true;
+  await runAskCli([...args, '--diff'], { query });
+  fail = false;
+  const nextSuccess = JSON.parse((await runAskCli([...args, '--diff'], { query })).stdout);
+  expect(nextSuccess.diff).toMatchObject({ from: firstSuccess.meta.snapshotId, to: nextSuccess.meta.snapshotId });
+});
+
+it('returns null and an explanation for incompatible or unusable history', async () => {
+  const current = await snapshotTerm('Sora', {}, { query: mock([10, 10, 20, 20, 0]) });
+  const wrongFilter = { ...current, id: 'old', filter: { ...current.filter, geo: 'JP' } };
+  expect(diffSnapshots(wrongFilter, current)).toBeNull();
+  expect(snapshotDiff(current, [current, wrongFilter])).toEqual({ diff: null, diffReason: 'Snapshot history has incompatible term or filters' });
+  for (const status of ['error', 'blocked', 'partial', 'no_data'] as const) {
+    expect(snapshotDiff(current, [current, { ...current, id: 'old', status }])).toEqual({ diff: null, diffReason: 'No usable prior successful snapshot' });
+  }
 });

@@ -6,7 +6,7 @@ import { isAbortError } from './transport.js';
 import { renderTrafficChart, type TrafficChartPoint } from './chart.js';
 import { filterInput, resolveFilter, settledPoints, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints } from './gaps.js';
-import { SnapshotStore, type TermSnapshot } from './snapshot.js';
+import { gateLowSample, isLowSample, LOW_SAMPLE_WARNING, normalizeKeyword, SnapshotStore, type TermSnapshot } from './snapshot.js';
 import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, round2 } from './calibration.js';
 import type { InterestOverTime, RelatedQueries } from './core.js';
@@ -76,7 +76,7 @@ function detectSpike(values: number[], filter: Pick<TrendsFilter, 'time'>): { ra
 export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOptions = {}): Promise<TermSnapshot> {
   resolveTimeZone(opts.timeZone);
   const filter = resolveFilter(opts.filter), query = opts.query ?? queryTrends, anchorTerm = opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
-  const same = term.trim() === anchorTerm.trim();
+  const same = normalizeKeyword(term) === normalizeKeyword(anchorTerm);
   let r: TrendsResponse;
   try { r = await query({ queries: same ? [term] : [term, anchorTerm], ...filterInput(filter), dataTypes: ['interestOverTime', 'relatedQueries'] }); }
   catch (e) {
@@ -91,7 +91,7 @@ export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOpt
   const first = byQuery?.[0];
   const single = r.data?.relatedQueries as RelatedQueries | undefined;
   const related = { top: first?.top ?? single?.top ?? [], rising: first?.rising ?? single?.rising ?? [] };
-  return {
+  return gateLowSample({
     schema: 'term-snapshot/1', id: randomUUID(), term, filter, fetchedAt: r.meta.fetchedAt,
     status: ['BLOCKED', 'RATE_LIMITED'].includes(r.error?.code ?? '') ? 'blocked' : r.status === 'partial' ? 'partial' : r.status === 'error' ? 'error' : points.some(p => p.value > 0) ? 'ok' : 'no_data',
     ...(r.error ? { error: r.error } : {}),
@@ -101,12 +101,12 @@ export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOpt
     popular: related.top.map((p, i) => ({ rank: i + 1, query: p.query, value: p.value })),
     rising: related.rising.map((p, i) => ({ rank: i + 1, query: p.query, value: p.value, formattedValue: p.formattedValue, breakout: /breakout/i.test(p.formattedValue) })),
     regions: [],
-  };
+  });
 }
 
 async function fetchOne(term: string, opts: TrafficSnapshotOptions, store: SnapshotStore, filter: TrendsFilter, anchorTerm: string): Promise<Omit<TrafficSnapshotResult, 'week' | 'weekError'>> {
   const old = (await store.history(term, filter, 1, anchorTerm))[0], age = old ? Math.max(0, (Date.now() - Date.parse(old.fetchedAt)) / 60000) : Infinity;
-  if (old && (old.status === 'ok' || old.status === 'no_data') && (opts.refresh === 'never' || opts.refresh !== 'always' && age <= (opts.maxAgeMin ?? 360))) return { snapshot: old, source: 'cache' as const, ageMin: age };
+  if (old && (old.status === 'ok' || old.status === 'no_data') && (opts.refresh === 'never' || opts.refresh !== 'always' && age <= (opts.maxAgeMin ?? 360))) return { snapshot: gateLowSample({ ...old, term }), source: 'cache' as const, ageMin: age };
   if (opts.refresh === 'never') throw new Error('no cached snapshot');
   const snapshot = await snapshotTrafficTerm(term, { ...opts, filter, anchor: anchorTerm });
   await store.save(snapshot);
@@ -155,7 +155,9 @@ function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
   const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
   const daily = calibration ? anchorDailySearches(calibration) : null;
   const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
-  const c = calibrateTraffic(snap.interest.points, snap.anchor?.points ?? [], { filter, dailySearches: daily, tolerance });
+  const lowSample = isLowSample(snap);
+  const c = calibrateTraffic(snap.interest.points, snap.anchor?.points ?? [], { filter, dailySearches: lowSample ? null : daily, tolerance });
+  if (lowSample) { c.ratio = null; c.note = LOW_SAMPLE_WARNING; c.warning = LOW_SAMPLE_WARNING; }
   const anchor = {
     term: anchorTerm,
     dailySearches: daily === null ? null : round(daily),
@@ -180,16 +182,16 @@ function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
 function verdictFor(snap: TermSnapshot, traffic: { settledLatest: number | null }) {
   const values = settledNonGapPoints(snap.interest.points, snap.filter).map(p => p.value);
   const reasons: string[] = [];
-  if (snap.status === 'blocked') { reasons.push(snap.error?.code ?? 'BLOCKED'); return { label: 'no_data' as const, confidence: 'low' as const, reasons, prioritize: false }; }
-  if (snap.status === 'error' || !values.some(v => v > 0)) { reasons.push(snap.error?.message ?? 'No settled search interest'); return { label: 'no_data' as const, confidence: 'low' as const, reasons, prioritize: false }; }
+  if (snap.status === 'blocked') { reasons.push(snap.error?.code ?? 'BLOCKED'); return { label: 'blocked' as const, confidence: 'low' as const, reasons, prioritize: false }; }
+  if (snap.status === 'error' || snap.status === 'no_data' || isLowSample(snap) || !values.some(v => v > 0)) { reasons.push(snap.error?.message ?? (isLowSample(snap) ? LOW_SAMPLE_WARNING : 'No settled search interest')); return { label: 'no_data' as const, confidence: 'low' as const, reasons, prioritize: false }; }
   const spike = detectSpike(values, snap.filter);
-  let label: 'rising' | 'spiking' | 'steady' | 'fading' = 'steady';
+  let label: 'rising' | 'spiking' | 'steady' | 'flat' = 'flat';
   if (spike) { label = 'spiking'; reasons.push(`Fresh spike: last points avg ${spike.recent.toFixed(0)} vs earlier avg ${spike.baseline.toFixed(1)} (${spike.ratio.toFixed(1)}×)`); }
   else {
     const split = Math.ceil(values.length / 2), early = mean(values.slice(0, split)), tail = mean(values.slice(split));
     if (snap.rising.some(r => r.breakout)) { label = 'rising'; reasons.push('Breakout related queries'); }
     else if (values.length >= 2 && tail >= 1.5 * early) { label = 'rising'; reasons.push('Settled tail mean >= 1.5 × earlier mean'); }
-    else if (early > 0 && tail <= .67 * early) { label = 'fading'; reasons.push('Settled tail mean <= 0.67 × earlier mean'); }
+    else if (early > 0 && tail <= .67 * early) { label = 'flat'; reasons.push('Settled tail mean <= 0.67 × earlier mean'); }
     else if (Math.max(...values) >= 10 && tail >= early) { label = 'steady'; reasons.push('Settled peak >= 10 with no decline'); }
     else reasons.push('Insufficient sustained rise or decline');
   }
@@ -199,6 +201,7 @@ function verdictFor(snap: TermSnapshot, traffic: { settledLatest: number | null 
 
 /** Convert the shared-scale comparison into an agent-facing traffic envelope and write the SVG copies. */
 export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
+  snap = gateLowSample(snap);
   const warnings: string[] = [];
   const timeZone = resolveTimeZone(opts.timeZone);
   const chartOptions = { ...opts, timeZone };
@@ -237,7 +240,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
       return { rank: r.rank, query: r.query, value: r.value, formattedValue: formatted, breakout: r.breakout, estDaily };
     }),
   };
-  const verdict = verdictFor(snap, traffic);
+  const verdict = verdictFor(blockError ? { ...snap, status: 'blocked', error: blockError } : snap, traffic);
   let chartWarning = false;
   const writeChart = async (svg: string, id: string) => {
     if (opts.chartDir === null) return null;
@@ -280,7 +283,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
     meta: {
       cached: opts.cached, ageMin: Math.round(opts.ageMin * 10) / 10, fetchedAt: snap.fetchedAt, snapshotId: snap.id,
       exploreUrl: 'https://trends.google.com/trends/explore?' + new URLSearchParams({ q: snap.term, geo: filter.geo, date: filter.time, cat: String(filter.category), gprop: filter.property || 'web' }),
-      ...(warnings.length ? { warnings } : {}),
+      ...(warnings.length ? { warnings: [...new Set(warnings)] } : {}),
     },
   };
 }

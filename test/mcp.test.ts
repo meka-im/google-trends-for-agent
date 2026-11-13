@@ -259,3 +259,56 @@ describe("trends_ask end-to-end offline", () => {
     }
   }, 20000);
 });
+
+describe('trends_ask history regressions over MCP', () => {
+  it.each([false, true])('preserves case, skips failed baselines, and continues calls for a reused-store batch (validate=%s)', async validate => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { SnapshotStore } = await import('../src/snapshot.js');
+    const dir = mkdtempSync(join(tmpdir(), 'gtfa-mcp-history-'));
+    const fx = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+    let failed = true;
+    const transport: Transport = async req => {
+      if (failed) throw new TypeError('offline');
+      if (req.method === 'HEAD') return { status: 200, headers: {}, body: '' };
+      const url = new URL(req.url), path = url.pathname;
+      const request = JSON.parse(url.searchParams.get('req') ?? '{}');
+      const items = request.comparisonItem ?? [];
+      if (path.endsWith('/explore')) {
+        const keywords = items.map((i: { keyword: string }) => i.keyword);
+        const body = keywords.length > 1
+          ? fx('explore-multi.txt').replaceAll('chatgpt', keywords[0]).replaceAll('claude', keywords[1])
+          : fx('explore-single-world.txt').replaceAll('bitcoin', keywords[0]);
+        return { status: 200, headers: {}, body };
+      }
+      const file = path.endsWith('/multiline') ? (items.length > 1 ? 'multiline-multi.txt' : 'multiline-single-custom.txt')
+        : path.endsWith('/comparedgeo') ? 'comparedgeo-country-world.txt' : 'relatedsearches-single.txt';
+      return { status: 200, headers: {}, body: fx(file) };
+    };
+    try {
+      const client = await connect(transport, { snapshotDir: dir });
+      const call = async (term: string, fresh = false) => (await client.callTool({ name: 'trends_ask', arguments: { term, validate, fresh } })).structuredContent!;
+      for (const term of ['Sora', 'sora']) {
+        const r = await call(term);
+        expect(r).toMatchObject({ term, status: 'error', diff: null, diffReason: 'Current snapshot has no usable successful data', error: { code: 'NETWORK_ERROR' }, meta: { cached: false } });
+      }
+      expect(await new SnapshotStore(dir).history('sora')).toHaveLength(2);
+      failed = false;
+      const first = await call('Sora', true);
+      expect(first).toMatchObject({ ok: true, status: 'ok', term: 'Sora', diff: null, diffReason: 'No usable prior successful snapshot' });
+      expect(await call('sora')).toMatchObject({ term: 'sora', meta: { cached: true } });
+      failed = true;
+      expect(await call('SORA', true)).toMatchObject({ diff: null, error: { code: 'NETWORK_ERROR' } });
+      failed = false;
+      const next = await call('sora', true);
+      expect(next).toMatchObject({ term: 'sora', diff: { term: 'sora', from: (first.meta as { snapshotId: string }).snapshotId } });
+      // MCP's single-term surface runs the same mixed-term batch as sequential calls.
+      const batch = [];
+      for (const term of ['sora', 'nano banana']) batch.push(await call(term, true));
+      expect(batch).toMatchObject([{ term: 'sora', diff: { term: 'sora' } }, { term: 'nano banana', diff: null }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20000);
+});

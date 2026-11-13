@@ -2,7 +2,7 @@ import { queryTrends } from './api.js';
 import type { InterestOverTime } from './core.js';
 import { resolveFilter, filterInput, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints, summarizeInterest } from './gaps.js';
-import { askTerm, SnapshotStore, type TermSnapshot } from './snapshot.js';
+import { askTerm, isLowSample, LOW_SAMPLE_WARNING, SnapshotStore, type TermSnapshot } from './snapshot.js';
 import { fetchTrending, type TrendingItem } from './trending.js';
 import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, type TrafficEstimate } from './calibration.js';
@@ -60,7 +60,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     const reasons: string[] = [];
     let retryAfterSec: number | undefined;
     if (s.status === 'blocked') { verdict = 'blocked'; reasons.push(s.error?.code ?? 'BLOCKED'); if (s.error?.retryAfterSec !== undefined) retryAfterSec = s.error.retryAfterSec; if (opts.stopOnBlocked !== false) blocked = true; }
-    else if (s.status === 'error' || !values.some(v => v > 0)) { verdict = 'no_data'; reasons.push(s.error?.message ?? 'No settled search interest'); }
+    else if (s.status === 'error' || s.status === 'no_data' || isLowSample(s) || !values.some(v => v > 0)) { verdict = 'no_data'; reasons.push(s.error?.message ?? (isLowSample(s) ? LOW_SAMPLE_WARNING : 'No settled search interest')); }
     else if (spike) { verdict = 'spiking'; reasons.push(`Fresh spike: last points avg ${spike.recent.toFixed(0)} vs earlier 24h avg ${spike.baseline.toFixed(1)} (${spike.ratio.toFixed(1)}×); recheck in ~${spike.recheckAfterMin} min`); }
     else if (values.length >= 2 && ratio >= 1.5 || s.rising.some(r => r.breakout)) { verdict = 'rising'; reasons.push(s.rising.some(r => r.breakout) ? 'Breakout related queries' : 'Settled tail mean >= 1.5 × earlier mean'); }
     else if (Math.max(...values) >= 10 && tail >= early) { verdict = 'steady'; reasons.push('Settled peak >= 10 with no decline'); }
