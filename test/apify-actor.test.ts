@@ -272,7 +272,7 @@ describe('Actor relay transport', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('allows 120 s for the first cold-start request', async () => {
+  it('allows 120 s for the first startup request', async () => {
     const fetchMock = vi.fn(async () => { throw new DOMException('timed out', 'TimeoutError'); });
     const transport = createActorRelayTransport({
       token: TOKEN,

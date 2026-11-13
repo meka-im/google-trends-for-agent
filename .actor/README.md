@@ -2,7 +2,10 @@
 
 **Open-source Google Trends for AI agents — search interest, comparisons, calibrated searches/day and trending searches, from MCP, HTTP or a one-off run.**
 
-Use it to check whether demand exists before writing about a term, compare a candidate with an established one, estimate searches/day, or see what is rising in a country today. It is an unofficial client for undocumented Google Trends endpoints; Google can change them without notice.
+Use it to check whether demand exists before writing about a term, compare a candidate with an established one, estimate searches/day, or see what is rising in a country today.
+
+> [!WARNING]
+> **Unofficial. Not affiliated with or endorsed by Google.** This Actor calls undocumented Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive research only, not bulk scraping or an SLA. You are responsible for compliance.
 
 ## Quick start
 
@@ -20,7 +23,7 @@ Paste this input and press **Start**. The run executes one tool and exits with d
 }
 ```
 
-Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 2–5 terms; `now` ignores `terms` and returns trending searches for `geo`.
+Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 2–5 terms; `now` ignores `terms` and returns trending searches for `geo`. In an `ask`/`snapshot` batch, a block or rate limit stops the batch and later terms are written as `skipped` rows.
 
 ### MCP client
 
@@ -48,9 +51,11 @@ curl -X POST 'https://meka-im--google-trends-for-agent.apify.actor/tools/trends_
 
 | Route | Setup | Cost |
 | --- | --- | --- |
-| Local (your IP) | `npx` the CLI/MCP server or install the dsh plugin; requests leave your machine. No Apify account. | Free. |
+| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. | Free. |
 | This Actor | Use the Standby URL or one-off runs with your Apify token. Nothing to deploy. | Apify platform usage in your account; no Actor fee. |
 | Self-deploy | Put the same open-source code in your own account: dsh plugin one-click, Console → Link Git repository, or `apify push`. | Apify platform usage in your account. |
+
+The public Standby endpoint does not pass Actor Run input; each MCP or HTTP request supplies its own arguments.
 
 Source: https://github.com/meka-im/google-trends-for-agent
 
@@ -58,9 +63,8 @@ Source: https://github.com/meka-im/google-trends-for-agent
 
 - **No Actor fee.** The Actor has no pay-per-event price.
 - **You pay Apify platform usage in your account** — compute and residential proxy traffic at your plan's rates.
-- **Measured:** about **$0.0025 per isolated `trends_ask`** (≈65 KB residential at $8/GB plus a 512 MB run that exits after 60 s idle; measured 2026-11-12).
-- **Warm calls are cheaper:** a later call in the same Standby run skips the cold start and the idle window is already running.
-- **Free plan:** the $5 monthly credit is roughly 2,000 calls at that estimate.
+- **Measured on the public Standby URL:** isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008.
+- **Free plan:** the $5 monthly credit is roughly 2,100 isolated asks at that estimate.
 - **What counts:** a Standby run bills until its idle exit; a one-off run bills its few seconds of compute plus proxy traffic. Google calls are small; `trends_now` over many countries uses more traffic than one `trends_ask`.
 
 ## What you get
@@ -79,11 +83,18 @@ Source: https://github.com/meka-im/google-trends-for-agent
 | `tool` | `ask`, `snapshot`, `compare` or `now`. Default `ask`. |
 | `terms` | One or more terms for `ask`/`snapshot`; 2–5 for `compare`; ignored by `now`. |
 | `geo` | Country code. `WORLDWIDE` maps to Worldwide for `ask`/`snapshot`/`compare`; `now` needs a country. Default `US`. |
-| `window` | `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y` or `all`. Default `now 1-d`. `now` maps it to 4, 24 or 168 hours. |
+| `window` | Explore window (`now 1-H` through `all`); default `now 1-d`. For `now`, see the mapping below. |
 | `anchor` | Blank = automatic (`sudoku` for ≤1 day, `gpts` for 7 days+), or `gpts` / `sudoku`. |
 | `proxyConfiguration` | Proxy editor; defaults to Apify Residential, US. |
 
-Standby/MCP callers ignore this input and pass arguments per tool call.
+**Input passing.** The public Actor's Standby endpoint ignores Actor input: Apify does not pass the Run input to the Standby container, so `geo`, `anchor`, and `proxyConfiguration` from a Run input do not affect it. A self-deployed Actor that enables input passing reads those three fields at startup: `geo` becomes the default, `anchor` the server-wide anchor, and `proxyConfiguration` the egress proxy. `tool`, `terms`, and `window` remain per call.
+
+**Window mapping.**
+
+| Tool | Mapping |
+| --- | --- |
+| `ask`, `snapshot`, `compare` | `window` is used unchanged as the Explore time range. |
+| `now` | `now 1-H` / `now 4-H` → 4 h; `now 1-d` → 24 h; `now 7-d` → 168 h; `today 1-m` / `today 3-m` / `today 12-m` / `today 5-y` / `all` → 24 h. `trends_now` also accepts `hours: 48` directly, but no Actor window maps to 48 h. |
 
 ## Dataset output
 
@@ -94,7 +105,7 @@ One row per term, or one row per Trending Now item. Flat fields, `null` when the
 | `term` | Term or trending query. |
 | `tool` | `ask`, `snapshot`, `compare` or `now`. |
 | `geo`, `window` | Requested country and window. |
-| `status` | `ok`, `no_data`, `blocked`, `rate_limited` or `error`. |
+| `status` | `ok`, `no_data`, `blocked`, `rate_limited`, `skipped` or `error`. |
 | `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak` | Relative 0–100 interest, when available. |
 | `searchesPerDay` | Anchor-calibrated estimate; null without calibration. |
 | `verdict`, `anchor` | Verdict label and anchor term, when the tool returns them. |
@@ -142,6 +153,7 @@ The `OUTPUT` key-value record summarizes the run:
   "delivered": 1,
   "noData": 0,
   "blocked": 0,
+  "skipped": 0,
   "errors": 0,
   "durationMs": 18300,
   "completed": true,
@@ -151,11 +163,12 @@ The `OUTPUT` key-value record summarizes the run:
 ```
 
 - `completed` — every row is `ok` or `no_data`.
-- `partial` — at least one row delivered and at least one row blocked or failed. The run still exits successfully.
+- `partial` — at least one row delivered and at least one row blocked, skipped or failed. The run still exits successfully.
 - `failed` — nothing usable; the Actor exits non-zero.
 - `no_data` — Google returned no interest for the term.
 - `blocked` — Google returned a challenge; stop and report instead of looping.
 - `rate_limited` — HTTP 429; wait `retryAfterSec` and retry once at most.
+- `skipped` — a later term in an `ask`/`snapshot` batch after a block or rate limit. `OUTPUT.skipped` counts these rows; they are not delivered, blocked, or errors.
 - `error` — another upstream or protocol failure, with `error.code` and `error.message`.
 
 ## MCP and HTTP API
@@ -165,13 +178,15 @@ The `OUTPUT` key-value record summarizes the run:
 | `/mcp` | Streamable HTTP MCP endpoint (`tools/list`, `tools/call`). |
 | `POST /tools/{name}` | Run `trends_ask`, `trends_snapshot`, `trends_compare` or `trends_now` directly. |
 | `POST /egress/fetch` | Relay one request; only `https://trends.google.com/...` is allowed. |
-| `GET /health` | Cheap JSON: `{ ok, version, relay: 1 }`; no Google call. |
+| `GET /health` | Cheap JSON: `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set. No Google call. |
 
-All endpoints use `Authorization: Bearer <YOUR_APIFY_TOKEN>`. A cold Standby start can take about 10 seconds (up to two minutes in the worst case). Requests are limited to 5 minutes. The Actor logs only the method and path — never query strings, headers, bodies or tokens.
+All endpoints use `Authorization: Bearer <YOUR_APIFY_TOKEN>`. Startup overhead is extra time on the first call after idle; a cold Standby start can occasionally take up to ~2 minutes. Each tool call has a 300 s deadline, and cancellation aborts the in-flight work.
+
+Logging is minimal: for Standby requests the Actor logs the method and path only; one-off runs log row counts and statuses, never terms. Errors are logged by code without upstream URLs; query strings, headers, bodies and tokens are never logged.
 
 ## Coverage and limits
 
-Google Trends coverage and calibration vary by country. The built-in anchors are US baselines; other geos return null `searchesPerDay` when no calibration exists. Values are relative interest or anchor-based estimates, not measured Google volume. Use it for light, interactive research — not bulk scraping or continuous polling. On `BLOCKED`, stop and report; on `RATE_LIMITED`, wait and retry once at most.
+Google Trends coverage and calibration vary by country. The built-in anchors are US baselines; other geos return null `searchesPerDay` when no calibration exists. Values are relative interest or anchor-based estimates, not measured Google volume. Explicit `trends_now` country lists are deduped and capped at 30; use `all` for every supported country. Use it for light, interactive research — not bulk scraping or continuous polling. On `BLOCKED`, stop and report; on `RATE_LIMITED`, wait and retry once at most.
 
 ## Related tools
 
@@ -190,10 +205,6 @@ Google Trends coverage and calibration vary by country. The built-in anchors are
 **Is the source code available?** Yes: https://github.com/meka-im/google-trends-for-agent (MIT).
 
 **How is searches/day estimated?** The term and anchor share one 0–100 scale; traffic is `score ÷ anchor level × anchor daily searches`. The default anchors are `gpts` ≈3,500/day and `sudoku` ≈63,000/day for US, each with a ±50% band. Treat the result as an estimate.
-
-## Historical validation
-
-On **2026-11-12**, one isolated `trends_ask` measured about **$0.0025** of platform usage: ≈65 KB of residential traffic at $8/GB plus a 512 MB Standby run that exited after 60 s idle. Warm calls cost less. This is a dated measurement, not a current guarantee; check the Apify Console for current proxy and compute rates.
 
 ## Open source and license
 

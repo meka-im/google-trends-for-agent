@@ -11,10 +11,10 @@ The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
 | `gtfa ask <term>` | `--validate`, `--from FILE\|-`, `--anchor TERM`, `--no-anchor`, `--trending`, `--diff`, `--points`, `--fresh`, `--refresh always\|never\|if-stale`, `--max-age MIN`, `--geo`, `--time`, `--category`, `--property`, `--store DIR`, `--json`, `--help` | One term: interest, Popular/Rising, regions, optional verdict and diff. |
 | `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--json`, `--pretty`, `--help` | Calibrated searches/day, traffic series, verdict, charts, and chart paths. |
 | `gtfa compare <kw> <kw> [...]` | `--url URL` (repeatable), `--geo`, `--time`, `--start YYYY-MM-DD`, `--end YYYY-MM-DD`, `--types LIST`, `--format json\|csv`, `--json`, `--timeout MS`, `--retries N`, `--min-interval MS`, `--pretty`, `--help`, `--version` | Relative interest for 1–5 keywords. The default `--query` mode is the same command. |
-| `gtfa now` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
+| `gtfa now --geo US` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
 | `gtfa doctor` | `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 gtfa ask "nano banana" --validate --diff --json
@@ -23,7 +23,7 @@ gtfa snapshot Sora --geo US --svg --tz Asia/Shanghai --fresh --json
 gtfa compare coffee tea --geo US --time "today 3-m" --pretty
 gtfa --query coffee --query tea --geo US --json
 gtfa now --geo SG --hours 24 --limit 20 --pretty
-gtfa now --list-geos
+gtfa now --geo US --list-geos
 gtfa doctor --json
 gtfa help snapshot
 ```
@@ -32,14 +32,14 @@ gtfa help snapshot
 
 ## MCP tools
 
-The stdio server exposes exactly four tools.
+The stdio server exposes exactly four tools. HTTP and Actor tool calls share the same definitions.
 
 | Tool | Inputs | What it returns |
 | --- | --- | --- |
 | `trends_ask` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `fresh` (`false`); `validate` (`false`); `points` (`false`) | Interest, Popular/Rising queries, regions, optional verdict, diff vs the previous saved snapshot. `points: true` includes the full series. |
 | `trends_snapshot` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `anchor` (optional; automatic when omitted); `fresh` (`false`); `svg` (`false`); `tz` (`GTFA_TZ`, then `UTC`) | Calibrated searches/day, `anchor` / `anchor7d` and traffic blocks, series, verdict, related queries, `chart` and always-on `chart7d` / `traffic7d`. |
 | `trends_compare` | `keywords` (2–5, required); `geo` (`US`); `time` (`now 1-d`) | Relative 0–100 interest for each keyword on one shared scale, with gap-aware latest/peak. Duplicate keywords return `INVALID_INPUT`. |
-| `trends_now` | `geos` (array, `"default"`, or `"all"`; default `"default"` = 30 countries); `hours` (`4`, `24`, `48`, or `168`; default `24`); `limit` (integer ≥ 0; default `10`) | Trending Now items per country, with rank, traffic bucket, growth, categories, related queries, and links. |
+| `trends_now` | `geos` (array of up to 30 distinct country codes after dedupe, `"default"`, or `"all"`; default `"default"` = 30 countries); `hours` (`4`, `24`, `48`, or `168`; default `24`); `limit` (integer ≥ 0; default `10`) | Trending Now items per country, with rank, traffic bucket, growth, categories, related queries, and links. |
 
 `time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live. Anchors are automatic by window: `sudoku` for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` for `now 7-d` and longer. An explicit MCP `anchor` or CLI `--anchor` overrides both the requested and the extra 7-day window.
 
@@ -49,7 +49,7 @@ Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the 
 
 `dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). pnpm keys git builds by commit, so the first run prints that key (it changes when main moves), add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
 
-Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile. The usage card shows this cycle's plan and usage; the public-Actor cost line shows the measured ≈$0.0025 per isolated-call estimate.
+Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile. The usage card shows this cycle's plan and usage; the public-Actor line shows the measured cost. A saved legacy `egress: apify` loads as `actor-own` with a rename notice; an unknown value loads as `local` with a notice, and Save rewrites the profile. The deploy poll follows only the returned `actorId`/`buildId` until that exact build succeeds or fails, so an unrelated successful build never auto-selects.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -79,9 +79,11 @@ The settings page also calls four owner-authenticated Host routes through dsh's 
 
 These routes require dsh's authenticated browser session and are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, Actor metadata, and status/latency; account identity, the raw `/users/me` object, and the token are dropped Host-side.
 
-`actor-public` resolves the Actor id to the constant `meka.im~google-trends-for-agent`; `actor-own` needs `apifyActor`. Both resolve the token from saved `apifyToken`, then `APIFY_TOKEN`, and POST each `TransportRequest` to `${standbyUrl}/egress/fetch` with `Authorization: Bearer <token>`. Before the first relay, the transport calls `GET ${standbyUrl}/health` once and requires `relay === 1`; a mismatch or a missing field returns `INVALID_INPUT` with "This Actor build speaks relay v…; this plugin needs v1. Update the plugin or rebuild the Actor." The Actor runs the request with its on-platform residential proxy and rotates the proxy session on HTTP 429 or a Google challenge. 401/403 map to `INVALID_INPUT` ("Apify rejected the token"), 404 / no Actor to `INVALID_INPUT` ("Select or deploy…"), and 429/5xx/network to retryable `NETWORK_ERROR`; the first request allows about 120 s for a cold Standby start. Missing token or Actor returns a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure, and the token is never included in errors. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
+`actor-public` resolves the Actor id to the constant `meka.im~google-trends-for-agent`; `actor-own` needs `apifyActor`. Both resolve the token from saved `apifyToken`, then `APIFY_TOKEN`, and POST each `TransportRequest` to `${standbyUrl}/egress/fetch` with `Authorization: Bearer <token>`. Before the first relay, the transport calls `GET ${standbyUrl}/health` once and requires `relay === 1`; a mismatch or a missing field returns `INVALID_INPUT` with "This Actor build speaks relay v…; this plugin needs v1. Update the plugin or rebuild the Actor." The Actor runs the request with its on-platform residential proxy and rotates the proxy session on HTTP 429 or a Google challenge. 401/403 map to `INVALID_INPUT` ("Apify rejected the token"), 404 / no Actor to `INVALID_INPUT` ("Select or deploy…"), and 429/5xx/network to retryable `NETWORK_ERROR`; the first request allows about 120 s for a Standby startup. Missing token or Actor returns a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure, and the token is never included in errors. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
 
-The Actor's HTTP API (`/egress/fetch`, `/tools/{name}`, `/health`, `/mcp`) also uses `Authorization: Bearer <token>`. A single-tenant Standby run bills compute while idle, so the Actor exits after 60 s without in-flight requests (`GTFA_IDLE_EXIT_SECS`). One-off runs execute one tool and exit; see [`.actor/README.md`](../.actor/README.md).
+The local `gtfa-mcp --http` endpoint binds `127.0.0.1`, accepts only loopback `Host` values, rejects a non-loopback `Origin` when one is sent, and does not send wildcard CORS headers. The Actor's Standby endpoint trusts Apify's proxy and bearer-token auth instead. `GET /health` returns `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set.
+
+The Actor's HTTP API (`/egress/fetch`, `/tools/{name}`, `/health`, `/mcp`) also uses `Authorization: Bearer <token>`. One tool call has a 300 s deadline; a client disconnect or an expired deadline aborts the upstream work. A single-tenant Standby run bills compute while idle, so the Actor exits after 60 s without in-flight requests (`GTFA_IDLE_EXIT_SECS`). One-off runs execute one tool and exit, and later terms in an `ask`/`snapshot` batch after a block or rate limit are written as `skipped` rows; see [`.actor/README.md`](../.actor/README.md).
 
 ## Output contract
 
@@ -186,12 +188,12 @@ Measured on 2026-11-13 against the public Standby URL (US, `now 1-d`, sequential
 
 | Case | Run time | CU | Residential | Cost | Free $5 covers |
 | --- | --- | --- | --- | --- | --- |
-| Isolated `trends_ask` (cold, 10.8 s response) | 67 s | 0.0094 | 61 KB | $0.0024 | ≈ 2,100 calls |
-| Isolated `trends_snapshot` (cold, 31 s response) | 68 s | 0.0094 | 122 KB | $0.0029 | ≈ 1,700 calls |
+| Isolated `trends_ask` (startup, 10.8 s response) | 67 s | 0.0094 | 61 KB | $0.0024 | ≈ 2,100 calls |
+| Isolated `trends_snapshot` (startup, 31 s response) | 68 s | 0.0094 | 122 KB | $0.0029 | ≈ 1,700 calls |
 | 10 × `trends_ask` in one session (8.0–24.9 s each, median 8.3 s) | 160 s | 0.0222 | 592 KB | $0.0092 | ≈ 540 sessions (5,400 calls) |
 | Each extra warm `trends_ask` | — | — | ~59 KB | ≈ $0.0008 | — |
 
-The warm figure is (session − isolated ask) ÷ 9. The cold-start overhead (+~3 s) is the cold ask's response time minus the warm median; Apify can take longer on a cold start. Warm asks take ~8 s because MCP requests are spaced 1500 ms apart. Most of an isolated call's cost is the 60 s idle tail, so batching calls into one session is the cheapest pattern. One-off runs bill the same way without the idle tail (one measured run: two snapshots in 32 s, $0.0031). The plugin's ≈$0.0025 per call (≈2,000 calls per $5) matches an isolated `trends_ask`; isolated snapshots cost about 20% more.
+The warm figure is (session − isolated ask) ÷ 9. Startup overhead (+~3 s) is the first call's response time after idle minus the warm median; a cold Actor can occasionally take up to ~2 minutes. Warm asks take ~8 s because MCP requests are spaced 1500 ms apart. Most of an isolated call's cost is the 60 s idle tail, so batching calls into one session is the cheapest pattern. One-off runs bill the same way without the idle tail (one measured run: two snapshots in 32 s, $0.0031). Isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008. The plugin uses the same figures.
 
 ## Rate limits, retries, and timeouts
 
@@ -199,5 +201,6 @@ The warm figure is (session − isolated ask) ÷ 9. The cold-start overhead (+~3
 - HTTP 429 triggers a bounded automatic retry: `Retry-After` is honored when it is at most **10 s**, otherwise the request fails immediately with `retryAfterSec` so the caller can wait. Without `Retry-After`, the delay is 1 s, then 2 s. `maxRetries` defaults to `1` and is capped at `2`.
 - `BLOCKED` challenge pages are never retried. They trigger adaptive backoff capped at 60 s (1 s floor); successes halve the penalty.
 - For Explore and Trending Now requests, transient `TRENDS_TIMEOUT`, `TRENDS_TEMPORARILY_UNAVAILABLE`, and `NETWORK_ERROR` failures may also retry up to `maxRetries` (default `1`, maximum `2`). Explore's default timeout is 8000 ms, and `timeoutMs` must be 1000–60000 ms. The Trending Now library `timeoutMs` defaults to 8000 ms and accepts any finite positive number; the CLI's `now --timeout` requires a positive safe integer.
-- Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped.
+- Batches and `trends_now` stop after the first block by default; later items are reported as blocked/skipped, and one-off Actor batches write a `skipped` dataset row for each remaining term.
+- Each `gtfa-mcp --http` or Actor tool call has a **300 s** deadline; cancellation (a client disconnect) aborts the in-flight request instead of continuing through retries or countries.
 - Keep workloads small. This is not suitable for bulk scraping or continuous polling, and retries or proxies do not guarantee access.

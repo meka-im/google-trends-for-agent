@@ -53,18 +53,18 @@ export const APIFY_PRICING_URL = 'https://apify.com/pricing';
 export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
 /**
  * Estimated cost of one isolated `trends_ask` through the Actor, measured on
- * build 0.1.7 (Nov 2026): ~65 KB residential ($8/GB) plus a 512 MB Standby run
- * that exits after 60 s idle ($0.2/CU). Calls in a warm run cost less.
+ * 2026-11-13 at Free-plan rates: ~61 KB residential ($8/GB) plus a 512 MB
+ * Standby run that exits after 60 s idle ($0.2/CU). Extra warm calls cost less.
  */
-export const APIFY_EST_COST_PER_CALL_USD = 0.0025;
+export const APIFY_EST_COST_PER_CALL_USD = 0.0024;
 
-/** Rough monthly call allowance: floor(credit / cost) rounded down to the nearest 100. */
+/** Rough monthly call allowance: credit / cost rounded to the nearest 100. */
 export function apifyEstimatedCalls(
   creditUsd = APIFY_FREE_MONTHLY_CREDIT_USD,
   costPerCallUsd = APIFY_EST_COST_PER_CALL_USD,
 ): number {
   if (!(creditUsd > 0) || !(costPerCallUsd > 0)) return 0;
-  return Math.floor(Math.floor(creditUsd / costPerCallUsd) / 100) * 100;
+  return Math.round((creditUsd / costPerCallUsd) / 100) * 100;
 }
 
 /** Built-in calibration anchor terms, shared by the host and the browser form without importing baselines. */

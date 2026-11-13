@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-407%20passed-22c55e?style=flat-square" alt="407 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src=".actor/icon.png" alt="google-trends-for-agent" width="44" height="44" align="middle"> <strong>在 Apify Store 打开 →</strong></a></p>
 
@@ -28,18 +28,27 @@
 
 | 路线 | 一键使用 | 费用 |
 | --- | --- | --- |
-| **本机直连（你的 IP）** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | 免费；无需 Apify 账号。 |
+| **本机直连（你的 IP）** | `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US` | 免费；无需 Apify 账号。 |
 | **公共 Actor（meka.im）** | [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent) | 无 Actor 费用；每次调用约 $0.0024，免费版每月 $5 ≈ 2,100 次调用。 |
-| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)；dsh 插件**部署到我的 Apify 账号**；Console → **Link Git repository**（分支 `main`，启用 **Standby**）；或 `apify push`。 | 每次调用约 $0.0024，另加每次构建约 $0.005。 |
+| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)，然后按下面四步操作。 | 每次调用约 $0.0024，另加每次构建约 $0.005。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-zh-dark.png">
-  <img src="docs/assets/routes-zh.png" alt="路线对比：每次调用费用、免费 $5 可用次数、冷启动、限流应对、准备">
+  <img src="docs/assets/routes-zh.png" alt="路线对比：每次调用费用、免费 $5 可用次数、启动开销、限流应对、准备">
 </picture>
 
-快照、会话和计算公式见 [Actor costs](docs/reference.md#actor-costs)。
+启动开销是空闲后首次调用的额外等待；冷 Actor 偶尔可能长达约 2 分钟。
 
-通过公共 Standby 端点使用远程 MCP：
+公共 Standby 实测：单次 `trends_ask` ≈ $0.0024（2026-11-13 实测，Apify 免费版费率）；快照 ≈ $0.0029；额外热调用 ≈ $0.0008。快照、会话和计算公式见 [Actor costs](docs/reference.md#actor-costs)。
+
+**自行部署**
+
+1. [Fork 仓库](https://github.com/meka-im/google-trends-for-agent/fork)。
+2. 在 Apify Console 用 **Link Git repository**（分支 `main`）创建 Actor，或在克隆目录运行 `apify push`。
+3. 构建完成后，在 Settings → Server 启用 **Standby**。
+4. 客户端使用 `https://<user>--<actor>.apify.actor/mcp` 并带上 Apify Token。
+
+通过公共 Standby 端点使用远程 MCP。先在 [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) 创建 Token：
 
 ```json
 {
@@ -59,21 +68,21 @@
 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.0", "gtfa-mcp"] } }
 }
 ```
 
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 ## dsh 插件
@@ -113,7 +122,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 | `gtfa ask <term>` | 单个词，可选 `--validate`、`--diff`、`--points` 和批量 `--from`。 |
 | `gtfa snapshot <term>` | 校准流量、相关查询、verdict 和 SVG 图表。 |
 | `gtfa compare <kw> <kw> [...]` | 1–5 个关键词的相对兴趣（也支持 `--query` 模式）。 |
-| `gtfa now` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
+| `gtfa now --geo US` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
 | `gtfa doctor` | 检查 Node、Google Trends 可达性、代理，并执行一次 `gpts` 美国 24 小时抓取；`--json` 供机器读取。 |
 
 完整选项和示例见[参考文档](docs/reference.md#cli-surface)。
@@ -139,7 +148,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 ```sh
 npm install
-npm test          # 384 个测试
+npm test          # 407 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

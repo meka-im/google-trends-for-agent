@@ -474,7 +474,7 @@ Google Trending Now（按国顺序拉取；遇 block 即停后续国家）。
 
 | 参数 | 类型 | 必填 | 默认 | 含义 |
 | --- | --- | --- | --- | --- |
-| `geos` | `string[]` · `"default"` · `"all"` | 否 | `"default"`（30 国） | 国家列表；支持列表写在工具 description |
+| `geos` | `string[]` · `"default"` · `"all"` | 否 | `"default"`（30 国） | 国家列表；显式列表按输入顺序大写、去重，最多 30 个 |
 | `hours` | `4` · `24` · `48` · `168` | 否 | `24` | **Trending 窗口（小时）**，勿与 Explore `time` 混淆 |
 | `limit` | integer ≥ 0 | 否 | `10` | 每国条数 |
 

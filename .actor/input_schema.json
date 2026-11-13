@@ -6,7 +6,7 @@
     "tool": {
       "title": "What to run",
       "type": "string",
-      "description": "One tool per run. Example: \"ask\" checks a single term and returns interest plus related queries. Standby/MCP callers ignore this input.",
+      "description": "One tool per run. Example: \"ask\" checks a single term and returns interest plus related queries. The public Actor's Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses geo, anchor, and proxyConfiguration at startup.",
       "editor": "select",
       "enum": [
         "ask",
@@ -23,7 +23,7 @@
       "default": "ask",
       "prefill": "snapshot",
       "sectionCaption": "Question",
-      "sectionDescription": "A one-off run executes one tool and exits with a dataset row per term (one row per Trending Now item for \"now\"). Standby/MCP callers ignore this input."
+      "sectionDescription": "A one-off run executes one tool and exits with a dataset row per term (one row per Trending Now item for \"now\"). The public Actor's Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses geo, anchor, and proxyConfiguration at startup."
     },
     "terms": {
       "title": "Terms",
@@ -38,7 +38,7 @@
     "geo": {
       "title": "Country",
       "type": "string",
-      "description": "Google Trends country. Example: \"US\". Worldwide is supported for ask/snapshot/compare; \"now\" needs a country.",
+      "description": "Google Trends country. Example: \"US\". Worldwide is supported for ask/snapshot/compare; \"now\" needs a country. The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses it as the default geo.",
       "editor": "select",
       "enum": [
         "WORLDWIDE",
@@ -292,7 +292,7 @@
     "window": {
       "title": "Time window",
       "type": "string",
-      "description": "Explore time window. Example: \"now 7-d\". Trending Now maps this to the nearest supported window (4, 24, or 168 hours).",
+      "description": "Explore time window. Example: \"now 7-d\". For ask/snapshot/compare it is used unchanged. For now: now 1-H and now 4-H map to 4 hours; now 1-d to 24; now 7-d to 168; today 1-m, today 3-m, today 12-m, today 5-y, and all map to 24 hours. trends_now also accepts hours 48 directly, but no Actor window maps to 48 hours.",
       "editor": "select",
       "enum": [
         "now 1-H",
@@ -322,7 +322,7 @@
     "anchor": {
       "title": "Calibration anchor",
       "type": "string",
-      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic (sudoku for ≤1 day, gpts for 7 days and longer).",
+      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic (sudoku for ≤1 day, gpts for 7 days and longer). The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled applies it server-wide.",
       "editor": "select",
       "enum": [
         "",
@@ -342,7 +342,7 @@
     "proxyConfiguration": {
       "title": "Proxy configuration",
       "type": "object",
-      "description": "Egress for Google Trends requests inside the Actor. Example: Apify Residential proxy in the US. Residential traffic is billed per GB from your Apify credits.",
+      "description": "Egress for Google Trends requests inside the Actor. Example: Apify Residential proxy in the US. Residential traffic is billed per GB from your Apify credits. The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses it at startup.",
       "editor": "proxy",
       "default": {
         "useApifyProxy": true,

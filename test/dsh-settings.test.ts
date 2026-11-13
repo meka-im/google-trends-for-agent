@@ -184,7 +184,7 @@ describe('dsh settings form', () => {
     const html = render({ draft: { egress: 'actor-own' }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
     expect(html).toContain('No Apify account? Sign up free');
     expect(html).toContain('$5 monthly credit');
-    expect(html).toContain(`roughly ${new Intl.NumberFormat('en').format(apifyEstimatedCalls())} calls a month at about $0.0025 per call, estimated`);
+    expect(html).toContain(`roughly ${new Intl.NumberFormat('en').format(apifyEstimatedCalls())} calls a month at about $0.0024 per call, estimated`);
     expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
     expect(html).toContain(`href="${APIFY_PRICING_URL}"`);
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
@@ -215,7 +215,7 @@ describe('dsh settings form', () => {
     expect(html).toContain('View source on GitHub →');
     expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent"');
     expect(html).toContain(`href="${GTFA_STORE_URL}" target="_blank" rel="noopener noreferrer">Apify Store page →</a>`);
-    expect(html).toContain('About $0.0025 of platform usage per isolated call');
+    expect(html).toContain('About $0.0024 of platform usage per isolated call');
     expect(html).toContain('Apify token');
     expect(html).not.toContain('aria-label="Actor"');
     expect(html).not.toContain('Deploy to my Apify account');
@@ -243,8 +243,8 @@ describe('dsh settings form', () => {
     expect(APIFY_SIGNUP_URL).toBe('https://console.apify.com/sign-up');
     expect(APIFY_PRICING_URL).toBe('https://apify.com/pricing');
     expect(APIFY_FREE_MONTHLY_CREDIT_USD).toBe(5);
-    expect(APIFY_EST_COST_PER_CALL_USD).toBe(0.0025);
-    expect(apifyEstimatedCalls()).toBe(2000);
+    expect(APIFY_EST_COST_PER_CALL_USD).toBe(0.0024);
+    expect(apifyEstimatedCalls()).toBe(2100);
   });
 
   it('keeps Advanced collapsed by default and shows its fields inside the disclosure', () => {

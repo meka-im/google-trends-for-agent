@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-407%20passed-22c55e?style=flat-square" alt="407 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src=".actor/icon.png" alt="google-trends-for-agent" width="44" height="44" align="middle"> <strong>Open in Apify Store →</strong></a></p>
 
@@ -28,18 +28,27 @@
 
 | Route | One click | Cost |
 | --- | --- | --- |
-| **Local (your IP)** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | Free; no Apify account. |
+| **Local (your IP)** | `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US` | Free; no Apify account. |
 | **Public Actor (meka.im)** | [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent) | No Actor fee; ~$0.0024 per call, so the Free plan's $5/month ≈ 2,100 calls. |
-| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork); dsh plugin **Deploy to my Apify account**; Console → **Link Git repository** (branch `main`, enable **Standby**); or `apify push`. | ~$0.0024 per call, plus ~$0.005 per build. |
+| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork), then follow the four steps below. | ~$0.0024 per call, plus ~$0.005 per build. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-en-dark.png">
-  <img src="docs/assets/routes-en.png" alt="Routes compared: cost per call, calls per free $5, cold start, rate limits, setup">
+  <img src="docs/assets/routes-en.png" alt="Routes compared: cost per call, calls per free $5, startup overhead, rate limits, setup">
 </picture>
 
-Snapshots, sessions and the cost formula: [Actor costs](docs/reference.md#actor-costs).
+Startup overhead is extra time on the first call after idle; a cold Actor can occasionally take up to ~2 minutes.
 
-Remote MCP over the public Standby endpoint:
+Measured on the public Standby URL: isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008. Snapshots, sessions and the cost formula: [Actor costs](docs/reference.md#actor-costs).
+
+**Self-deploy**
+
+1. [Fork the repository](https://github.com/meka-im/google-trends-for-agent/fork).
+2. In Apify Console, create an Actor with **Link Git repository** (branch `main`) or run `apify push` from a clone.
+3. Build it, then enable **Standby** under Settings → Server.
+4. Point clients at `https://<user>--<actor>.apify.actor/mcp` with an Apify token.
+
+Remote MCP over the public Standby endpoint. Create a token at [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations):
 
 ```json
 {
@@ -59,21 +68,21 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 Node.js 20+ is required. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.0", "gtfa-mcp"] } }
 }
 ```
 
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 ## dsh plugin
@@ -113,7 +122,7 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 | `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, and batch `--from`. |
 | `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, and SVG charts. |
 | `gtfa compare <kw> <kw> [...]` | Relative interest for 1–5 keywords (also `--query` mode). |
-| `gtfa now` | Trending Now by country; `--hours` is the Now window. |
+| `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window. |
 | `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch; `--json` for machines. |
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
@@ -139,7 +148,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 384 tests
+npm test          # 407 tests
 npm run typecheck
 npm run build
 npm run trends -- --help
