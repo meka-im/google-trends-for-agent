@@ -26,20 +26,16 @@
 
 ## Choose a route
 
-| Route | One click | Cost |
-| --- | --- | --- |
-| **Local (your IP)** | `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US` | Free; no Apify account. |
-| **Public Actor (meka.im)** | [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent) | No Actor fee; ~$0.0024 per call, so the Free plan's $5/month ≈ 2,100 calls. |
-| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork), then follow the four steps below. | ~$0.0024 per call, plus ~$0.005 per build. |
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-en-dark.png">
   <img src="docs/assets/routes-en.png" alt="Routes compared: cost per call, calls per free $5, startup overhead, rate limits, setup">
 </picture>
 
-Startup overhead is extra time on the first call after idle; a cold Actor can occasionally take up to ~2 minutes.
+<sub>A cold Actor can occasionally take up to ~2 min on its first call. Snapshot, warm-call and build costs: [Actor costs](docs/reference.md#actor-costs).</sub>
 
-Measured on the public Standby URL: isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008. Snapshots, sessions and the cost formula: [Actor costs](docs/reference.md#actor-costs).
+- **Local** — [Run one npx command →](#install--quick-start)
+- **Public Actor** — [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent)
+- **Self-deploy** — [Fork and deploy →](#deploy-it-yourself)
 
 ### Deploy it yourself
 

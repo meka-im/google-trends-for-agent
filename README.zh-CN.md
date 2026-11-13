@@ -26,20 +26,16 @@
 
 ## 选择路线
 
-| 路线 | 一键使用 | 费用 |
-| --- | --- | --- |
-| **本机直连（你的 IP）** | `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US` | 免费；无需 Apify 账号。 |
-| **公共 Actor（meka.im）** | [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent) | 无 Actor 费用；每次调用约 $0.0024，免费版每月 $5 ≈ 2,100 次调用。 |
-| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)，然后按下面四步操作。 | 每次调用约 $0.0024，另加每次构建约 $0.005。 |
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-zh-dark.png">
   <img src="docs/assets/routes-zh.png" alt="路线对比：每次调用费用、免费 $5 可用次数、启动开销、限流应对、准备">
 </picture>
 
-启动开销是空闲后首次调用的额外等待；冷 Actor 偶尔可能长达约 2 分钟。
+<sub>冷 Actor 首次调用偶尔可能长达约 2 分钟。快照、热调用和构建费用见 [Actor costs](docs/reference.md#actor-costs)。</sub>
 
-公共 Standby 实测：单次 `trends_ask` ≈ $0.0024（2026-11-13 实测，Apify 免费版费率）；快照 ≈ $0.0029；额外热调用 ≈ $0.0008。快照、会话和计算公式见 [Actor costs](docs/reference.md#actor-costs)。
+- **本机直连** — [运行一条 npx 命令 →](#安装与快速开始)
+- **公共 Actor** — [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent)
+- **自行部署** — [Fork 并部署 →](#deploy-it-yourself)
 
 <a id="deploy-it-yourself"></a>
 
