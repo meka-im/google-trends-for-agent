@@ -135,6 +135,14 @@ export function blockedVerdict<T extends { ok: boolean; verdict?: Record<string,
   const { meta, ...rest } = env;
   return { ...rest, ok: false, status: 'blocked', error: { code, message: (v.anchor as { note?: string } | undefined)?.note || 'validation blocked', ...(typeof v.retryAfterSec === 'number' ? { retryAfterSec: v.retryAfterSec } : {}) }, meta } as never;
 }
+/** First keyword that collides after trim, case-fold, and whitespace collapse; otherwise undefined. */
+export function findDuplicateKeyword(keywords: string[]): string | undefined {
+  const seen = new Set<string>();
+  return keywords.find(k => {
+    const n = k.trim().toLowerCase().replace(/\s+/g, ' ');
+    return seen.has(n) || !seen.add(n);
+  });
+}
 /** Map a TrendsResponse for 1–5 distinct keywords to the stable trends_compare envelope. */
 export function compareEnvelope(keywords: string[], r: TrendsResponse, filter: { geo: string; time: string } = { geo: DEFAULTS.geo, time: DEFAULTS.time }) {
   const iot = r.data?.interestOverTime as InterestOverTime | undefined;
@@ -279,7 +287,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const { keywords, geo, time: range } = parsed.data as { keywords: string[]; geo?: string; time: (typeof TIME_RANGES)[number] };
       const geoValue = geo !== undefined ? geo.trim() : live().defaultGeo;
       const { client } = scoped(context);
-      const seen = new Set<string>(), dup = keywords.find(k => { const n = k.trim().toLowerCase().replace(/\s+/g, ' '); return seen.has(n) || !seen.add(n); });
+      const dup = findDuplicateKeyword(keywords);
       if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
       const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal } as never);
       return response(compareEnvelope(keywords, r, { geo: geoValue, time: range }));

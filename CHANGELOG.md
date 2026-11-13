@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-11-13
 
+- CLI `compare` rejects duplicate keywords with `INVALID_INPUT` (exit 4), matching MCP.
+- Persistent-install instructions pack a tarball (`npm pack`) so the clone directory can be deleted.
 - Fix persistent-install instructions with clone/build/local global install; document npx startup overhead and the exact dsh `allowBuilds` map.
 - CLI `--diff` forces a fresh saved snapshot; clarify MCP diffs on cache hits and `fresh: true`.
 - Document accepted `--from` JSON formats in CLI help and reference.
 - Accept 1–5 distinct compare keywords across CLI, MCP, and Actor; align schemas, help, and docs.
 - Correct SVG dimensions to 720×300, explain trailing back-fill zeros and settled values, and use fresh fetches in baseline examples.
+- Translate the new mcp-api notes into Chinese.
+- Install and MCP pins move to `v0.2.1`.
 - npm audit fix: transitive security updates.
 
 ## 0.2.0 — 2026-11-13

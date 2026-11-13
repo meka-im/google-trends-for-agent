@@ -66,29 +66,29 @@
 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 零安装的 `npx` 路径首次从 git 构建约需 30–50 秒，之后每次调用仍增加约 7 秒启动开销。频繁使用建议持久安装或运行 MCP 服务器。
 
-持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）：
+持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）。用打包后的 tarball 安装，之后可以删除 clone 目录：
 
 ```sh
-git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.0", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"] } }
 }
 ```
 
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 ## dsh 插件

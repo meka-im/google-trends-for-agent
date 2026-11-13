@@ -26,7 +26,7 @@ describe('package root entry', () => {
 
   it('reads one version from package.json', () => {
     const pkg = JSON.parse(read('package.json'));
-    expect(pkg.version).toBe('0.2.0');
+    expect(pkg.version).toBe('0.2.1');
     expect(VERSION).toBe(pkg.version);
   });
 

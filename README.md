@@ -64,29 +64,29 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 Node.js 20+ is required. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
 
-Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`):
+Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.0", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"] } }
 }
 ```
 
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 ## dsh plugin

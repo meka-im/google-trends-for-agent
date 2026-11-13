@@ -1,6 +1,6 @@
 {
   "name": "google-trends-for-agent",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Search-interest signals for AI agents — an unofficial Google Trends client",
   "type": "module",
   "license": "MIT",

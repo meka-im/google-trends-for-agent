@@ -8,7 +8,7 @@ Node.js 20+ is required. Nothing is published to npm; `npx` builds the package f
 
 ```sh
 # Pinned release (recommended)
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa --help
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa --help
 
 # Latest main
 npx -y -p github:meka-im/google-trends-for-agent gtfa --help
@@ -16,22 +16,22 @@ npx -y -p github:meka-im/google-trends-for-agent gtfa --help
 
 The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
 
-Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`):
+Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 ## MCP client config
 
-Use this generic stdio configuration (swap `#v0.2.0` for no tag to follow main):
+Use this generic stdio configuration (swap `#v0.2.1` for no tag to follow main):
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.0", "gtfa-mcp"]
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.1", "gtfa-mcp"]
     }
   }
 }
@@ -61,8 +61,8 @@ This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`
 Run the doctor once after install, or whenever a call fails unexpectedly:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa doctor
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa doctor --json
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa doctor
+npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa doctor --json
 ```
 
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
@@ -73,7 +73,7 @@ Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY
 
 Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
 
-1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
+1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
 3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
 

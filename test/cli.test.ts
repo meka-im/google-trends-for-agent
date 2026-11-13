@@ -33,6 +33,16 @@ describe('CLI offline output', () => {
     expect(dated.input).toMatchObject({ geo: 'US', startDate: '2026-01-01', endDate: '2026-02-01' });
     expect(dated.input.timeRange ?? null).toBeNull();
   }, 20000);
+
+  it('rejects duplicate compare keywords with INVALID_INPUT and no fetch', () => {
+    for (const cli of [['compare', 'coffee', 'coffee', '--json'], ['compare', 'Coffee', ' coffee ', '--json'], ['--query', 'coffee', '--query', 'coffee', '--json']]) {
+      const r = runCli([...args, ...cli], { encoding: 'utf8', env });
+      expect(r.status).toBe(4);
+      expect(JSON.parse(r.stdout)).toMatchObject({ status: 'error', error: { code: 'INVALID_INPUT', message: expect.stringContaining('duplicate keyword: "coffee"') }, meta: { upstreamRequests: 0 } });
+      expect(r.stderr).toContain('INVALID_INPUT');
+    }
+  });
+
   it('prints the required JSON envelope for a fixture query', () => {
     const { stdout: output } = runCli([...args, '--query', 'coffee', '--time', 'today 1-m', '--types', 'interestOverTime', '--format', 'json'], { encoding: 'utf8', env });
     const result = JSON.parse(output);
@@ -70,7 +80,7 @@ describe('CLI flags and exit codes', () => {
   });
   it('supports help and version offline', () => {
     expect((runCli([...args, '--help'], { encoding: 'utf8', env })).stdout).toContain('gtfa ask <term>');
-    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.2.0' });
+    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.2.1' });
   });
   it.each(['--unknown', '--types', '--timeout', '--retries', '--min-interval'])('rejects invalid %s offline', flag => {
     const invalid = runCli([...args, '--query', 'x', flag, 'bogus'], { encoding: 'utf8', env });

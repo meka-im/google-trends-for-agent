@@ -4,10 +4,10 @@ Operational detail for the CLI, the MCP server, the dsh plugin, and the numbers 
 
 ## CLI surface
 
-The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server. Keep `npx` for zero-install use. For a persistent install, clone first because npm global git installs can omit build devDependencies during `prepare`:
+The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server. Keep `npx` for zero-install use. For a persistent install, clone first because npm global git installs can omit build devDependencies during `prepare`. Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g .
+git clone --branch v0.2.1 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
 ```
 
 | Command | Flags | Purpose |
@@ -18,7 +18,7 @@ git clone --branch v0.2.0 --depth 1 https://github.com/meka-im/google-trends-for
 | `gtfa now --geo US` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
 | `gtfa doctor` | `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent#v0.2.0 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent#v0.2.1 gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. Filters also honor `gtfa.config.json`, `GTFA_GEO`, and `GTFA_TIME`; chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 gtfa ask "nano banana" --validate --diff --json
