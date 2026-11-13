@@ -58,7 +58,7 @@ describe('runOnce validation', () => {
 describe('runOnce mapping', () => {
   it('calls ask once per term, sequentially, and maps interest plus verdict', async () => {
     const calls: { name: string; input: Record<string, unknown> }[] = [];
-    const { deps, pushed, values, logs } = harness(async (name, input) => {
+    const { deps, pushed, values, options, logs } = harness(async (name, input) => {
       calls.push({ name, input });
       return askEnvelope(String(input.term));
     });
@@ -76,6 +76,8 @@ describe('runOnce mapping', () => {
     });
     expect(logs).toEqual(['Sora: ok', 'Veo: ok']);
     expect(values.OUTPUT).toMatchObject({ status: 'completed', tool: 'ask', geo: 'US', delivered: 2, completed: true, partial: false });
+    // Apify's setValue rejects an object value with an explicit contentType; JSON is the default.
+    expect(options.OUTPUT).toBeUndefined();
   });
 
   it('passes the anchor to snapshot and stores the chart in KV', async () => {

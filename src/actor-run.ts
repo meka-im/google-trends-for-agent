@@ -374,7 +374,7 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
     const tool = (ACTOR_RUN_TOOLS as readonly string[]).includes(rawTool) ? rawTool as ActorRunTool : 'ask';
     const output = buildOutput(tool, typeof input.geo === 'string' ? input.geo : DEFAULT_GEO,
       text(input.window) ?? DEFAULTS.time, Array.isArray(input.terms) ? input.terms : [], [], startedAt, clock(), `Invalid input: ${validated}`);
-    await deps.setValue('OUTPUT', output, { contentType: 'application/json' });
+    await deps.setValue('OUTPUT', output);
     deps.log?.(`Invalid input: ${validated}`);
     return { output, failed: true, rows: [] };
   }
@@ -451,6 +451,6 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
   }
 
   const output = buildOutput(tool, geo, window, terms, rows, startedAt, clock());
-  await deps.setValue('OUTPUT', output, { contentType: 'application/json' });
+  await deps.setValue('OUTPUT', output);
   return { output, failed: output.status === 'failed', rows };
 }
