@@ -336,6 +336,27 @@ describe('Actor relay transport', () => {
   });
 });
 
+describe('relay health retry', () => {
+  it('retries the health check after a transient failure', async () => {
+    const request = { url: 'https://trends.google.com/trends/', method: 'HEAD', headers: {}, timeoutMs: 5000 };
+    let health = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith('/health')) {
+        health += 1;
+        return health === 1 ? json({ error: 'busy' }, 503) : json({ ok: true, version: '0.1.0', relay: 1 });
+      }
+      return json({ status: 200, headers: {}, body: '' });
+    });
+    const transport = createActorRelayTransport({
+      token: TOKEN, actorId: 'a1', fetch: fetchMock as unknown as typeof fetch,
+      resolveStandbyUrl: async () => 'https://actor.test',
+    });
+    await expect(transport(request)).rejects.toBeInstanceOf(GTrendsError);
+    await expect(transport(request)).resolves.toMatchObject({ status: 200 });
+    expect(health).toBe(2);
+  });
+});
+
 describe('Apify token resolution', () => {
   it('prefers the saved config token, then APIFY_TOKEN', () => {
     expect(resolveApifyApiToken('config-token', { APIFY_TOKEN: 'env-token' })).toEqual({ token: 'config-token', source: 'config' });

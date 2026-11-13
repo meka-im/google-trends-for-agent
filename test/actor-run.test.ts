@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runOnce, type ActorRunDeps, type ActorRunRow } from '../src/actor-run.js';
+import { chartKeyFor, runOnce, type ActorRunDeps, type ActorRunRow } from '../src/actor-run.js';
 import type { GtfaTool } from '../src/tools.js';
 
 const FIELDS: Record<string, unknown> = {
@@ -85,7 +85,14 @@ describe('runOnce mapping', () => {
     const setValue = vi.fn(async (key: string, value: unknown) => { values[key] = value; });
     const { deps, pushed } = harness(async (_name, input) => ({
       ok: true, status: 'ok', term: input.term,
-      traffic: { latest: 50, settledLatest: 48, average: 45.5, peak: 100 },
+      filter: { geo: 'US', time: 'now 7-d', category: 0, property: 'web' },
+      traffic: { latest: 52000, settledLatest: 48000, average: 12000, peak: 90000 },
+      series: { points: [
+        { t: '2026-11-10T00:00:00Z', score: 40, traffic: 10000 },
+        { t: '2026-11-10T01:00:00Z', score: 100, traffic: 25000 },
+        { t: '2026-11-10T02:00:00Z', score: 60, traffic: 15000 },
+        { t: '2026-11-10T03:00:00Z', score: 50, traffic: 12500 },
+      ] },
       anchor: { term: 'gpts' }, verdict: { label: 'rising' },
       tables: { popular: [{ query: 'sora 2' }], rising: [{ query: 'sora 2 api' }] },
       chart: { path: '/tmp/charts/sora.svg' },
@@ -93,11 +100,11 @@ describe('runOnce mapping', () => {
     }), { setValue, readFile: async () => chart });
     const result = await runOnce({ tool: 'snapshot', terms: ['Sora'], geo: 'US', window: 'now 7-d', anchor: 'gpts' }, deps);
     expect(pushed[0]).toMatchObject({
-      status: 'ok', interestLatest: 50, interestSettled: 48, interestAverage: 45.5, interestPeak: 100,
-      searchesPerDay: 45.5, verdict: 'rising', anchor: 'gpts',
-      chartKey: 'chart-sora', chartUrl: 'https://api.apify.com/v2/key-value-stores/store-1/records/chart-sora',
+      status: 'ok', interestLatest: 50, interestSettled: 60, interestAverage: 62.5, interestPeak: 100,
+      searchesPerDay: 12000, verdict: 'rising', anchor: 'gpts',
+      chartKey: chartKeyFor('Sora'), chartUrl: `https://api.apify.com/v2/key-value-stores/store-1/records/${chartKeyFor('Sora')}`,
     });
-    expect(setValue).toHaveBeenCalledWith('chart-sora', chart, { contentType: 'image/svg+xml' });
+    expect(setValue).toHaveBeenCalledWith(chartKeyFor('Sora'), chart, { contentType: 'image/svg+xml' });
     expect(values.OUTPUT).toMatchObject({ status: 'completed', delivered: 1 });
     expect(result.failed).toBe(false);
   });
@@ -169,6 +176,34 @@ describe('runOnce mapping', () => {
     const blocked = await runOnce({ tool: 'ask', terms: ['blocked'], geo: 'US', window: 'now 1-d' }, failed.deps);
     expect(blocked.output).toMatchObject({ status: 'failed', blocked: 1, errors: 0, completed: false, partial: false });
     expect(blocked.failed).toBe(true);
+  });
+
+  it('keeps a partial envelope with usable data as delivered, and the run partial', async () => {
+    const { deps, pushed, values } = harness(async (_name, input) => askEnvelope(String(input.term), {
+      ok: true, status: 'partial', error: { code: 'NETWORK_ERROR', message: 'related queries failed' },
+    }));
+    const result = await runOnce({ tool: 'ask', terms: ['Sora'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(pushed[0]).toMatchObject({ status: 'ok', interestLatest: 43, error: { code: 'NETWORK_ERROR' } });
+    expect(values.OUTPUT).toMatchObject({ status: 'partial', delivered: 1, partial: true, completed: false });
+    expect(result.failed).toBe(false);
+  });
+
+  it('reports a Trending Now country failure as a row', async () => {
+    const { deps, pushed, values } = harness(async () => ({
+      ok: false, status: 'error',
+      byGeo: [{ geo: 'US', ok: false, items: [], error: { code: 'BLOCKED', message: 'challenge page' } }],
+    }));
+    const result = await runOnce({ tool: 'now', geo: 'US', window: 'now 1-d' }, deps);
+    expect(pushed).toEqual([expect.objectContaining({ term: 'US', status: 'blocked', error: { code: 'BLOCKED', message: 'challenge page' } })]);
+    expect(values.OUTPUT).toMatchObject({ status: 'failed', blocked: 1 });
+    expect(result.failed).toBe(true);
+  });
+
+  it('builds ASCII-only, collision-free chart keys', () => {
+    const keys = ['C++', 'C#', '人工智能', 'Sora'].map(chartKeyFor);
+    expect(new Set(keys).size).toBe(4);
+    for (const key of keys) expect(key).toMatch(/^chart-[a-z0-9-]*[0-9a-f]{8}$/);
+    expect(chartKeyFor('Sora')).toBe(chartKeyFor('Sora'));
   });
 
   it('turns a thrown tool error into an error row', async () => {

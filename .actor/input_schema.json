@@ -21,7 +21,7 @@
         "Trending now (trends_now)"
       ],
       "default": "ask",
-      "prefill": "ask",
+      "prefill": "snapshot",
       "sectionCaption": "Question",
       "sectionDescription": "A one-off run executes one tool and exits with a dataset row per term (one row per Trending Now item for \"now\"). Standby/MCP callers ignore this input."
     },

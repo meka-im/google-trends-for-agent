@@ -40,7 +40,8 @@ describe('Actor Store metadata', () => {
     expect(actor.webServerSchema).toBe('./web_server_schema.json');
     expect(actor.dockerfile).toBe('./Dockerfile');
     expect(actor).not.toHaveProperty('meta');
-    expect(actor).not.toHaveProperty('icon');
+    expect(actor.icon).toBe('./icon.png');
+    expect(existsSync(new URL('../.actor/icon.png', import.meta.url))).toBe(true);
     expect(existsSync(new URL('../.actor/icon.svg', import.meta.url))).toBe(true);
   });
 
@@ -81,7 +82,7 @@ describe('Actor input schema', () => {
       sectionCaption: 'Question',
       editor: 'select',
       default: 'ask',
-      prefill: 'ask',
+      prefill: 'snapshot',
       enum: ['ask', 'snapshot', 'compare', 'now'],
     });
     expect((properties.tool.enumTitles as string[])[1]).toBe('Calibrated snapshot (trends_snapshot)');

@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFile as readFileDefault } from 'node:fs/promises';
 import { GTrendsError, TIME_RANGES, type GTrendsTimeRange } from './core.js';
 import { DEFAULT_GEO, GEO_CODES, normalizeGeo, WORLDWIDE_GEO } from './options.js';
 import { DEFAULTS, type GtfaTool } from './tools.js';
+import { summarizeInterest } from './gaps.js';
+import { DEFAULT_FILTER, type TrendsFilter } from './filter.js';
 
 /** The four actor input tools, mapped to the shared tool definitions. */
 export const ACTOR_RUN_TOOLS = ['ask', 'snapshot', 'compare', 'now'] as const;
@@ -168,9 +171,21 @@ function chartUrlFor(key: string, storeId: string | undefined): string | null {
   return `https://api.apify.com/v2/key-value-stores/${encodeURIComponent(storeId)}/records/${encodeURIComponent(key)}`;
 }
 
-function slug(term: string): string {
-  const value = term.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60);
-  return value || 'chart';
+/** ASCII-only KV key part (Apify keys allow ASCII only) plus a short hash so distinct terms never collide. */
+export function chartKeyFor(term: string): string {
+  const ascii = term.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  const hash = createHash('sha256').update(term).digest('hex').slice(0, 8);
+  return `chart-${ascii ? `${ascii}-` : ''}${hash}`;
+}
+
+/** A partial envelope still counts as delivered when it carries usable data. */
+function hasUsableData(row: ActorRunRow): boolean {
+  return row.interestLatest !== null || row.searchesPerDay !== null || row.topRelated.length > 0 || row.topRising.length > 0;
+}
+
+function settlePartial(row: ActorRunRow, envelope: Record<string, unknown>): ActorRunRow {
+  if (text(envelope.status) === 'partial' && hasUsableData(row)) row.status = 'ok';
+  return row;
 }
 
 function mapAsk(term: string, envelope: Record<string, unknown>, geo: string, window: string, fallbackFetchedAt: string): ActorRunRow {
@@ -191,27 +206,39 @@ function mapAsk(term: string, envelope: Record<string, unknown>, geo: string, wi
   row.topRelated = names(tables.popular);
   row.topRising = names(tables.rising);
   row.error = errorOf(envelope.error);
-  return row;
+  return settlePartial(row, envelope);
 }
 
 function mapSnapshot(term: string, envelope: Record<string, unknown>, geo: string, window: string, fallbackFetchedAt: string): ActorRunRow {
   const row = baseRow('snapshot', term, geo, window, fetchedAtOf(envelope, fallbackFetchedAt));
-  const traffic = iq(envelope.traffic);
+  const traffic = record(envelope.traffic);
   const anchor = record(envelope.anchor);
   const verdict = record(envelope.verdict);
   const tables = record(envelope.tables);
   row.status = statusOf(envelope);
-  row.interestLatest = traffic.latest;
-  row.interestSettled = traffic.settled;
-  row.interestAverage = traffic.average;
-  row.interestPeak = traffic.peak;
+  // Relative interest (0–100) comes from the score series; traffic holds searches/day.
+  const series = record(envelope.series);
+  const points = (Array.isArray(series.points) ? series.points : []).flatMap(value => {
+    const point = record(value);
+    const time = text(point.t);
+    const score = num(point.score);
+    return time && score !== null ? [{ time, value: score }] : [];
+  });
+  if (points.length) {
+    const filter: TrendsFilter = { ...DEFAULT_FILTER, ...record(envelope.filter) as Partial<TrendsFilter> };
+    const interest = summarizeInterest(points, filter);
+    row.interestLatest = interest.latest;
+    row.interestSettled = interest.settledLatest;
+    row.interestAverage = interest.average;
+    row.interestPeak = interest.peak;
+  }
   row.searchesPerDay = num(traffic.average);
   row.verdict = text(verdict.label);
   row.anchor = text(anchor.term);
   row.topRelated = names(tables.popular);
   row.topRising = names(tables.rising);
   row.error = errorOf(envelope.error);
-  return row;
+  return settlePartial(row, envelope);
 }
 
 function mapCompare(envelope: Record<string, unknown>, terms: string[], geo: string, window: string, fallbackFetchedAt: string): ActorRunRow[] {
@@ -235,7 +262,7 @@ function mapCompare(envelope: Record<string, unknown>, terms: string[], geo: str
     row.interestAverage = num(entry.average);
     row.interestPeak = num(entry.peak);
     row.error = error;
-    return row;
+    return settlePartial(row, envelope);
   });
 }
 
@@ -248,6 +275,14 @@ function mapNow(envelope: Record<string, unknown>, geo: string, window: string, 
     const status = block.ok === false || block.error ? statusOf({ status: 'error', error: block.error }) : 'ok';
     const fetchedAt = text(block.fetchedAt) ?? fallbackFetchedAt;
     const items = Array.isArray(block.items) ? block.items.slice(0, TRENDING_LIMIT) : [];
+    if (status !== 'ok' && !items.length) {
+      // Keep a country-level failure visible in the dataset and OUTPUT counters.
+      const row = baseRow('now', blockGeo, blockGeo, window, fetchedAt);
+      row.status = status;
+      row.error = errorOf(block.error) ?? { code: 'INTERNAL', message: 'Trending Now returned no items for this country.' };
+      rows.push(row);
+      continue;
+    }
     for (const itemValue of items) {
       const item = record(itemValue);
       const term = text(item.query) ?? text(item.title) ?? '';
@@ -267,7 +302,7 @@ function buildOutput(tool: ActorRunTool, geo: string, window: string, terms: str
   const noData = rows.filter(row => row.status === 'no_data').length;
   const blocked = rows.filter(row => row.status === 'blocked' || row.status === 'rate_limited').length;
   const errors = rows.filter(row => row.status === 'error').length;
-  const completed = rows.length > 0 && rows.every(row => row.status === 'ok' || row.status === 'no_data');
+  const completed = rows.length > 0 && rows.every(row => (row.status === 'ok' || row.status === 'no_data') && !row.error);
   const partial = !completed && delivered > 0;
   const status = completed ? 'completed' : partial ? 'partial' : 'failed';
   const firstError = rows.find(row => row.error)?.error?.message;
@@ -277,7 +312,7 @@ function buildOutput(tool: ActorRunTool, geo: string, window: string, terms: str
     message: message ?? (completed
       ? `Completed ${rows.length} row${rows.length === 1 ? '' : 's'}${noData ? ` (${noData} with no data)` : ''}.`
       : partial
-        ? `Partial result: ${delivered} of ${rows.length} rows delivered; ${blocked + errors} failed.`
+        ? `Partial result: ${delivered} of ${rows.length} rows delivered; ${rows.filter(row => row.error).length} with errors.`
         : firstError ? `No usable data: ${firstError}` : 'No usable data.'),
   };
 }
@@ -395,7 +430,7 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
           if (chartPath) {
             try {
               const buffer = deps.readFile ? await deps.readFile(chartPath) : await readFileDefault(chartPath);
-              const key = `chart-${slug(term)}`;
+              const key = chartKeyFor(term);
               const contentType = chartPath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/svg+xml';
               await deps.setValue(key, buffer, { contentType });
               row.chartKey = key;

@@ -19,5 +19,6 @@
     "keyValueStore": "./key_value_store_schema.json"
   },
   "webServerSchema": "./web_server_schema.json",
-  "dockerfile": "./Dockerfile"
+  "dockerfile": "./Dockerfile",
+  "icon": "./icon.png"
 }

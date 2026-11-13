@@ -411,7 +411,11 @@ export function createActorRelayTransport(options: CreateActorRelayTransportOpti
         const speaks = typeof relay === 'number' && Number.isFinite(relay) ? String(relay) : '?';
         throw new GTrendsError('INVALID_INPUT', `This Actor build speaks relay v${speaks}; this plugin needs v${relayVersion}. Update the plugin or rebuild the Actor.`);
       }
-    })();
+    })().catch(error => {
+      // Keep a definite answer (bad token, wrong relay version); retry transient failures next call.
+      if (!(error instanceof GTrendsError && error.code === 'INVALID_INPUT')) health = undefined;
+      throw error;
+    });
     return health;
   };
 
