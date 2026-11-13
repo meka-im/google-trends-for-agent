@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createTools } from './tools.js';
 import { createActorRelayTransport, resolveApifyApiToken, type CreateActorRelayTransportOptions } from './apify-actor.js';
 import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
-import { DEFAULT_GEO, EGRESS_MODES, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, type EgressMode } from './options.js';
+import { DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, resolveEgress, type EgressMode, type EgressNotice } from './options.js';
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 
@@ -80,7 +80,7 @@ function createConfig(Schema: SchemaFactory) {
 
   /** Host Config schema. Volatile fields apply live; dsh-settings redacts token reads. */
   return Schema.object({
-    egress: Schema.union(['local', 'actor-public', 'actor-own']).default('local')
+    egress: Schema.string().default('local')
       .description('local sends Google requests from the dsh machine. actor-public relays through the meka.im Actor; actor-own relays through your own deployment (both work on the Free plan).').volatile(),
     apifyToken: Schema.string().role('secret')
       .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
@@ -131,6 +131,8 @@ export interface RegisterOverrides {
 /** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
 export interface GtfaRuntimeSettings {
   egress: EgressMode;
+  /** Set when a saved egress value was renamed or is unrecognized. */
+  egressNotice?: EgressNotice;
   apifyToken?: string;
   apifyActor?: string;
   geo: string;
@@ -167,14 +169,14 @@ export function baselinesFromConfig(value: unknown): Baselines | undefined {
 
 /** Normalize one config object (plain or volatile) into the values the tools read per call. */
 export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines): GtfaRuntimeSettings {
-  const egress = read(config.egress) ?? 'local';
-  if (!(EGRESS_MODES as readonly string[]).includes(egress)) throw new Error(`gtfa: unsupported egress "${String(egress)}"; use "local", "actor-public", or "actor-own"`);
+  const resolvedEgress = resolveEgress(read(config.egress));
   const geo = normalizeGeo(read(config.geo) ?? DEFAULT_GEO);
   const chartDirValue = read(config.chartDir);
   const charts = read(config.charts) ?? chartDirValue !== null;
   const baselines = baselinesFromConfig(read(config.baselines)) ?? envBaselines;
   return {
-    egress,
+    egress: resolvedEgress.egress,
+    ...(resolvedEgress.notice ? { egressNotice: resolvedEgress.notice } : {}),
     ...(read(config.apifyToken)?.trim() ? { apifyToken: read(config.apifyToken)!.trim() } : {}),
     ...(read(config.apifyActor)?.trim() ? { apifyActor: read(config.apifyActor)!.trim() } : {}),
     geo,

@@ -59,6 +59,7 @@ describe('Apify Actor client', () => {
           title: 'Google Trends for AI Agents',
           standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
           standbyEnabled: true,
+          lastBuildId: 'b1',
           lastBuildStatus: 'SUCCEEDED',
         },
         {
@@ -68,6 +69,7 @@ describe('Apify Actor client', () => {
           title: 'Dev copy',
           standbyUrl: 'https://alice--google-trends-for-agent-dev.apify.actor',
           standbyEnabled: true,
+          lastBuildId: 'b2',
           lastBuildStatus: 'RUNNING',
         },
       ],
@@ -113,7 +115,7 @@ describe('Apify Actor client', () => {
     });
     const client = new ApifyActorClient({ fetch: fetchMock as unknown as typeof fetch });
     const result = await client.listMyActors(TOKEN);
-    expect(result).toMatchObject({ ok: true, actors: [{ id: 'a1', lastBuildStatus: 'FAILED' }] });
+    expect(result).toMatchObject({ ok: true, actors: [{ id: 'a1', lastBuildId: 'b0', lastBuildStatus: 'FAILED' }] });
   });
 
   it('never sends the token to a non-Apify Standby host', async () => {

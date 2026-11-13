@@ -5,6 +5,24 @@ export type EgressMode = 'local' | 'actor-public' | 'actor-own';
 /** Every supported egress value, in display order. */
 export const EGRESS_MODES = ['local', 'actor-public', 'actor-own'] as const;
 
+/** Why a stored egress value differs from the supported modes. */
+export type EgressNotice = 'renamed' | 'unknown';
+
+export interface ResolvedEgress {
+  egress: EgressMode;
+  /** Set when an old or unrecognized saved value was migrated. */
+  notice?: EgressNotice;
+}
+
+/** Resolve a saved egress value; `apify` was renamed to `actor-own`. */
+export function resolveEgress(value: unknown): ResolvedEgress {
+  const raw = String(value ?? '').trim();
+  if (!raw) return { egress: 'local' };
+  if (raw === 'local' || raw === 'actor-public' || raw === 'actor-own') return { egress: raw };
+  if (raw === 'apify') return { egress: 'actor-own', notice: 'renamed' };
+  return { egress: 'local', notice: 'unknown' };
+}
+
 /** The Actor this package ships; the plugin deploys or selects this name. */
 export const GTFA_ACTOR_NAME = 'google-trends-for-agent';
 /** Public Store Actor API id (username~name, as Apify returns it). */

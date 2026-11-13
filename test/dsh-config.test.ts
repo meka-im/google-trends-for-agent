@@ -56,14 +56,24 @@ describe('dsh Config schema', () => {
     expect(values.cache.get()).toBe(true);
   });
 
-  it('rejects an unsupported egress value', () => {
-    expect(() => Config!({ egress: 'mcp' } as never)).toThrow(/"local" \| "actor-public" \| "actor-own"/);
-  });
-
-  it('accepts all three egress values', () => {
+  it('accepts the three current egress values', () => {
     for (const egress of ['local', 'actor-public', 'actor-own'] as const) {
       expect(resolveGtfaSettings(Config!({ egress }) as never).egress).toBe(egress);
     }
+  });
+
+  it('migrates the removed apify egress to actor-own with a notice', () => {
+    expect(resolveGtfaSettings(Config!({ egress: 'apify' }) as never)).toMatchObject({
+      egress: 'actor-own',
+      egressNotice: 'renamed',
+    });
+  });
+
+  it('falls back to local with a notice for any other unknown egress', () => {
+    expect(resolveGtfaSettings(Config!({ egress: 'mcp' }) as never)).toMatchObject({
+      egress: 'local',
+      egressNotice: 'unknown',
+    });
   });
 
   it('accepts and trims the Actor id, and leaves it unset by default', () => {

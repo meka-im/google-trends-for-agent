@@ -197,6 +197,7 @@ describe('dsh host routes', () => {
         title: 'Google Trends for AI Agents',
         standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
         standbyEnabled: true,
+        lastBuildId: 'build-1',
         lastBuildStatus: 'SUCCEEDED',
       }],
     });

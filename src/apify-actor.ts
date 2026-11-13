@@ -20,6 +20,7 @@ export interface ApifyActor {
   title: string | null;
   standbyUrl: string | null;
   standbyEnabled: boolean;
+  lastBuildId: string | null;
   lastBuildStatus: string | null;
 }
 
@@ -143,6 +144,7 @@ export class ApifyActorClient {
       const tagged = record(data.taggedBuilds);
       const latest = record(tagged.latest);
       const buildId = stringOrNull(latest.buildId);
+      let lastBuildId: string | null = buildId;
       let lastBuildStatus: string | null = null;
       if (buildId) {
         const build = await this.getJson(`${API_BASE}/actor-builds/${encodeURIComponent(buildId)}`, trimmed, options.signal);
@@ -155,6 +157,7 @@ export class ApifyActorClient {
         if (!builds.ok) return builds;
         const recent = record(record(builds.body).data).items;
         const first = record(Array.isArray(recent) ? recent[0] : undefined);
+        lastBuildId = stringOrNull(first.id);
         lastBuildStatus = stringOrNull(first.status);
       }
       actors.push({
@@ -164,6 +167,7 @@ export class ApifyActorClient {
         title: stringOrNull(data.title) ?? stringOrNull(row.title),
         standbyUrl: stringOrNull(data.standbyUrl),
         standbyEnabled: standby.isEnabled === true,
+        lastBuildId,
         lastBuildStatus,
       });
     }

@@ -20,7 +20,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
   APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
-  GTFA_STORE_URL, apifyEstimatedCalls, regionLabel, type EgressMode,
+  GTFA_STORE_URL, apifyEstimatedCalls, regionLabel, resolveEgress, type EgressMode, type EgressNotice,
 } from '../options.js';
 
 /** Cordis service name used by the client bundle. */
@@ -34,6 +34,8 @@ const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const TEST_URL = 'api/gtfa.test-connection';
 const DEPLOY_MANUAL_URL = `${GTFA_SOURCE_URL}#deploy-it-yourself`;
+/** Profile keys removed with the old egress; Save unsets them. */
+const LEGACY_EGRESS_KEYS = ['apifyProxyGroup', 'apifyProxyCountry'] as const;
 
 type Translate = (key: string) => string;
 
@@ -118,6 +120,10 @@ export interface AnchorDraft {
 
 export interface Draft {
   egress: EgressMode;
+  /** A saved old or unrecognized egress value migrated on read. */
+  egressNotice?: EgressNotice;
+  /** Removed profile keys still present; Save unsets them. */
+  legacyKeys?: string[];
   token: string;
   clearToken: boolean;
   actor: string;
@@ -175,6 +181,7 @@ export interface ApifyActorView {
   title: string | null;
   standbyUrl: string | null;
   standbyEnabled: boolean;
+  lastBuildId: string | null;
   lastBuildStatus: string | null;
 }
 
@@ -188,6 +195,18 @@ export type DeployActorView =
   | { ok: true; actorId: string; buildId: string }
   | { ok: false; code: string; message?: string };
 
+/** The exact Actor build started by the one-click deploy. */
+export interface DeployTarget {
+  actorId: string;
+  buildId: string;
+}
+
+export interface DeployBuildResolution {
+  status: 'pending' | 'succeeded' | 'failed';
+  /** The deployed Actor to select; set only when its build succeeded. */
+  actorId?: string;
+}
+
 export const EN: Record<string, string> = {
   summary: 'Configure egress, the Apify token and Actor, usage, default geo, anchors, and snapshot cache.',
   intro: 'Changes apply live, no restart needed. Usage, Actor listing, deploy, and Test connection run on the dsh host, so the token never reaches the browser.',
@@ -198,6 +217,8 @@ export const EN: Record<string, string> = {
   egressLocal: 'Local (this machine)',
   egressPublic: 'Public Actor (meka.im)',
   egressOwn: 'My own Actor',
+  egressRenamed: 'Your saved egress "apify" was renamed; it now uses My own Actor. Save to update the profile.',
+  egressUnknown: 'Your saved egress value is not recognized; it now uses Local (this machine). Save to update the profile.',
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
@@ -263,7 +284,7 @@ export const EN: Record<string, string> = {
   deployBuilding: 'Building… (about 1–2 min)',
   deployExists: 'That Actor already exists. Refresh the list and select it.',
   deployFailed: 'Deploy failed. Try again or deploy manually.',
-  deployBuildFailed: 'The build failed. Check the build log in Apify Console.',
+  deployBuildFailed: 'The build for the deployed Actor failed. Rebuild it in Apify Console (Actor → Builds), then refresh.',
   defaults: 'Defaults',
   defaultsDescription: 'Defaults applied when a tool call omits them.',
   geo: 'Default geo',
@@ -337,6 +358,8 @@ export const ZH: Record<string, string> = {
   egressLocal: '本机直连',
   egressPublic: '公共 Actor（meka.im）',
   egressOwn: '我自己的 Actor',
+  egressRenamed: '已保存的出口 "apify" 已更名；现在使用我自己的 Actor。保存以更新配置。',
+  egressUnknown: '无法识别已保存的出口值；现在使用本机直连。保存以更新配置。',
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
@@ -402,7 +425,7 @@ export const ZH: Record<string, string> = {
   deployBuilding: '构建中…（约 1–2 分钟）',
   deployExists: '该 Actor 已存在。请刷新列表并选择它。',
   deployFailed: '部署失败。请重试或手动部署。',
-  deployBuildFailed: '构建失败。请在 Apify Console 查看构建日志。',
+  deployBuildFailed: '刚部署的 Actor 构建失败。请在 Apify Console（Actor → Builds）中重新构建，然后刷新。',
   defaults: '默认值',
   defaultsDescription: '工具调用未指定时使用的默认值。',
   geo: '默认地区',
@@ -627,8 +650,12 @@ export function fromSnapshot(value: Record<string, unknown> | undefined): Draft 
   const anchors = anchorsFrom(baselines.anchors);
   const windows = record(baselines.windowAnchors);
   const chartDir = source.chartDir === null ? '' : text(source.chartDir, '.gtfa/charts');
+  const egress = resolveEgress(source.egress);
+  const legacyKeys = LEGACY_EGRESS_KEYS.filter(key => key in source);
   return {
-    egress: source.egress === 'actor-public' || source.egress === 'actor-own' ? source.egress : 'local',
+    egress: egress.egress,
+    ...(egress.notice ? { egressNotice: egress.notice } : {}),
+    ...(legacyKeys.length ? { legacyKeys } : {}),
     token: '',
     clearToken: false,
     actor: text(source.apifyActor),
@@ -666,6 +693,9 @@ export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
 
   if (draft.token && draft.clearToken) return t('tokenConflict');
   set(['egress'], draft.egress);
+  for (const key of draft.legacyKeys ?? []) {
+    if ((LEGACY_EGRESS_KEYS as readonly string[]).includes(key)) unset([key]);
+  }
   // Local egress leaves the saved Apify token and Actor untouched.
   if (draft.egress !== 'local') {
     if (draft.token.trim()) set(['apifyToken'], draft.token.trim());
@@ -845,6 +875,7 @@ function normalizeActor(value: unknown): ApifyActorView | null {
     title: stringOrNull(row.title),
     standbyUrl: stringOrNull(row.standbyUrl),
     standbyEnabled: row.standbyEnabled === true,
+    lastBuildId: stringOrNull(row.lastBuildId),
     lastBuildStatus: stringOrNull(row.lastBuildStatus),
   };
 }
@@ -942,6 +973,17 @@ export async function deployApifyActor(): Promise<DeployActorView> {
   } catch {
     return { ok: false, code: 'network' };
   }
+}
+
+/** Resolve only the deployed Actor's exact build; unrelated Actors never affect it. */
+export function resolveDeployBuild(actors: ApifyActorsView, target: DeployTarget | null): DeployBuildResolution {
+  if (!target || actors.status !== 'ready') return { status: 'pending' };
+  const actor = actors.actors.find(row => row.id === target.actorId);
+  if (!actor || actor.lastBuildId !== target.buildId) return { status: 'pending' };
+  const status = (actor.lastBuildStatus ?? '').trim().toUpperCase().replace(/_/g, '-');
+  if (status === 'SUCCEEDED') return { status: 'succeeded', actorId: target.actorId };
+  if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') return { status: 'failed' };
+  return { status: 'pending' };
 }
 
 /** Send exactly one owner-authenticated test request for the saved egress. */
@@ -1206,6 +1248,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   const [actorsRequest, setActorsRequest] = useState({ id: 0, refresh: false });
   const [deploying, setDeploying] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
@@ -1216,7 +1259,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
     return /^zh/i.test(raw || fallback) ? 'zh-CN' : 'en';
   }, []);
   const validation = useMemo(() => validateDraft(draft, t), [draft, t]);
-  const dirty = draftKey(draft) !== baseline;
+  const dirty = draftKey(draft) !== baseline || Boolean(draft.egressNotice || draft.legacyKeys?.length);
   const blocking = hasBlockingValidation(validation);
 
   useEffect(() => {
@@ -1261,33 +1304,34 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
     return () => { cancelled = true; };
   }, [draft.egress, actorsRequest]);
 
-  // Auto-select the first matching Actor into the draft when none is saved yet.
+  // Auto-select the first matching Actor only before a deploy chooses one.
   useEffect(() => {
-    if (actors.status !== 'ready' || actors.actors.length === 0) return;
+    if (deployTarget || building || actors.status !== 'ready' || actors.actors.length === 0) return;
     setDraft(current => current.actor ? current : { ...current, actor: actors.actors[0]!.id });
-  }, [actors]);
+  }, [actors, building, deployTarget]);
 
   // While a deploy build runs, re-list every 15 s until it succeeds.
   useEffect(() => {
-    if (!building) return;
+    if (!building || !deployTarget) return;
     const timer = setInterval(() => setActorsRequest(current => ({ id: current.id + 1, refresh: true })), 15_000);
     return () => clearInterval(timer);
-  }, [building]);
+  }, [building, deployTarget]);
 
   useEffect(() => {
-    if (!building || actors.status !== 'ready') return;
-    const succeeded = actors.actors.find(actor => actor.lastBuildStatus?.toUpperCase() === 'SUCCEEDED');
-    if (succeeded) {
-      setDraft(current => ({ ...current, actor: succeeded.id }));
+    if (!building) return;
+    const resolved = resolveDeployBuild(actors, deployTarget);
+    if (resolved.status === 'succeeded' && resolved.actorId) {
+      setDraft(current => ({ ...current, actor: resolved.actorId! }));
       setBuilding(false);
       setDeployNotice(null);
+      requestActors(true);
       return;
     }
-    if (actors.actors.some(actor => ['FAILED', 'ABORTED', 'TIMED-OUT'].includes(actor.lastBuildStatus?.toUpperCase() ?? ''))) {
+    if (resolved.status === 'failed') {
       setBuilding(false);
       setDeployNotice(t('deployBuildFailed'));
     }
-  }, [building, actors, t]);
+  }, [building, actors, deployTarget, t]);
 
   const edit = (patch: Partial<Draft>) => setDraft(current => ({ ...current, ...patch }));
   const editAnchor = (index: number, patch: Partial<AnchorDraft>) => setDraft(current => ({
@@ -1333,9 +1377,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
       return;
     }
     if (typeof ops === 'string') { setFailure(ops); return; }
-    const savedEgress: EgressMode = snapshot.value?.egress === 'actor-public' || snapshot.value?.egress === 'actor-own'
-      ? snapshot.value.egress
-      : 'local';
+    const savedEgress = resolveEgress(snapshot.value?.egress).egress;
     const tokenChanged = Boolean(draft.token.trim() || draft.clearToken);
     const egressChanged = draft.egress !== savedEgress;
     setBusy(true);
@@ -1343,7 +1385,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
       const accepted = await form.mutate(ops, snapshot.revision);
       if (!accepted) setFailure(t('failed'));
       else {
-        const cleaned = { ...toSave, token: '', clearToken: false, newAnchor: blankAnchor() };
+        const cleaned: Draft = {
+          ...toSave, token: '', clearToken: false, newAnchor: blankAnchor(),
+          egressNotice: undefined, legacyKeys: undefined,
+        };
         setDraft(cleaned);
         setBaseline(draftKey(cleaned));
         setNotice(t('saved'));
@@ -1371,10 +1416,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
 
   const deploy = async () => {
     setDeploying(true);
+    setDeployTarget(null);
     setDeployNotice(null);
     try {
       const result = await deployApifyActor();
       if (result.ok) {
+        setDeployTarget({ actorId: result.actorId, buildId: result.buildId });
         setBuilding(true);
         requestActors(true);
       } else if (result.code === 'exists') {
@@ -1464,7 +1511,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
             { value: 'actor-public', label: t('egressPublic') },
             { value: 'actor-own', label: t('egressOwn') },
           ]}
-          onChange={value => { edit({ egress: value }); setTestResult(null); }} />
+          onChange={value => { edit({ egress: value, egressNotice: undefined }); setTestResult(null); }} />
+        {draft.egressNotice ? <p style={styles.warning} role="status">
+          {t(draft.egressNotice === 'renamed' ? 'egressRenamed' : 'egressUnknown')}
+        </p> : null}
       </Field>
       <div style={styles.field}>
         <div style={styles.switchRow}>

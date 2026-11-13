@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ConfigPage, EN, ZH, deployApifyActor, loadApifyActors, loadApifyUsage, withPendingAnchor,
-  type ApifyActorsView, type ApifyUsageView, type Draft,
+  ConfigPage, EN, ZH, deployApifyActor, fromSnapshot, loadApifyActors, loadApifyUsage, opsFor,
+  resolveDeployBuild, withPendingAnchor, type ApifyActorsView, type ApifyUsageView, type Draft,
 } from '../src/client/index.js';
 import {
   APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -109,9 +108,26 @@ const oneActor: ApifyActorsView = {
     title: 'Google Trends for AI Agents',
     standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
     standbyEnabled: true,
+    lastBuildId: 'build-1',
     lastBuildStatus: 'SUCCEEDED',
   }],
 };
+
+function actor(id: string, buildId: string | null, buildStatus: string | null): ApifyActorsView {
+  return {
+    status: 'ready',
+    actors: [{
+      id,
+      name: 'google-trends-for-agent',
+      username: 'alice',
+      title: 'Google Trends for AI Agents',
+      standbyUrl: `https://alice--${id}.apify.actor`,
+      standbyEnabled: true,
+      lastBuildId: buildId,
+      lastBuildStatus: buildStatus,
+    }],
+  };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -315,18 +331,86 @@ describe('dsh settings form', () => {
 describe('settings i18n and egress compatibility', () => {
   it('has the same keys in English and Chinese', () => {
     expect(Object.keys(ZH).sort()).toEqual(Object.keys(EN).sort());
-    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'testVersionMismatch', 'publicActorCost', 'viewSource', 'storePage']) {
+    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'egressRenamed', 'egressUnknown', 'testVersionMismatch', 'publicActorCost', 'viewSource', 'storePage']) {
       expect(EN[key], key).toBeTruthy();
       expect(ZH[key], key).toBeTruthy();
     }
   });
 
-  it('no longer uses the old apify egress value', () => {
-    for (const path of ['../src/options.ts', '../src/dsh.ts', '../src/dsh-routes.ts', '../src/client/index.tsx']) {
-      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-      expect(source, path).not.toMatch(/egress[^\n]*'apify'/);
-      expect(source, path).not.toContain("'apify'");
-    }
+  it('migrates a saved apify egress to actor-own with a visible warning', () => {
+    const draft = fromSnapshot({ egress: 'apify' });
+    expect(draft).toMatchObject({ egress: 'actor-own', egressNotice: 'renamed' });
+    const html = render({ value: { egress: 'apify' } });
+    expect(html).toContain(EN.egressRenamed.replace(/"/g, '&quot;'));
+    expect(html).toMatch(/type="submit"[^>]*>Save<\/button>/);
+    expect(html).not.toMatch(/type="submit"[^>]*disabled/);
+  });
+
+  it('warns instead of silently treating any other unknown egress as local', () => {
+    const draft = fromSnapshot({ egress: 'mcp' });
+    expect(draft).toMatchObject({ egress: 'local', egressNotice: 'unknown' });
+    expect(render({ value: { egress: 'mcp' } })).toContain(EN.egressUnknown);
+  });
+
+  it('unsets removed proxy keys on save when the profile still has them', () => {
+    const draft = fromSnapshot({ egress: 'actor-own', apifyProxyGroup: 'RESIDENTIAL', apifyProxyCountry: 'US' });
+    expect(draft.legacyKeys).toEqual(['apifyProxyGroup', 'apifyProxyCountry']);
+    expect(opsFor(draft, t)).toEqual(expect.arrayContaining([
+      { op: 'unset', path: ['apifyProxyGroup'] },
+      { op: 'unset', path: ['apifyProxyCountry'] },
+    ]));
+    expect(opsFor(fromSnapshot({ egress: 'actor-own' }), t)).not.toEqual(expect.arrayContaining([
+      { op: 'unset', path: ['apifyProxyGroup'] },
+    ]));
+  });
+});
+
+describe('deploy build latching', () => {
+  it('ignores an unrelated succeeded Actor while the deployed build runs', () => {
+    const actors = {
+      status: 'ready' as const,
+      actors: [
+        ...actor('unrelated', 'other-build', 'SUCCEEDED').actors,
+        ...actor('deployed', 'deployed-build', 'RUNNING').actors,
+      ],
+    };
+    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
+  });
+
+  it('ignores an unrelated failed Actor', () => {
+    const actors = {
+      status: 'ready' as const,
+      actors: [
+        ...actor('unrelated', 'other-build', 'FAILED').actors,
+        ...actor('deployed', 'deployed-build', 'RUNNING').actors,
+      ],
+    };
+    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
+  });
+
+  it('selects exactly the returned Actor when its build succeeds', () => {
+    const actors = {
+      status: 'ready' as const,
+      actors: [
+        ...actor('unrelated', 'other-build', 'FAILED').actors,
+        ...actor('deployed', 'deployed-build', 'SUCCEEDED').actors,
+      ],
+    };
+    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' }))
+      .toEqual({ status: 'succeeded', actorId: 'deployed' });
+  });
+
+  it('fails only when the returned build id fails', () => {
+    const stale = {
+      status: 'ready' as const,
+      actors: actor('deployed', 'older-build', 'FAILED').actors,
+    };
+    expect(resolveDeployBuild(stale, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
+    const failed = {
+      status: 'ready' as const,
+      actors: actor('deployed', 'deployed-build', 'TIMED-OUT').actors,
+    };
+    expect(resolveDeployBuild(failed, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'failed' });
   });
 });
 
@@ -378,6 +462,7 @@ describe('Apify Actor client helpers', () => {
         title: 'Google Trends for AI Agents',
         standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
         standbyEnabled: true,
+        lastBuildId: 'build-1',
         lastBuildStatus: 'SUCCEEDED',
       }],
     }), { status: 200 }));

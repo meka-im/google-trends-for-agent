@@ -234,8 +234,9 @@ describe('dsh plugin execution', () => {
     expect(calls).toBe(1);
   });
 
-  it('rejects unsupported egress at registration', async () => {
+  it('migrates old egress values instead of rejecting registration', async () => {
     const { ctx } = fakeCtx();
-    await expect(register(ctx, config({ egress: 'mcp' as never }))).rejects.toThrow(/unsupported egress/);
+    await expect(register(ctx, config({ egress: 'apify' as never, chartDir: null }))).resolves.toBeUndefined();
+    await expect(register(ctx, config({ egress: 'mcp' as never, chartDir: null }))).resolves.toBeUndefined();
   });
 });
