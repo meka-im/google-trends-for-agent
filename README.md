@@ -29,8 +29,15 @@
 | Route | One click | Cost |
 | --- | --- | --- |
 | **Local (your IP)** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | Free; no Apify account. |
-| **Public Actor (meka.im)** | [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent) | No Actor fee; measured ~$0.0024–0.0029 per isolated call, ~$0.0009 per call in a 10-call session. Free plan's $5/month ≈ 1,700–5,400 calls. |
-| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork); dsh plugin **Deploy to my Apify account**; Console → **Link Git repository** (branch `main`, enable **Standby**); or `apify push`. | Same per-call usage, plus ~$0.005 per build. |
+| **Public Actor (meka.im)** | [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent) | No Actor fee; ~$0.0024 per call, so the Free plan's $5/month ≈ 2,100 calls. |
+| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork); dsh plugin **Deploy to my Apify account**; Console → **Link Git repository** (branch `main`, enable **Standby**); or `apify push`. | ~$0.0024 per call, plus ~$0.005 per build. |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-en-dark.png">
+  <img src="docs/assets/routes-en.png" alt="Routes compared: cost per call, calls per free $5, cold start, rate limits, setup">
+</picture>
+
+Snapshots, sessions and the cost formula: [Actor costs](docs/reference.md#actor-costs).
 
 Remote MCP over the public Standby endpoint:
 
@@ -46,17 +53,6 @@ Remote MCP over the public Standby endpoint:
 ```
 
 The same open-source code serves all three routes; HTTP and one-off details are in [`.actor/README.md`](.actor/README.md).
-
-| | Local (your IP) | Public Actor | Self-deploy |
-| --- | --- | --- | --- |
-| **Setup** | Node 20+, one `npx` command | Free Apify account + token; paste the MCP URL | Apify account; fork, build (~1 min), enable Standby |
-| **Works for** | Agents on the same machine (stdio or localhost) | Any agent that can reach a remote HTTPS MCP or HTTP endpoint | Same as Public Actor |
-| **Rate limits** | Your IP's reputation with Google; bounded 429 retries and backoff, no IP rotation | US residential proxy; session rotates on 429 or a challenge | Same as Public Actor |
-| **Latency** | No cold start | Cold start on the first call (+~3 s measured, can be longer); ~8 s per `trends_ask` | Same as Public Actor |
-| **Depends on** | Your network | Apify uptime; meka.im publishes updates | Apify uptime; you rebuild to update |
-| **Cost** | Free | ~$0.0024–0.0029 isolated · ~$0.0009 in a session | Same + builds |
-
-Costs are measured on Apify's Free-plan rates ($0.2/CU, residential $8/GB); formula and run data in [Actor costs](docs/reference.md#actor-costs).
 
 ## Install & quick start
 

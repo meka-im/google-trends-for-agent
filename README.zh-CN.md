@@ -29,8 +29,15 @@
 | 路线 | 一键使用 | 费用 |
 | --- | --- | --- |
 | **本机直连（你的 IP）** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | 免费；无需 Apify 账号。 |
-| **公共 Actor（meka.im）** | [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent) | 无 Actor 费用；实测单次独立调用约 $0.0024–0.0029，10 次调用的会话中约 $0.0009/次。免费版每月 $5 ≈ 1,700–5,400 次调用。 |
-| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)；dsh 插件**部署到我的 Apify 账号**；Console → **Link Git repository**（分支 `main`，启用 **Standby**）；或 `apify push`。 | 每次调用费用相同，另加每次构建约 $0.005。 |
+| **公共 Actor（meka.im）** | [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent) | 无 Actor 费用；每次调用约 $0.0024，免费版每月 $5 ≈ 2,100 次调用。 |
+| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)；dsh 插件**部署到我的 Apify 账号**；Console → **Link Git repository**（分支 `main`，启用 **Standby**）；或 `apify push`。 | 每次调用约 $0.0024，另加每次构建约 $0.005。 |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-zh-dark.png">
+  <img src="docs/assets/routes-zh.png" alt="路线对比：每次调用费用、免费 $5 可用次数、冷启动、限流应对、准备">
+</picture>
+
+快照、会话和计算公式见 [Actor costs](docs/reference.md#actor-costs)。
 
 通过公共 Standby 端点使用远程 MCP：
 
@@ -46,17 +53,6 @@
 ```
 
 同一份开源代码服务全部三种路线；HTTP 和一次性运行细节见 [`.actor/README.md`](.actor/README.md)。
-
-| | 本机直连（你的 IP） | 公共 Actor | 自行部署 |
-| --- | --- | --- | --- |
-| **准备** | Node 20+，一条 `npx` 命令 | 免费 Apify 账号 + Token，粘贴 MCP URL | Apify 账号；Fork、构建（约 1 分钟）、启用 Standby |
-| **适用** | 同一台机器上的 Agent（stdio 或 localhost） | 能访问远程 HTTPS MCP 或 HTTP 端点的任何 Agent | 同公共 Actor |
-| **限流** | 取决于你的 IP 在 Google 的信誉；429 有限重试和退避，不换 IP | 美国住宅代理；遇到 429 或验证页时轮换会话 | 同公共 Actor |
-| **延迟** | 无冷启动 | 首次调用有冷启动（实测 +约 3 秒，可能更长）；`trends_ask` 每次约 8 秒 | 同公共 Actor |
-| **依赖** | 你的网络 | Apify 可用性；meka.im 发布更新 | Apify 可用性；更新需自己重新构建 |
-| **费用** | 免费 | 独立调用约 $0.0024–0.0029 · 会话中约 $0.0009 | 相同 + 构建费 |
-
-费用按 Apify 免费版价格实测（$0.2/CU，住宅代理 $8/GB）；公式和运行数据见 [Actor costs](docs/reference.md#actor-costs)。
 
 ## 安装与快速开始
 
