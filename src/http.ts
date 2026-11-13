@@ -9,6 +9,14 @@ import type { Transport } from './transport.js';
 
 export const DEFAULT_HTTP_PORT = 4321;
 export const DEFAULT_MCP_PATH = '/mcp';
+/**
+ * Standby runs carry APIFY_META_ORIGIN=STANDBY. ACTOR_STANDBY_PORT is injected
+ * into every run of a Standby-enabled Actor, so it must not decide the mode.
+ */
+export function isStandbyRun(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.APIFY_META_ORIGIN === 'STANDBY';
+}
+
 export const EGRESS_FETCH_PATH = '/egress/fetch';
 export const HEALTH_PATH = '/health';
 /** Relay protocol version reported by GET /health and required by the dsh plugin. */

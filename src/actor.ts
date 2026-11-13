@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Actor } from 'apify';
 import { createServer } from './mcp.js';
-import { startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
+import { isStandbyRun, startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
 import { createDefaultTransport, type Transport } from './transport.js';
 import { createTools, type GtfaTool } from './tools.js';
@@ -20,8 +20,7 @@ const version = (() => {
   catch { return '0.1.0'; }
 })();
 
-/** Standby is signalled by the platform origin or by the port it injects. */
-const standby = process.env.APIFY_META_ORIGIN === 'STANDBY' || Boolean(process.env.ACTOR_STANDBY_PORT?.trim());
+const standby = isStandbyRun();
 
 await Actor.init();
 

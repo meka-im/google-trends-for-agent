@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createServer } from '../src/mcp.js';
-import { IdleExitController, parsePort, resolveStandbyPort, startHttpMcpServer, type HttpMcpServer, type IdleExitOptions } from '../src/http.js';
+import { IdleExitController, isStandbyRun, parsePort, resolveStandbyPort, startHttpMcpServer, type HttpMcpServer, type IdleExitOptions } from '../src/http.js';
 import type { GtfaTool } from '../src/tools.js';
 import type { Transport } from '../src/transport.js';
 
@@ -306,6 +306,14 @@ describe('Streamable HTTP MCP transport', () => {
 
     const missing = await realFetch(`http://127.0.0.1:${http.port}/other`);
     expect(missing.status).toBe(404);
+  });
+});
+
+describe('run mode', () => {
+  it('treats only APIFY_META_ORIGIN=STANDBY as a Standby run', () => {
+    expect(isStandbyRun({ APIFY_META_ORIGIN: 'STANDBY' })).toBe(true);
+    expect(isStandbyRun({ APIFY_META_ORIGIN: 'API', ACTOR_STANDBY_PORT: '4321' })).toBe(false);
+    expect(isStandbyRun({})).toBe(false);
   });
 });
 
