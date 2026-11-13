@@ -1,7 +1,7 @@
 import { GTrendsError } from './core.js';
 import type { TrendsErrorCode } from './api.js';
 import { normalizeTrendingGeos, TRENDING_GEOS } from './geos.js';
-import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type Transport, type RateLimitOptions } from './transport.js';
+import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type Transport, type RateLimitOptions, type TimeoutSurface } from './transport.js';
 
 export const TRENDING_CATEGORIES: Record<number, string> = {
   1: 'Autos and Vehicles', 2: 'Beauty and Fashion', 3: 'Business and Finance', 4: 'Entertainment',
@@ -21,7 +21,7 @@ export interface TrendingResponse {
   error?: { code: TrendsErrorCode; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number };
 }
-export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; maxRetries?: number; stopOnBlocked?: boolean; signal?: AbortSignal }
+export interface TrendingOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; timeoutMs?: number; maxRetries?: number; stopOnBlocked?: boolean; signal?: AbortSignal; timeoutSurface?: TimeoutSurface }
 export function trendingVolumeLabel(volume: number): string {
   return `${volume >= 1e6 ? `${volume / 1e6}M` : volume >= 1000 ? `${volume / 1000}K` : volume}+`;
 }
@@ -111,7 +111,7 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
     url.searchParams.set('hours', String(result.hours));
     url.searchParams.set('hl', input.lang ?? 'en');
     const body = await withRetry(() => session!.request({ url: url.toString(), method: 'GET',
-      timeoutMs: options.timeoutMs ?? TRENDING_TIMEOUT_MS, signal: options.signal,
+      timeoutMs: options.timeoutMs ?? TRENDING_TIMEOUT_MS, signal: options.signal, timeoutSurface: options.timeoutSurface,
       headers: { 'user-agent': BROWSER_USER_AGENT, accept: 'text/html,application/xhtml+xml', 'accept-language': input.lang ?? 'en' } }),
     { maxRetries: options.maxRetries ?? 1, sleep: limiter.sleep, signal: options.signal });
     result.items = parseTrendingResponse(body).filter(item => item.volume >= (input.minVolume ?? 0) &&

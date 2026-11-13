@@ -93,6 +93,7 @@ describe('Actor input schema', () => {
       default: '',
       enum: ['', 'gpts', 'sudoku'],
     });
+    expect(properties.timeoutMs).toMatchObject({ type: 'integer', minimum: 1000, maximum: 60000 });
     expect(properties.proxyConfiguration).toMatchObject({ sectionCaption: 'Advanced: proxy', editor: 'proxy' });
     expect(properties.proxyConfiguration.default).toEqual(properties.proxyConfiguration.prefill);
     expect(properties.window.default).toBe('now 1-d');

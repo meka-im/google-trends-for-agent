@@ -144,7 +144,7 @@ Tool bodies:
 - `trends_compare`: `filter`, `summary`, `series`, `meta`.
 - `trends_now`: `hours`, `geos`, `summary`, `byGeo`, `meta`.
 
-Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`. Messages are actionable for agents: they say what happened and whether to retry, lower the request rate, raise `--timeout`, check the network, or set `HTTPS_PROXY` / `HTTP_PROXY`. The lower-level `queryTrends()` API instead returns `{ status, input, data?, error?, meta }`.
+Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`. Messages are actionable for agents: they say what happened and whether to retry, lower the request rate, raise `--timeout` (CLI) or `timeoutMs` (MCP, dsh, and Actor tools; 1000–60000), check the network, or set `HTTPS_PROXY` / `HTTP_PROXY`. The lower-level `queryTrends()` API instead returns `{ status, input, data?, error?, meta }`.
 
 ## Exit codes
 

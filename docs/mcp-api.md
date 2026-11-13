@@ -18,6 +18,7 @@
 | Explore `time` 枚举 | `now 1-H` · `now 4-H` · `now 1-d` · `now 7-d` · `today 1-m` · `today 3-m` · `today 12-m` · `today 5-y` · `all` |
 | 图表时区 | 默认 `UTC`；显式 `tz` / `--tz` / `timeZone` > `GTFA_TZ` > `UTC`；用 `Intl.DateTimeFormat` 校验并规范化 IANA 名称（大小写变体映射到同一时区，共用标签与图表文件），非法名称返回 `INVALID_INPUT` |
 | Web / 分类 | MCP 固定 Web、`category=0`（不可从这四个工具改） |
+| `timeoutMs` | 可选，整数 1000–60000。Explore 工具（ask / snapshot / compare）默认 8000 ms，`trends_now` 默认 15000 ms。超时错误会提示调整 `timeoutMs` 或重试，不会提到 CLI 的 `--timeout`。 |
 
 **CLI 对照**
 
@@ -46,6 +47,7 @@
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的快照；`true`：强制现拉 |
 | `validate` | boolean | 否 | `false` | `true`：附加裁决；锚点按窗口自动（1h/4h/1d 用 `sudoku`，7d 及以上用 `gpts`） |
 | `points` | boolean | 否 | `false` | `true`：返回完整 `interest.points`；默认省略以控制 Agent 上下文 |
+| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 本次 Explore 请求超时（毫秒） |
 
 ### 请求示例
 
@@ -225,6 +227,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的同类快照；`true`：强制现拉 |
 | `svg` | boolean | 否 | `false` | `true`：内联 `chart.svg` / `chart7d.svg` 文本；默认 `svg: ""`，但 `path` 仍会写入 |
 | `tz` | IANA string | 否 | `GTFA_TZ`，再退回 `UTC` | 图表时间轴时区（如 `Asia/Shanghai`）；非法名称返回 `INVALID_INPUT` |
+| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 本次 Explore 请求超时（毫秒） |
 
 ### 请求示例
 
@@ -404,6 +407,7 @@ published.est = round(popular.value / 100 × average)
 | `keywords` | string[1–5]，每项 1–100 | 是 | — | 要对比的不同关键词 |
 | `geo` | string | 否 | `US` | 国家 / 地区 |
 | `time` | Explore 枚举 | 否 | `now 1-d` | 时间窗 |
+| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 本次 Explore 请求超时（毫秒） |
 
 > **去重：** trim + 大小写折叠后若有重复，直接 `INVALID_INPUT`，不发请求。
 
@@ -485,6 +489,7 @@ Google Trending Now（按国顺序拉取；遇 block 即停后续国家）。
 | `geos` | `string[]` · `"default"` · `"all"` | 否 | `"default"`（30 国） | 国家列表；显式列表按输入顺序大写、去重，最多 30 个 |
 | `hours` | `4` · `24` · `48` · `168` | 否 | `24` | **Trending 窗口（小时）**，勿与 Explore `time` 混淆 |
 | `limit` | integer ≥ 0 | 否 | `10` | 每国条数 |
+| `timeoutMs` | integer（1000–60000） | 否 | 15000 | 本次 Trending Now 请求超时（毫秒） |
 
 ### 请求示例
 

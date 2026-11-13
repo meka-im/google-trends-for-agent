@@ -17,6 +17,7 @@ const guidance = ' Light use only. On BLOCKED stop and report. On RATE_LIMITED w
 const hours = z.union([z.literal(4), z.literal(24), z.literal(48), z.literal(168)]);
 const nonnegative = z.number().int().nonnegative().safe();
 const time = z.enum(TIME_RANGES);
+const timeoutMsField = z.number().int().min(1000).max(60000).optional();
 
 /** Output schema version shared by all four tools. */
 export const SCHEMA_VERSION = 1;
@@ -169,10 +170,10 @@ export function nowEnvelope(results: TrendingResponse[], hours: TrendingHours) {
     ...err(results.find(x => x.error)?.error), meta: { fetchedAt: new Date().toISOString() } };
 }
 
-const ASK_DOC = 'Input: term (required); geo (default US; "" = Worldwide); time (now 1-H|now 4-H|now 1-d|now 7-d|today 1-m|today 3-m|today 12-m|today 5-y|all, default now 1-d); fresh (default false: reuse a saved snapshot under 360 min); validate (default false: add verdict; anchor auto by window: sudoku for now 1-H/now 4-H/now 1-d, gpts for now 7-d and longer); points (default false: include the full interest series). Web search, all categories. Output: ok, schemaVersion, status (ok|no_data|partial|blocked|error), term, summary, filter{geo,time,category,property}, interest{average,latest,settledLatest,peak,gapCount,points?[{t,value,gap?}]} (points omitted by default; set points=true), tables{popular[{rank,query,value,formattedValue}], rising[{rank,query,value,formattedValue,breakout}]}, regions[{geo,name,value}], verdict? {label,confidence,reasons,traffic{unit:"searches/day",average,latest,settledLatest,peak,low,high,gapCount}|null,anchor{term,dailySearches,ratio,band,note},warnings?,freshSpike?,trendingNow?,retryAfterSec?} (same calibration helper and reliability gates as trends_snapshot; interest.average < 1 with empty Popular/Rising tables means low-confidence no_data and null numeric traffic), diff (current vs latest usable prior successful snapshot, including on cache hits; case-insensitive keyword matching, original display spelling; null with diffReason for failed/no-data current data, no usable prior success, or incompatible history; failures are saved for diagnostics but never reused as cache or diff baselines; use fresh=true to save a new snapshot), error?{code,message,retryAfterSec?}, meta{cached,ageMin,fetchedAt,snapshotId,exploreUrl,warnings?}.';
-const SNAPSHOT_DOC = 'Input: term (required); geo (default US; "" = Worldwide); time (same enum, default now 1-d); anchor (optional; omit for automatic: sudoku for now 1-H/now 4-H/now 1-d, gpts for now 7-d and longer; an explicit anchor forces both the primary and 7-day fetches); fresh (default false: reuse a saved snapshot under 360 min); svg (default false: embed inline SVG text; chart/chart7d.svg is "" by default and path is still written); tz (IANA time zone for chart labels; default GTFA_TZ, then UTC; invalid names return INVALID_INPUT). One shared-scale interest comparison [term, anchor] plus the term\'s Popular/Rising related queries. Output: ok, schemaVersion, status (ok|no_data|partial|blocked|error), term, summary, filter{geo,time,category,property}, anchor{term,dailySearches,tolerance,level,ratio,source,note} (primary window; level keeps 2 decimals; ratio null when the anchor is too sparse/weak), anchor7d{term,dailySearches,tolerance,level,ratio,source,note} (the extra now 7-d window and the baseline it used; equals anchor when time is already now 7-d, and is baseline-only when the 7-day fetch is unavailable), traffic{unit:"searches/day",average,latest,settledLatest,peak,low,high,gapCount} (numeric fields null without calibration, when the anchor reliability gate fails, or when term average < 1 and Popular/Rising tables are empty (low-confidence no_data)), series{points[{t,score,traffic,gap?}],anchorPoints[{t,score}]}, chart{svg,path}, chart7d{svg,path} (always present: the now 7-d curve, same calibration; reuses chart when time is already now 7-d; `{svg:"",path:null}` when the 7-day fetch is unavailable), traffic7d{same fields as traffic} (always present; null numeric fields when the 7-day fetch is unavailable), tables{popular[{rank,query,value,formattedValue,estDaily}],rising[{rank,query,value,formattedValue,breakout,estDaily}]}, verdict{label,confidence,reasons,prioritize}, error?{code,message,retryAfterSec?}, meta{cached,ageMin,fetchedAt,snapshotId,exploreUrl,warnings?}.';
-const COMPARE_DOC = 'Input: keywords (1-5 distinct, required); geo (default US; "" = Worldwide); time (same enum, default now 1-d). Web search, all categories. Output: ok, schemaVersion, status (ok|partial|error), filter{geo,time}, summary (one line), series[{keyword,points[{t,value}],average,latest,peak}], error?{code,message,retryAfterSec?}, meta{fetchedAt,upstreamRequests,durationMs,warnings}. Values are relative 0-100 across all keywords in the call; latest/peak are gap-aware.';
-const trendingDoc = () => `Input: geos (list of up to 30 country codes, uppercased and deduped in order | "default" | "all"; default "default" = ${DEFAULT_TRENDING_GEOS.map(g => g.code).join(' ')}); hours (Trending Now window in hours, 4|24|48|168, default 24; not the Explore time enum); limit (per geo, default 10). Stops after the first block. Supported geos: ${TRENDING_GEOS.map(g => g.code).join(' ')}. Output: ok, schemaVersion, status (ok|partial|error), hours, geos, summary{geos,ok,failed}, byGeo[{geo,ok,fetchedAt,items[{rank,title,query,traffic,trafficLabel,growthPct,startedAt,endedAt,active,categories,relatedQueries,newsCount,link}],error?}], error? (first failure), meta{fetchedAt}.`;
+const ASK_DOC = 'Input: term (required); geo (default US; "" = Worldwide); time (now 1-H|now 4-H|now 1-d|now 7-d|today 1-m|today 3-m|today 12-m|today 5-y|all, default now 1-d); fresh (default false: reuse a saved snapshot under 360 min); validate (default false: add verdict; anchor auto by window: sudoku for now 1-H/now 4-H/now 1-d, gpts for now 7-d and longer); points (default false: include the full interest series); timeoutMs (optional, 1000–60000; Explore default 8000). Web search, all categories. Output: ok, schemaVersion, status (ok|no_data|partial|blocked|error), term, summary, filter{geo,time,category,property}, interest{average,latest,settledLatest,peak,gapCount,points?[{t,value,gap?}]} (points omitted by default; set points=true), tables{popular[{rank,query,value,formattedValue}], rising[{rank,query,value,formattedValue,breakout}]}, regions[{geo,name,value}], verdict? {label,confidence,reasons,traffic{unit:"searches/day",average,latest,settledLatest,peak,low,high,gapCount}|null,anchor{term,dailySearches,ratio,band,note},warnings?,freshSpike?,trendingNow?,retryAfterSec?} (same calibration helper and reliability gates as trends_snapshot; interest.average < 1 with empty Popular/Rising tables means low-confidence no_data and null numeric traffic), diff (current vs latest usable prior successful snapshot, including on cache hits; case-insensitive keyword matching, original display spelling; null with diffReason for failed/no-data current data, no usable prior success, or incompatible history; failures are saved for diagnostics but never reused as cache or diff baselines; use fresh=true to save a new snapshot), error?{code,message,retryAfterSec?}, meta{cached,ageMin,fetchedAt,snapshotId,exploreUrl,warnings?}.';
+const SNAPSHOT_DOC = 'Input: term (required); geo (default US; "" = Worldwide); time (same enum, default now 1-d); anchor (optional; omit for automatic: sudoku for now 1-H/now 4-H/now 1-d, gpts for now 7-d and longer; an explicit anchor forces both the primary and 7-day fetches); fresh (default false: reuse a saved snapshot under 360 min); svg (default false: embed inline SVG text; chart/chart7d.svg is "" by default and path is still written); tz (IANA time zone for chart labels; default GTFA_TZ, then UTC; invalid names return INVALID_INPUT); timeoutMs (optional, 1000–60000; Explore default 8000). One shared-scale interest comparison [term, anchor] plus the term\'s Popular/Rising related queries. Output: ok, schemaVersion, status (ok|no_data|partial|blocked|error), term, summary, filter{geo,time,category,property}, anchor{term,dailySearches,tolerance,level,ratio,source,note} (primary window; level keeps 2 decimals; ratio null when the anchor is too sparse/weak), anchor7d{term,dailySearches,tolerance,level,ratio,source,note} (the extra now 7-d window and the baseline it used; equals anchor when time is already now 7-d, and is baseline-only when the 7-day fetch is unavailable), traffic{unit:"searches/day",average,latest,settledLatest,peak,low,high,gapCount} (numeric fields null without calibration, when the anchor reliability gate fails, or when term average < 1 and Popular/Rising tables are empty (low-confidence no_data)), series{points[{t,score,traffic,gap?}],anchorPoints[{t,score}]}, chart{svg,path}, chart7d{svg,path} (always present: the now 7-d curve, same calibration; reuses chart when time is already now 7-d; `{svg:"",path:null}` when the 7-day fetch is unavailable), traffic7d{same fields as traffic} (always present; null numeric fields when the 7-day fetch is unavailable), tables{popular[{rank,query,value,formattedValue,estDaily}],rising[{rank,query,value,formattedValue,breakout,estDaily}]}, verdict{label,confidence,reasons,prioritize}, error?{code,message,retryAfterSec?}, meta{cached,ageMin,fetchedAt,snapshotId,exploreUrl,warnings?}.';
+const COMPARE_DOC = 'Input: keywords (1-5 distinct, required); geo (default US; "" = Worldwide); time (same enum, default now 1-d); timeoutMs (optional, 1000–60000; Explore default 8000). Web search, all categories. Output: ok, schemaVersion, status (ok|partial|error), filter{geo,time}, summary (one line), series[{keyword,points[{t,value}],average,latest,peak}], error?{code,message,retryAfterSec?}, meta{fetchedAt,upstreamRequests,durationMs,warnings}. Values are relative 0-100 across all keywords in the call; latest/peak are gap-aware.';
+const trendingDoc = () => `Input: geos (list of up to 30 country codes, uppercased and deduped in order | "default" | "all"; default "default" = ${DEFAULT_TRENDING_GEOS.map(g => g.code).join(' ')}); hours (Trending Now window in hours, 4|24|48|168, default 24; not the Explore time enum); limit (per geo, default 10); timeoutMs (optional, 1000–60000; Trending Now default 15000). Stops after the first block. Supported geos: ${TRENDING_GEOS.map(g => g.code).join(' ')}. Output: ok, schemaVersion, status (ok|partial|error), hours, geos, summary{geos,ok,failed}, byGeo[{geo,ok,fetchedAt,items[{rank,title,query,traffic,trafficLabel,growthPct,startedAt,endedAt,active,categories,relatedQueries,newsCount,link}],error?}], error? (first failure), meta{fetchedAt}.`;
 
 /** The four agent-facing tools. Everything else stays in the library. */
 export const PRIMARY_TOOLS = ['trends_ask', 'trends_compare', 'trends_now', 'trends_snapshot'] as const;
@@ -196,15 +197,18 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   };
   const geoField = options.settings ? z.string().trim().optional() : z.string().default(defaultGeo);
   const storeFor = () => new SnapshotStore(live().snapshotDir);
-  const scoped = (context?: ToolCallContext) => {
+  const scoped = (context: ToolCallContext | undefined, timeoutMs?: number) => {
     throwIfAborted(context?.signal);
     const signal = context?.signal ?? options.signal;
     const scopedTransport: Transport = signal
       ? request => transport({ ...request, signal })
       : transport;
-    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter, signal });
-    const query = (input: unknown) => queryTrends(input, { client, signal });
-    return { client, query, shared: { ...options, transport: scopedTransport, limiter, signal } };
+    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool' });
+    const query = (input: unknown) => {
+      const body = input && typeof input === 'object' ? { ...(input as Record<string, unknown>) } : {};
+      return queryTrends(timeoutMs !== undefined ? { ...body, timeoutMs } : input, { client, signal });
+    };
+    return { client, query, shared: { ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool' as const, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } };
   };
 
   const ask: GtfaTool = {
@@ -217,13 +221,14 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       fresh: z.boolean().default(false),
       validate: z.boolean().default(false),
       points: z.boolean().default(false),
+      timeoutMs: timeoutMsField,
     }),
     async execute(raw, context) {
       const parsed = ask.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { term, geo, time: range, fresh, validate, points } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean };
+      const { term, geo, time: range, fresh, validate, points, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean; timeoutMs?: number };
       const settings = live();
-      const { query, shared } = scoped(context);
+      const { query, shared } = scoped(context, timeoutMs);
       const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       const refresh = fresh || settings.cache === false ? 'always' : undefined;
       let snap: TermSnapshot, cached = false, ageMin = 0, verdict: Record<string, unknown> | undefined, validationWarnings: string[] = [];
@@ -255,13 +260,14 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       fresh: z.boolean().default(false),
       svg: z.boolean().default(false),
       tz: z.string().trim().min(1).max(100).optional(),
+      timeoutMs: timeoutMsField,
     }),
     async execute(raw, context) {
       const parsed = snapshot.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { term, geo, time: range, anchor, fresh, svg, tz } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string };
+      const { term, geo, time: range, anchor, fresh, svg, tz, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string; timeoutMs?: number };
       const settings = live();
-      const { query } = scoped(context);
+      const { query } = scoped(context, timeoutMs);
       const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       try {
         const forcedAnchor = anchor ?? settings.anchor;
@@ -281,16 +287,17 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       keywords: z.array(z.string().trim().min(1).max(100)).min(1).max(5),
       geo: geoField,
       time: time.default(DEFAULTS.time),
+      timeoutMs: timeoutMsField,
     }),
     async execute(raw, context) {
       const parsed = compare.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { keywords, geo, time: range } = parsed.data as { keywords: string[]; geo?: string; time: (typeof TIME_RANGES)[number] };
+      const { keywords, geo, time: range, timeoutMs } = parsed.data as { keywords: string[]; geo?: string; time: (typeof TIME_RANGES)[number]; timeoutMs?: number };
       const geoValue = geo !== undefined ? geo.trim() : live().defaultGeo;
-      const { client } = scoped(context);
+      const { client } = scoped(context, timeoutMs);
       const dup = findDuplicateKeyword(keywords);
       if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
-      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal } as never);
+      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } as never);
       return response(compareEnvelope(keywords, r, { geo: geoValue, time: range }));
     },
   };
@@ -302,12 +309,13 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       geos: z.union([z.array(z.string()).min(1), z.literal('default'), z.literal('all')]).default('default'),
       hours: hours.default(24),
       limit: nonnegative.default(10),
+      timeoutMs: timeoutMsField,
     }),
     async execute(raw, context) {
       const parsed = now.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-      const { geos, hours: window, limit } = parsed.data as { geos: string[] | 'default' | 'all'; hours: TrendingHours; limit: number };
-      const { shared } = scoped(context);
+      const { geos, hours: window, limit, timeoutMs } = parsed.data as { geos: string[] | 'default' | 'all'; hours: TrendingHours; limit: number; timeoutMs?: number };
+      const { shared } = scoped(context, timeoutMs);
       let list: string[];
       try { list = normalizeTrendingGeos(geos); }
       catch (error) { return response(invalidInputEnvelope(error instanceof Error ? error.message : 'invalid geos')); }

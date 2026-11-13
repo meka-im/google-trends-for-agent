@@ -7,6 +7,7 @@
 - Fix settings spacing above Save/Discard and clarify that Save applies changes without a restart.
 - Correct EN/ZH dsh prerequisites, allowBuilds append instructions, settings navigation, cwd chart paths, no-token Actor guidance, and optional `actorId`.
 - Add installed MCP configuration and GitHub/data-fetch troubleshooting; update release pins and metadata to 0.2.2.
+- Add optional `timeoutMs` (1000–60000) on MCP/dsh/Actor tools; TRENDS_TIMEOUT copy mentions `--timeout` on the CLI and `timeoutMs` on tools. Note that pnpm may wrap the allowBuilds key, and that dsh tools are called from chat.
 
 ## 0.2.1 — 2026-11-13
 

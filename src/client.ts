@@ -1,5 +1,5 @@
 import * as core from './core.js';
-import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type RateLimitOptions, type Transport } from './transport.js';
+import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type RateLimitOptions, type TimeoutSurface, type Transport } from './transport.js';
 export interface TrendsResult {
   status: 'ok' | 'partial' | 'error';
   input?: Record<string, unknown>;
@@ -7,15 +7,17 @@ export interface TrendsResult {
   error?: { code: string; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number; warnings: string[] };
 }
-export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; signal?: AbortSignal }
+export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; signal?: AbortSignal; timeoutSurface?: TimeoutSurface }
 export class TrendsClient {
   private readonly transport: Transport;
   private readonly limiter: RateLimiter;
   private readonly signal: AbortSignal | undefined;
+  private readonly timeoutSurface: TimeoutSurface | undefined;
   constructor(options: ClientOptions = {}) {
     this.transport = options.transport ?? createDefaultTransport();
     this.limiter = options.limiter ?? new RateLimiter(options);
     this.signal = options.signal;
+    this.timeoutSurface = options.timeoutSurface;
   }
   async query(raw: unknown): Promise<TrendsResult> {
     throwIfAborted(this.signal);
@@ -29,7 +31,7 @@ export class TrendsClient {
       input = core.parseGTrendsInput(raw);
       const i = input;
       const request = (url: string, method = 'GET'): Promise<string> => withRetry(
-        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? 8000, signal: this.signal, headers: {
+        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? 8000, signal: this.signal, timeoutSurface: this.timeoutSurface, headers: {
           accept: 'application/json, text/plain, */*', 'accept-language': core.acceptLanguage(i.locale),
           'user-agent': 'Mozilla/5.0', referer: core.refererUrl(i),
         } }),

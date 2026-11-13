@@ -69,7 +69,7 @@ describe('dsh plugin registration', () => {
     const { ctx, tools } = fakeCtx();
     await apply(ctx, config());
     expect([...tools.keys()].sort()).toEqual(['trends_ask', 'trends_compare', 'trends_now', 'trends_snapshot']);
-    expect(Object.keys(tools.get('trends_compare')!.parameters.properties as object).sort()).toEqual(['geo', 'keywords', 'time']);
+    expect(Object.keys(tools.get('trends_compare')!.parameters.properties as object).sort()).toEqual(['geo', 'keywords', 'time', 'timeoutMs']);
     for (const tool of tools.values()) {
       expect(tool.description).toMatch(/Output: ok, schemaVersion/);
       expect(tool.parameters).toMatchObject({ type: 'object', properties: expect.any(Object) });

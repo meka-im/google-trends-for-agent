@@ -2,7 +2,15 @@ import { ProxyAgent, fetch as proxyFetch } from 'undici';
 import { CookieJar } from 'tough-cookie';
 import { GTrendsError } from './core.js';
 
-export interface TransportRequest { url: string; method?: string; body?: string; headers: Record<string, string>; timeoutMs: number; signal?: AbortSignal }
+export type TimeoutSurface = 'cli' | 'tool';
+
+/** Actionable timeout copy: CLI exposes --timeout, tools expose timeoutMs. */
+export function trendsTimeoutMessage(timeoutMs: number, surface: TimeoutSurface = 'cli'): string {
+  const raise = surface === 'tool' ? 'raise timeoutMs (max 60000)' : 'raise --timeout (max 60000)';
+  return `Google Trends request timed out after ${timeoutMs} ms. Retry, ${raise}, or set HTTPS_PROXY/HTTP_PROXY if this network blocks Google.`;
+}
+
+export interface TransportRequest { url: string; method?: string; body?: string; headers: Record<string, string>; timeoutMs: number; signal?: AbortSignal; timeoutSurface?: TimeoutSurface }
 export interface TransportResponse { status: number; headers: Record<string, string>; body: string }
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
 
@@ -204,7 +212,7 @@ export class Session {
         if (error instanceof GTrendsError) throw error;
         const timeout = error instanceof Error && /timeout|abort/i.test(error.name);
         const message = timeout
-          ? `Google Trends request timed out after ${req.timeoutMs} ms. Retry, raise --timeout (max 60000), or set HTTPS_PROXY/HTTP_PROXY if this network blocks Google.`
+          ? trendsTimeoutMessage(req.timeoutMs, req.timeoutSurface ?? 'cli')
           : 'Could not reach Google Trends (network, DNS, TLS, or proxy failure). Check connectivity/firewall; if a proxy is required, set HTTPS_PROXY or HTTP_PROXY.';
         throw new GTrendsError(timeout ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', message);
       }

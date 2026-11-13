@@ -43,6 +43,8 @@ describe('runOnce validation', () => {
     [{ tool: 'ask', terms: ['a'], window: 'yesterday' }, /Unknown window/],
     [{ tool: 'ask', terms: ['a'], anchor: 'chairs' }, /Unknown anchor/],
     [{ tool: 'ask', terms: ['a'], geo: 'ZZ' }, /Unsupported geo/],
+    [{ tool: 'ask', terms: ['a'], timeoutMs: 999 }, /timeoutMs/],
+    [{ tool: 'ask', terms: ['a'], timeoutMs: 60001 }, /timeoutMs/],
   ])('fails %j up front', async (input, message) => {
     const { deps, pushed, values, logs } = harness(async () => askEnvelope('a'));
     const result = await runOnce(input as never, deps);
@@ -63,6 +65,13 @@ describe('runOnce mapping', () => {
     expect(result.failed).toBe(false);
     expect(executeTool).toHaveBeenCalledWith('trends_compare', expect.objectContaining({ keywords: ['coffee'] }));
   });
+  it('forwards timeoutMs to the shared tool call', async () => {
+    const executeTool = vi.fn(async () => askEnvelope('Sora'));
+    const { deps } = harness(executeTool);
+    const result = await runOnce({ tool: 'ask', terms: ['Sora'], timeoutMs: 20000 }, deps);
+    expect(result.failed).toBe(false);
+    expect(executeTool).toHaveBeenCalledWith('trends_ask', expect.objectContaining({ term: 'Sora', timeoutMs: 20000 }));
+  });
   it('calls ask once per term, sequentially, and maps interest plus verdict', async () => {
     const calls: { name: string; input: Record<string, unknown> }[] = [];
     const { deps, pushed, values, options, logs } = harness(async (name, input) => {
@@ -73,6 +82,7 @@ describe('runOnce mapping', () => {
     expect(calls.map(call => call.input.term)).toEqual(['Sora', 'Veo']);
     expect(calls.every(call => call.name === 'trends_ask')).toBe(true);
     expect(calls[0]!.input).toMatchObject({ geo: 'US', time: 'now 1-d', validate: true });
+    expect(calls[0]!.input).not.toHaveProperty('timeoutMs');
     expect(pushed).toHaveLength(2);
     expect(pushed[0]).toMatchObject({
       term: 'Sora', tool: 'ask', geo: 'US', window: 'now 1-d', status: 'ok',

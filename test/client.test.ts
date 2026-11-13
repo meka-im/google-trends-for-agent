@@ -182,6 +182,19 @@ describe('transport and request spacing', () => {
     const session = new Session(async () => { throw new DOMException('aborted', 'TimeoutError'); }, new RateLimiter({ minIntervalMs: 0 }));
     await expect(session.request({ url: 'https://trends.google.com/trends/', headers: {}, timeoutMs: 1000 })).rejects.toMatchObject({ code: 'TRENDS_TIMEOUT' });
   });
+  it('uses surface-specific timeout advice', async () => {
+    const session = new Session(async () => { throw new DOMException('timeout', 'TimeoutError'); }, new RateLimiter({ minIntervalMs: 0 }));
+    const req = { url: 'https://trends.google.com/trends/', headers: {}, timeoutMs: 8000 };
+    await expect(session.request(req)).rejects.toMatchObject({
+      code: 'TRENDS_TIMEOUT',
+      message: expect.stringMatching(/raise --timeout \(max 60000\)/),
+    });
+    const cliMessage = await session.request(req).then(() => '', e => e instanceof Error ? e.message : String(e));
+    expect(cliMessage).not.toContain('timeoutMs');
+    const toolMessage = await session.request({ ...req, timeoutSurface: 'tool' }).then(() => '', e => e instanceof Error ? e.message : String(e));
+    expect(toolMessage).toMatch(/raise timeoutMs \(max 60000\)/);
+    expect(toolMessage).not.toContain('--timeout');
+  });
   it('propagates a caller abort instead of a retryable timeout', async () => {
     const controller = new AbortController();
     const session = new Session(async () => {

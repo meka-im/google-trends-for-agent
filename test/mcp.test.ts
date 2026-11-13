@@ -29,11 +29,30 @@ describe('MCP offline', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const props = Object.fromEntries(tools.map(t => [t.name, Object.keys((t.inputSchema as { properties: object }).properties).sort()]));
-    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'validate'], trends_compare: ['geo', 'keywords', 'time'], trends_now: ['geos', 'hours', 'limit'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'tz'] });
+    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'timeoutMs', 'validate'], trends_compare: ['geo', 'keywords', 'time', 'timeoutMs'], trends_now: ['geos', 'hours', 'limit', 'timeoutMs'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'timeoutMs', 'tz'] });
+    for (const t of tools) expect((t.inputSchema.properties as Record<string, Record<string, unknown>>).timeoutMs).toMatchObject({ type: 'integer', minimum: 1000, maximum: 60000 });
     for (const t of tools) expect(t.description).toMatch(/Output: ok, schemaVersion/);
     expect(tools.find(t => t.name === 'trends_now')!.description).toMatch(/Supported geos: .*SG/);
     const compare = tools.find(t => t.name === 'trends_compare')!;
     expect((compare.inputSchema.properties as Record<string, unknown>).keywords).toMatchObject({ minItems: 1, maxItems: 5 });
+  });
+  it('rejects timeoutMs outside 1000–60000 and wires an in-range value', async () => {
+    const timeouts: number[] = [];
+    const client = await connect(async req => {
+      timeouts.push(req.timeoutMs);
+      throw new DOMException('timeout', 'TimeoutError');
+    });
+    for (const value of [999, 60001]) {
+      const r = await client.callTool({ name: 'trends_ask', arguments: { term: 'Sora', timeoutMs: value } });
+      expect(r.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
+      expect((r.structuredContent as { error: { message: string } }).error.message).toMatch(/timeoutMs/i);
+    }
+    expect(timeouts).toEqual([]);
+    const timedOut = await client.callTool({ name: 'trends_ask', arguments: { term: 'Sora', fresh: true, timeoutMs: 20000 } });
+    expect(timedOut.structuredContent).toMatchObject({ ok: false, error: { code: 'TRENDS_TIMEOUT' } });
+    expect((timedOut.structuredContent as { error: { message: string } }).error.message).toContain('raise timeoutMs (max 60000)');
+    expect((timedOut.structuredContent as { error: { message: string } }).error.message).not.toContain('--timeout');
+    expect(timeouts.some(ms => ms === 20000)).toBe(true);
   });
   it('trends_compare defaults to US and now 1-d', async () => {
     const urls: string[] = [];

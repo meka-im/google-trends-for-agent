@@ -339,6 +339,15 @@
       "sectionCaption": "Calibration",
       "sectionDescription": "Most users can leave these unchanged."
     },
+    "timeoutMs": {
+      "title": "Request timeout (ms)",
+      "type": "integer",
+      "description": "Per-request Google Trends timeout in milliseconds (1000–60000). Example: 20000. Leave blank for the tool default (8000 ms for Explore tools, 15000 ms for Trending Now). Applies to this one-off run; the public Standby endpoint ignores this input (pass timeoutMs on the tool call instead).",
+      "minimum": 1000,
+      "maximum": 60000,
+      "sectionCaption": "Advanced: timeout",
+      "sectionDescription": "Raise this if Google is reachable but slow to respond."
+    },
     "proxyConfiguration": {
       "title": "Proxy configuration",
       "type": "object",

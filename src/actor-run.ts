@@ -17,6 +17,7 @@ export interface ActorRunInput {
   geo?: string;
   window?: string;
   anchor?: string;
+  timeoutMs?: number;
   proxyConfiguration?: Record<string, unknown>;
 }
 
@@ -337,6 +338,7 @@ interface ValidatedInput {
   geo: string;
   window: GTrendsTimeRange;
   anchor: string;
+  timeoutMs?: number;
 }
 
 function validate(input: ActorRunInput): ValidatedInput | string {
@@ -368,7 +370,14 @@ function validate(input: ActorRunInput): ValidatedInput | string {
   }
   if (tool !== 'now' && terms.length === 0) return `Add at least one term for the ${tool} tool.`;
   if (tool === 'compare' && terms.length > 5) return `Compare needs 1–5 distinct terms (got ${terms.length}).`;
-  return { tool, terms, geo, window, anchor };
+  let timeoutMs: number | undefined;
+  if (input.timeoutMs !== undefined) {
+    if (!Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1000 || input.timeoutMs > 60_000) {
+      return 'timeoutMs must be an integer between 1000 and 60000.';
+    }
+    timeoutMs = input.timeoutMs;
+  }
+  return { tool, terms, geo, window, anchor, timeoutMs };
 }
 
 /** Validate one-off input without running a tool; returns a user-facing message or undefined. */
@@ -392,7 +401,8 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
     deps.log?.(`Invalid input: ${validated}`);
     return { output, failed: true, rows: [] };
   }
-  const { tool, terms, geo, window, anchor } = validated;
+  const { tool, terms, geo, window, anchor, timeoutMs } = validated;
+  const timeout = timeoutMs !== undefined ? { timeoutMs } : {};
   const execute = deps.executeTool ?? (async (name, args) => {
     const definition = deps.tools?.find(candidate => candidate.name === name);
     if (!definition) throw new Error(`Tool ${name} is not available.`);
@@ -413,7 +423,7 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
 
   if (tool === 'compare') {
     try {
-      const envelope = await execute(TOOL_NAMES.compare, { keywords: terms, geo, time: window });
+      const envelope = await execute(TOOL_NAMES.compare, { keywords: terms, geo, time: window, ...timeout });
       for (const row of mapCompare(envelope, terms, geo, window, fallbackFetchedAt)) await push(row);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -427,7 +437,7 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
   } else if (tool === 'now') {
     try {
       const hours = TRENDING_HOURS[window] ?? 24;
-      const envelope = await execute(TOOL_NAMES.now, { geos: [geo], hours, limit: TRENDING_LIMIT });
+      const envelope = await execute(TOOL_NAMES.now, { geos: [geo], hours, limit: TRENDING_LIMIT, ...timeout });
       for (const row of mapNow(envelope, geo, window, fallbackFetchedAt)) await push(row);
     } catch (error) {
       const row = baseRow('now', geo, geo, window, fallbackFetchedAt);
@@ -442,8 +452,8 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
       if (halt) { await push(skipped(term, halt)); continue; }
       try {
         const envelope = tool === 'snapshot'
-          ? await execute(name, { term, geo, time: window, ...(anchor ? { anchor } : {}) })
-          : await execute(name, { term, geo, time: window, validate: true, ...(anchor ? { anchor } : {}) });
+          ? await execute(name, { term, geo, time: window, ...(anchor ? { anchor } : {}), ...timeout })
+          : await execute(name, { term, geo, time: window, validate: true, ...(anchor ? { anchor } : {}), ...timeout });
         const row = tool === 'snapshot'
           ? mapSnapshot(term, envelope, geo, window, fallbackFetchedAt)
           : mapAsk(term, envelope, geo, window, fallbackFetchedAt);
