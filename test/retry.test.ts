@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { TrendsClient } from '../src/client.js';
-import type { Transport, TransportRequest } from '../src/transport.js';
+import { errorLabel, type Transport, type TransportRequest } from '../src/transport.js';
+import { GTrendsError } from '../src/core.js';
 const fx = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const response = (body = '', status = 200, headers: Record<string, string> = {}) => ({ body, status, headers });
 const json = (value: unknown) => ")]}'\n" + JSON.stringify(value);
@@ -18,6 +19,16 @@ function fixtureTransport(first: Transport): Transport {
     throw new Error('Unexpected request');
   };
 }
+describe('safe error labels', () => {
+  it('logs only a code or class, never the raw message', () => {
+    const upstream = new GTrendsError('BLOCKED', 'challenge at https://trends.google.com/?q=private+term&token=secret');
+    expect(errorLabel(upstream)).toBe('BLOCKED');
+    const network = new TypeError('proxy failed for https://user:pass@proxy.test/?q=private');
+    expect(errorLabel(network)).toBe('TypeError');
+    expect(errorLabel('raw text')).toBe('Error');
+  });
+});
+
 describe('bounded retries', () => {
   it('backs off on 429, honors Retry-After, then succeeds', async () => {
     let calls = 0, now = 0;

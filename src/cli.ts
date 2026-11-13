@@ -3,7 +3,6 @@ import { runAskCli } from './ask-cli.js';
 import { runSnapshotCli } from './snapshot-cli.js';
 import { runTrendingCli } from './trending-cli.js';
 import { parseArgs } from 'node:util';
-import { readFileSync } from 'node:fs';
 import { queryTrends, batchTrends, errorResponse, type TrendsResponse } from './api.js';
 import { formatGTrendsExport } from './export.js';
 import { planTrendsRequest } from './input.js';
@@ -11,6 +10,7 @@ import { publicInput } from './core.js';
 import { resolveFilter } from './filter.js';
 import { compareEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { runDoctorCli } from './doctor-cli.js';
+import { VERSION } from './version.js';
 
 const help = `gtfa — Search-interest signals for AI agents — an unofficial Google Trends client
 
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
       pretty: { type: 'boolean' }, help: { type: 'boolean' }, version: { type: 'boolean' },
     } });
     if (values.help) { console.log(process.stdout.isTTY && !values.json ? help : JSON.stringify({ help })); return; }
-    if (values.version) { console.log(JSON.stringify({ name: 'google-trends-for-agent', version: JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version })); return; }
+    if (values.version) { console.log(JSON.stringify({ name: 'google-trends-for-agent', version: VERSION })); return; }
     if (values.format !== 'json' && values.format !== 'csv') throw new Error('format must be json or csv');
     json = values.json ?? false;
     format = json ? 'json' : values.format;

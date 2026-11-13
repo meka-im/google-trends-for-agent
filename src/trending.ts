@@ -1,6 +1,6 @@
 import { GTrendsError } from './core.js';
 import type { TrendsErrorCode } from './api.js';
-import { TRENDING_GEOS } from './geos.js';
+import { normalizeTrendingGeos, TRENDING_GEOS } from './geos.js';
 import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type Transport, type RateLimitOptions } from './transport.js';
 
 export const TRENDING_CATEGORIES: Record<number, string> = {
@@ -25,33 +25,65 @@ export interface TrendingOptions extends RateLimitOptions { transport?: Transpor
 export function trendingVolumeLabel(volume: number): string {
   return `${volume >= 1e6 ? `${volume / 1e6}M` : volume >= 1000 ? `${volume / 1000}K` : volume}+`;
 }
-/** Decode the batchexecute envelope; malformed rows fail rather than silently disappearing. */
-export function parseTrendingResponse(body: string): TrendingItem[] {
-  let rows: unknown;
-  for (const line of body.split('\n')) {
-    if (!line.includes('i0OFE')) continue;
-    try {
-      const envelope: unknown = JSON.parse(line);
-      if (!Array.isArray(envelope)) continue;
-      const rpc = envelope.find(row => Array.isArray(row) && row[1] === 'i0OFE');
-      if (rpc) { if (rpc[2] == null) throw new GTrendsError('INVALID_INPUT', 'Trending Now is not available for this geo'); rows = JSON.parse(rpc[2])[1]; break; }
-    } catch (e) { if (e instanceof GTrendsError) throw e; /* framing lines are not payloads */ }
+const TRENDING_PAGE_URL = 'https://trends.google.com/trending';
+const TRENDING_TIMEOUT_MS = 15_000;
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const protocolChanged = (detail: string) => new GTrendsError('TRENDS_PROTOCOL_CHANGED',
+  `Google Trends returned an unexpected Trending Now page (${detail}); the public endpoint may have changed. Retry later, and update gtfa if it persists.`);
+/** Return the JSON value starting at `start`, respecting strings and nesting. */
+function balancedJson(text: string, start: number): string {
+  const opening = text[start];
+  if (opening !== '[' && opening !== '{') throw protocolChanged('missing data payload');
+  const closing = opening === '[' ? ']' : '}';
+  let depth = 0, inString = false, escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === opening) depth++;
+    else if (char === closing && --depth === 0) return text.slice(start, i + 1);
   }
-  if (!Array.isArray(rows)) throw new Error('missing Trending Now payload');
+  throw protocolChanged('truncated data payload');
+}
+/** Decode the AF_initDataCallback ds:0 payload embedded in the Trending Now page. */
+export function parseTrendingResponse(body: string): TrendingItem[] {
+  const key = /key\s*:\s*['"]ds:0['"]/.exec(body);
+  if (!key) throw protocolChanged('missing ds:0 callback');
+  const afterKey = body.slice(key.index + key[0].length);
+  const data = /\bdata\s*:/.exec(afterKey);
+  if (!data) throw protocolChanged('missing ds:0 data');
+  const dataStart = key.index + key[0].length + data.index + data[0].length;
+  const first = body.slice(dataStart).search(/[\[{]/);
+  if (first < 0) throw protocolChanged('missing ds:0 data');
+  let parsed: unknown;
+  try { parsed = JSON.parse(balancedJson(body, dataStart + first)); }
+  catch (error) { if (error instanceof GTrendsError) throw error; throw protocolChanged('invalid ds:0 JSON'); }
+  if (!Array.isArray(parsed) || !Array.isArray(parsed[1])) throw protocolChanged('missing Trending Now rows');
+  const rows = parsed[1];
   const iso = (seconds: unknown): string => {
     if (typeof seconds !== 'number' || !Number.isFinite(seconds)) throw new Error('invalid timestamp');
     return new Date(seconds * 1000).toISOString();
   };
-  return rows.map((row: unknown, index) => {
-    if (!Array.isArray(row) || typeof row[0] !== 'string' || typeof row[2] !== 'string' ||
-      typeof row[6] !== 'number' || !Number.isFinite(row[6]) || typeof row[8] !== 'number' || !Number.isFinite(row[8]) ||
-      !Array.isArray(row[9]) || !row[9].every((q: unknown) => typeof q === 'string') ||
-      !Array.isArray(row[10]) || !row[10].every((id: unknown) => Number.isInteger(id)) || typeof row[12] !== 'string') throw new Error('invalid Trending Now item');
-    const endedAt = row[4] == null ? null : iso(Array.isArray(row[4]) ? row[4][0] : row[4]);
-    return { rank: index + 1, title: row[0], query: row[12], geo: row[2], volume: row[6], volumeLabel: trendingVolumeLabel(row[6]),
-      growthPct: row[8], categoryIds: row[10], categories: row[10].map((id: number) => TRENDING_CATEGORIES[id] ?? `Category ${id}`),
-      startedAt: iso(row[3]?.[0]), endedAt, active: endedAt === null, relatedQueries: row[9], newsCount: Array.isArray(row[11]) ? row[11].length : 0 };
-  });
+  try {
+    return rows.map((row: unknown, index) => {
+      if (!Array.isArray(row) || typeof row[0] !== 'string' || typeof row[2] !== 'string' ||
+        typeof row[6] !== 'number' || !Number.isFinite(row[6]) || typeof row[8] !== 'number' || !Number.isFinite(row[8]) ||
+        !Array.isArray(row[9]) || !row[9].every((q: unknown) => typeof q === 'string') ||
+        !Array.isArray(row[10]) || !row[10].every((id: unknown) => Number.isInteger(id)) || typeof row[12] !== 'string') throw new Error('invalid Trending Now item');
+      const endedAt = row[4] == null ? null : iso(Array.isArray(row[4]) ? row[4][0] : row[4]);
+      return { rank: index + 1, title: row[0], query: row[12], geo: row[2], volume: row[6], volumeLabel: trendingVolumeLabel(row[6]),
+        growthPct: row[8], categoryIds: row[10], categories: row[10].map((id: number) => TRENDING_CATEGORIES[id] ?? `Category ${id}`),
+        startedAt: iso(row[3]?.[0]), endedAt, active: endedAt === null, relatedQueries: row[9], newsCount: Array.isArray(row[11]) ? row[11].length : 0 };
+    });
+  } catch (error) {
+    if (error instanceof GTrendsError) throw error;
+    throw protocolChanged(`malformed Trending Now row: ${error instanceof Error ? error.message : 'unknown row shape'}`);
+  }
 }
 function failure(input: TrendingInput, code: TrendsErrorCode, message: string): TrendingResponse {
   return { status: 'error', geo: typeof input.geo === 'string' ? input.geo.toUpperCase() : '', hours: input.hours ?? 24,
@@ -74,10 +106,13 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
     }
     const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
     session = new Session(options.transport ?? createDefaultTransport(), limiter);
-    const req = [[['i0OFE', JSON.stringify([null, null, result.geo, 0, input.lang ?? 'en', result.hours, 1]), null, 'generic']]];
-    const body = await withRetry(() => session!.request({ url: 'https://trends.google.com/_/TrendsUi/data/batchexecute', method: 'POST',
-      body: `f.req=${encodeURIComponent(JSON.stringify(req))}`, timeoutMs: options.timeoutMs ?? 8000, signal: options.signal,
-      headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'Mozilla/5.0', accept: '*/*' } }),
+    const url = new URL(TRENDING_PAGE_URL);
+    url.searchParams.set('geo', result.geo);
+    url.searchParams.set('hours', String(result.hours));
+    url.searchParams.set('hl', input.lang ?? 'en');
+    const body = await withRetry(() => session!.request({ url: url.toString(), method: 'GET',
+      timeoutMs: options.timeoutMs ?? TRENDING_TIMEOUT_MS, signal: options.signal,
+      headers: { 'user-agent': BROWSER_USER_AGENT, accept: 'text/html,application/xhtml+xml', 'accept-language': input.lang ?? 'en' } }),
     { maxRetries: options.maxRetries ?? 1, sleep: limiter.sleep, signal: options.signal });
     result.items = parseTrendingResponse(body).filter(item => item.volume >= (input.minVolume ?? 0) &&
       (!input.categories?.length || item.categoryIds.some(id => input.categories!.includes(id))));
@@ -96,7 +131,7 @@ export async function fetchTrending(input: TrendingInput, options: TrendingOptio
 export interface ListTrendingInput extends Omit<TrendingInput, 'geo'> { geos: string[] | 'all' }
 export interface ListTrendingResponse { status: 'ok' | 'partial' | 'error'; results: TrendingResponse[]; summary: { geos: number; ok: number; failed: number } }
 export async function listTrending(input: ListTrendingInput, options: TrendingOptions = {}): Promise<ListTrendingResponse> {
-  const geos = input.geos === 'all' ? TRENDING_GEOS.map(g => g.code) : input.geos;
+  const geos = normalizeTrendingGeos(input.geos, false);
   const results: TrendingResponse[] = [];
   let blocked = false;
   let shared: TrendingOptions;

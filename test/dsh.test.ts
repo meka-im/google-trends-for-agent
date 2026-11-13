@@ -226,7 +226,7 @@ describe('dsh plugin execution', () => {
     const transport: Transport = async () => {
       calls++;
       controller.abort();
-      return { status: 200, headers: {}, body: fixture('trending/US-24.txt') };
+      return { status: 200, headers: {}, body: fixture('trending/US-24.html') };
     };
     await register(ctx, config(), { transport, minIntervalMs: 0 });
     await expect(tools.get('trends_now')!.execute({ geos: ['US', 'GB', 'JP'] }, { signal: controller.signal }))

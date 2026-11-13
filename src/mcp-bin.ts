@@ -25,6 +25,7 @@ try {
     const http = await startHttpMcpServer({
       port,
       host: '127.0.0.1',
+      mode: 'local',
       path: '/mcp',
       createMcpServer: () => createServer(serverOptions()),
       log: message => console.error(message),

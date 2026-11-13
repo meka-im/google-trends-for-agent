@@ -6,6 +6,13 @@ export interface TransportRequest { url: string; method?: string; body?: string;
 export interface TransportResponse { status: number; headers: Record<string, string>; body: string }
 export type Transport = (req: TransportRequest) => Promise<TransportResponse>;
 
+/** Safe error label for logs: a stable code or class name, never the raw message. */
+export function errorLabel(error: unknown): string {
+  if (error instanceof GTrendsError) return error.code;
+  if (error instanceof Error) return error.name || 'Error';
+  return 'Error';
+}
+
 /** Normalize any caller abort reason to an `AbortError` while preserving its message. */
 export function abortError(signal?: AbortSignal): Error {
   const reason = signal?.reason;
@@ -72,7 +79,8 @@ export function isChallengeResponse(res: Pick<TransportResponse, 'status' | 'hea
   const headers = Object.fromEntries(Object.entries(res.headers).map(([k, v]) => [k.toLowerCase(), v]));
   const looksJson = /^\s*(?:\)\]\}'[,]?\s*)?[{[]/.test(res.body);
   return /\/sorry(?:\/|\b)/i.test(headers.location ?? '') ||
-    !looksJson && /captcha|unusual traffic|\/sorry(?:\/|\b)/i.test(res.body);
+    // `\bcaptcha` skips asset names such as the trending page's `.grecaptcha-badge` CSS.
+    !looksJson && /\bcaptcha\b|unusual traffic|\/sorry(?:\/|\b)/i.test(res.body);
 }
 
 /** HTTP 429 from Google Trends. */

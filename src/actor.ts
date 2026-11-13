@@ -1,12 +1,12 @@
-import { readFileSync } from 'node:fs';
 import { Actor } from 'apify';
 import { createServer } from './mcp.js';
 import { isStandbyRun, startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
-import { createDefaultTransport, type Transport } from './transport.js';
+import { createDefaultTransport, errorLabel, type Transport } from './transport.js';
 import { createTools, type GtfaTool } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
 import { runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
+import { VERSION } from './version.js';
 
 interface ActorInput extends ActorRunInput {
   proxyConfiguration?: Record<string, unknown>;
@@ -15,10 +15,6 @@ interface ActorInput extends ActorRunInput {
 }
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
-const version = (() => {
-  try { return String((JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: unknown }).version ?? '0.1.0'); }
-  catch { return '0.1.0'; }
-})();
 
 const standby = isStandbyRun();
 
@@ -54,7 +50,7 @@ try {
         proxyTransport = createRotatingTransport(session, {
           createTransport: proxyUrl => createDefaultTransport({ HTTPS_PROXY: proxyUrl }),
           onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : reason === 'challenge' ? 'a Google challenge' : 'a failed proxy connection'}.`),
-          onError: error => console.error(`Proxy rotation failed; keeping the current egress. ${error instanceof Error ? error.message : String(error)}`),
+          onError: error => console.error(`Proxy rotation failed; keeping the current egress (${errorLabel(error)}).`),
         });
         console.log('Egress: Apify proxy (rotates on HTTP 429 or a Google challenge).');
       } else if (Actor.isAtHome()) {
@@ -102,8 +98,9 @@ try {
     http = await startHttpMcpServer({
       port,
       host: '0.0.0.0',
+      mode: 'standby',
       path: '/mcp',
-      version,
+      version: VERSION,
       tools,
       transport: relayTransport,
       idleExit: {
@@ -141,6 +138,6 @@ try {
     process.once('SIGINT', () => { void shutdown('SIGINT'); });
   }
 } catch (error) {
-  console.error(error instanceof Error ? error.message : 'Actor failed to start');
+  console.error(`Actor failed to start (${errorLabel(error)}).`);
   await Actor.exit({ exitCode: 1 });
 }

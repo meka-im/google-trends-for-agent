@@ -5,7 +5,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GTrendsError } from './core.js';
 import type { GtfaTool } from './tools.js';
-import type { Transport } from './transport.js';
+import { isAbortError, type Transport } from './transport.js';
+import { runWithRequestSignal } from './request-context.js';
+import { VERSION } from './version.js';
 
 export const DEFAULT_HTTP_PORT = 4321;
 export const DEFAULT_MCP_PATH = '/mcp';
@@ -21,6 +23,8 @@ export const EGRESS_FETCH_PATH = '/egress/fetch';
 export const HEALTH_PATH = '/health';
 /** Relay protocol version reported by GET /health and required by the dsh plugin. */
 export const RELAY_PROTOCOL_VERSION = 1;
+/** Overall deadline for one tool call; the HTTP layer aborts the tool signal at this point. */
+export const TOOL_DEADLINE_MS = 300_000;
 const MAX_TIMEOUT_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -134,8 +138,12 @@ export interface HttpMcpServerOptions {
   tools?: GtfaTool[];
   /** Transport used by POST /egress/fetch. */
   transport?: Transport;
-  /** Reported by GET /health. */
+  /** Reported by GET /health; defaults to the package version. */
   version?: string;
+  /** local validates loopback Host/Origin and enables DNS-rebinding protection; standby trusts Apify's proxy/auth. */
+  mode?: 'local' | 'standby';
+  /** Tool-call deadline (default 300 s); tests may shorten it. */
+  deadlineMs?: number;
   /** Optional self idle-exit for Standby runs. */
   idleExit?: IdleExitOptions;
   /** Optional logging hook (never logs request bodies, query strings, or credentials). */
@@ -179,12 +187,36 @@ function writeApiError(res: ServerResponse, status: number, code: string, messag
   writeJson(res, status, { error: { code, message } });
 }
 
-function setCors(res: ServerResponse): void {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID');
-  res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id, MCP-Protocol-Version');
-  res.setHeader('Access-Control-Max-Age', '86400');
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function loopbackHostname(value: string | undefined): boolean {
+  if (!value) return false;
+  const host = value.trim().toLowerCase();
+  return /^\[::1\](?::\d{1,5})?$/.test(host) || /^(localhost|127\.0\.0\.1)(?::\d{1,5})?$/.test(host);
+}
+
+function loopbackOrigin(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) return false;
+    return (url.protocol === 'http:' || url.protocol === 'https:') && LOOPBACK_HOSTS.has(url.hostname.toLowerCase().replace(/^\[|\]$/g, ''));
+  } catch { return false; }
+}
+
+/** Abort a tool call when the response closes early or the overall deadline expires. */
+async function withAbortSignal<T>(res: ServerResponse, deadlineMs: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('tool deadline exceeded')), deadlineMs);
+  let finished = false;
+  const onClose = () => { if (!finished) controller.abort(new Error('client disconnected')); };
+  res.once('close', onClose);
+  try { return await fn(controller.signal); }
+  finally {
+    finished = true;
+    clearTimeout(timer);
+    res.off('close', onClose);
+  }
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -233,12 +265,20 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
   const normalizedPath = (path.startsWith('/') ? path : `/${path}`).replace(/\/+$/, '') || '/mcp';
   const sessions = new Map<string, SessionEntry>();
   const idle = options.idleExit ? new IdleExitController(options.idleExit) : undefined;
+  const local = (options.mode ?? (isStandbyRun() ? 'standby' : 'local')) === 'local';
+  const deadlineMs = options.deadlineMs ?? TOOL_DEADLINE_MS;
   let closing = false;
+  let boundPort = options.port ?? DEFAULT_HTTP_PORT;
 
   const createSession = async (): Promise<SessionEntry> => {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       enableJsonResponse: true,
+      ...(local ? {
+        enableDnsRebindingProtection: true,
+        allowedHosts: ['localhost', '127.0.0.1', '[::1]', '::1',
+          `localhost:${boundPort}`, `127.0.0.1:${boundPort}`, `[::1]:${boundPort}`],
+      } : {}),
     });
     const mcp = options.createMcpServer();
     const entry: SessionEntry = { mcp, transport };
@@ -320,7 +360,7 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
     }
     options.log?.(`Tool ${name}`);
     try {
-      const result = await tool.execute(record(body), {});
+      const result = await withAbortSignal(res, deadlineMs, signal => tool.execute(record(body), { signal }));
       const row = record(result);
       const error = record(row.error);
       if (row.ok === false && typeof error.code === 'string' && typeof error.message === 'string') {
@@ -336,13 +376,30 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
       }
       writeJson(res, 200, { ok: true, result });
     } catch (error) {
-      if (error instanceof GTrendsError) writeJson(res, 200, { ok: false, error: { code: error.code, message: error.message } });
+      if (isAbortError(error) && res.destroyed) return;
+      if (isAbortError(error)) {
+        writeApiError(res, 504, 'TRENDS_TIMEOUT', `The tool call exceeded the ${Math.round(deadlineMs / 1000)} s deadline.`);
+      } else if (error instanceof GTrendsError) writeJson(res, 200, { ok: false, error: { code: error.code, message: error.message } });
       else writeApiError(res, 500, 'INTERNAL', 'The tool call failed.');
     }
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    setCors(res);
+    if (local) {
+      const host = header(req, 'host');
+      if (!loopbackHostname(host)) {
+        writeApiError(res, 403, 'FORBIDDEN', 'Host header must be localhost, 127.0.0.1, or [::1].');
+        return;
+      }
+      const origin = header(req, 'origin');
+      if (origin !== undefined && !loopbackOrigin(origin)) {
+        writeApiError(res, 403, 'FORBIDDEN', 'Origin must be a loopback origin.');
+        return;
+      }
+      // The SDK allowlist compares exact Host values; normalize an already-validated
+      // loopback Host so any server port is accepted.
+      req.headers.host = `127.0.0.1:${boundPort}`;
+    }
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname.replace(/\/+$/, '') || '/';
 
     if (req.method === 'OPTIONS') {
@@ -356,7 +413,8 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
         return;
       }
       if (pathname === HEALTH_PATH) {
-        writeJson(res, 200, { ok: true, version: options.version ?? '0.0.0', relay: RELAY_PROTOCOL_VERSION });
+        const build = process.env.ACTOR_BUILD_NUMBER?.trim();
+        writeJson(res, 200, { ok: true, version: options.version ?? VERSION, relay: RELAY_PROTOCOL_VERSION, ...(build ? { build } : {}) });
         return;
       }
       const probe = header(req, 'x-apify-container-server-readiness-probe');
@@ -441,7 +499,7 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
       entry = await createSession();
     }
 
-    await entry.transport.handleRequest(req, res, body);
+    await withAbortSignal(res, deadlineMs, signal => runWithRequestSignal(signal, () => entry!.transport.handleRequest(req, res, body)));
     const assigned = entry.transport.sessionId;
     if (assigned) {
       if (!sessions.has(assigned)) sessions.set(assigned, entry);
@@ -479,6 +537,7 @@ export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise
 
   const address = server.address() as AddressInfo | null;
   const port = address?.port ?? options.port ?? DEFAULT_HTTP_PORT;
+  boundPort = port;
   const host = options.host ?? '127.0.0.1';
   const url = `http://${host.includes(':') ? `[${host}]` : host}:${port}${normalizedPath}`;
   options.log?.(`MCP Streamable HTTP listening on ${url}`);

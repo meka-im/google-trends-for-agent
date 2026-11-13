@@ -1,4 +1,5 @@
 export * from './core.js';
+export * from './version.js';
 export * from './input.js';
 export * from './export.js';
 export * from './transport.js';

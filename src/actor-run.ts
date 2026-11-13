@@ -9,7 +9,7 @@ import { DEFAULT_FILTER, type TrendsFilter } from './filter.js';
 /** The four actor input tools, mapped to the shared tool definitions. */
 export const ACTOR_RUN_TOOLS = ['ask', 'snapshot', 'compare', 'now'] as const;
 export type ActorRunTool = (typeof ACTOR_RUN_TOOLS)[number];
-export type ActorRunStatus = 'ok' | 'no_data' | 'blocked' | 'rate_limited' | 'error';
+export type ActorRunStatus = 'ok' | 'no_data' | 'blocked' | 'rate_limited' | 'skipped' | 'error';
 
 export interface ActorRunInput {
   tool?: string;
@@ -56,6 +56,7 @@ export interface ActorRunOutput {
   delivered: number;
   noData: number;
   blocked: number;
+  skipped: number;
   errors: number;
   durationMs: number;
   completed: boolean;
@@ -127,6 +128,10 @@ function names(value: unknown, limit = 10): string[] {
     const query = text(record(row).query);
     return query ? [query] : [];
   }).slice(0, limit);
+}
+
+function statusFromCode(code: string | undefined): ActorRunStatus {
+  return code === 'RATE_LIMITED' ? 'rate_limited' : code === 'BLOCKED' ? 'blocked' : 'error';
 }
 
 function statusOf(envelope: Record<string, unknown>): ActorRunStatus {
@@ -301,13 +306,14 @@ function buildOutput(tool: ActorRunTool, geo: string, window: string, terms: str
   const delivered = rows.filter(row => row.status === 'ok').length;
   const noData = rows.filter(row => row.status === 'no_data').length;
   const blocked = rows.filter(row => row.status === 'blocked' || row.status === 'rate_limited').length;
+  const skipped = rows.filter(row => row.status === 'skipped').length;
   const errors = rows.filter(row => row.status === 'error').length;
   const completed = rows.length > 0 && rows.every(row => (row.status === 'ok' || row.status === 'no_data') && !row.error);
   const partial = !completed && delivered > 0;
   const status = completed ? 'completed' : partial ? 'partial' : 'failed';
   const firstError = rows.find(row => row.error)?.error?.message;
   return {
-    status, tool, geo, window, terms, delivered, noData, blocked, errors,
+    status, tool, geo, window, terms, delivered, noData, blocked, skipped, errors,
     durationMs: Math.max(0, now - startedAt), completed, partial,
     message: message ?? (completed
       ? `Completed ${rows.length} row${rows.length === 1 ? '' : 's'}${noData ? ` (${noData} with no data)` : ''}.`
@@ -387,8 +393,14 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
   const rows: ActorRunRow[] = [];
   const push = async (row: ActorRunRow) => {
     rows.push(row);
-    deps.log?.(`${row.term}: ${row.status}`);
+    deps.log?.(`Row ${rows.length}: ${row.status}`);
     await deps.pushData(row as unknown as Record<string, unknown>);
+  };
+  const skipped = (term: string, code: string) => {
+    const row = baseRow(tool, term, geo, window, fallbackFetchedAt);
+    row.status = 'skipped';
+    row.error = { code, message: 'skipped after upstream block/rate limit' };
+    return row;
   };
 
   if (tool === 'compare') {
@@ -417,7 +429,9 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
     }
   } else {
     const name = TOOL_NAMES[tool];
+    let halt: string | undefined;
     for (const term of terms) {
+      if (halt) { await push(skipped(term, halt)); continue; }
       try {
         const envelope = tool === 'snapshot'
           ? await execute(name, { term, geo, time: window, ...(anchor ? { anchor } : {}) })
@@ -441,11 +455,14 @@ export async function runOnce(input: ActorRunInput, deps: ActorRunDeps): Promise
           }
         }
         await push(row);
+        if (row.status === 'blocked' || row.status === 'rate_limited') halt = row.error?.code ?? (row.status === 'rate_limited' ? 'RATE_LIMITED' : 'BLOCKED');
       } catch (error) {
+        const code = error instanceof GTrendsError ? error.code : 'INTERNAL';
         const row = baseRow(tool, term, geo, window, fallbackFetchedAt);
-        row.status = 'error';
-        row.error = { code: error instanceof GTrendsError ? error.code : 'INTERNAL', message: error instanceof Error ? error.message : String(error) };
+        row.status = statusFromCode(code);
+        row.error = { code, message: error instanceof Error ? error.message : String(error) };
         await push(row);
+        if (row.status === 'blocked' || row.status === 'rate_limited') halt = code;
       }
     }
   }

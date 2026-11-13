@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { request as httpRequest } from 'node:http';
 import { fetch as realFetch } from 'undici';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -13,15 +14,27 @@ import type { Transport } from '../src/transport.js';
 // test/setup.ts blocks global fetch; the SDK client needs real localhost HTTP.
 vi.stubGlobal('fetch', realFetch);
 
-const sgBody = readFileSync(new URL('./fixtures/trending/SG-24.txt', import.meta.url), 'utf8');
+const sgBody = readFileSync(new URL('./fixtures/trending/SG-24.html', import.meta.url), 'utf8');
+function rawGet(port: number, path: string, headers: Record<string, string>): Promise<{ status: number; body: string; headers: Record<string, string | string[] | undefined> }> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers, setHost: false }, res => {
+      const chunks: Buffer[] = [];
+      res.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8'), headers: res.headers }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
+  vi.unstubAllEnvs();
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 async function start(
   transport?: Transport,
-  extra: { tools?: GtfaTool[]; version?: string; idleExit?: IdleExitOptions; log?: (message: string) => void } = {},
+  extra: { tools?: GtfaTool[]; version?: string; idleExit?: IdleExitOptions; log?: (message: string) => void; mode?: 'local' | 'standby'; deadlineMs?: number } = {},
 ): Promise<{ http: HttpMcpServer; snapshotDir: string }> {
   const snapshotDir = mkdtempSync(join(tmpdir(), 'gtfa-http-'));
   const effective = transport ?? (async req => req.method === 'HEAD'
@@ -32,6 +45,8 @@ async function start(
     transport: effective,
     ...(extra.tools ? { tools: extra.tools } : {}),
     ...(extra.version ? { version: extra.version } : {}),
+    ...(extra.mode ? { mode: extra.mode } : {}),
+    ...(extra.deadlineMs ? { deadlineMs: extra.deadlineMs } : {}),
     ...(extra.idleExit ? { idleExit: extra.idleExit } : {}),
     ...(extra.log ? { log: extra.log } : {}),
     createMcpServer: () => createServer({
@@ -81,6 +96,39 @@ describe('Streamable HTTP MCP transport', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, version: '9.9.9', relay: 1 });
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('adds ACTOR_BUILD_NUMBER to /health only when set', async () => {
+    vi.stubEnv('ACTOR_BUILD_NUMBER', '42');
+    const { http } = await start();
+    const health = await (await realFetch(`http://127.0.0.1:${http.port}/health`)).json() as Record<string, unknown>;
+    expect(health).toMatchObject({ ok: true, relay: 1, build: '42' });
+    expect(health.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('allows loopback Host/Origin and rejects foreign Host or Origin without wildcard CORS', async () => {
+    const { http } = await start();
+    const base = `http://127.0.0.1:${http.port}`;
+    const ok = await realFetch(`${base}/health`, { headers: { origin: 'http://localhost:5173' } });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get('access-control-allow-origin')).toBeNull();
+
+    const foreignHost = await rawGet(http.port, '/health', { host: 'evil.test' });
+    expect(foreignHost.status).toBe(403);
+    expect(JSON.parse(foreignHost.body)).toMatchObject({ error: { code: 'FORBIDDEN' } });
+
+    const foreignOrigin = await realFetch(`${base}/health`, { headers: { origin: 'https://evil.test' } });
+    expect(foreignOrigin.status).toBe(403);
+    expect(await foreignOrigin.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(foreignOrigin.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('trusts Apify proxy Host and Origin in standby mode', async () => {
+    const { http } = await start(undefined, { mode: 'standby' });
+    const ready = await realFetch(`http://127.0.0.1:${http.port}/health`, {
+      headers: { host: 'meka-im--google-trends-for-agent.apify.actor', origin: 'https://console.apify.com' },
+    });
+    expect(ready.status).toBe(200);
   });
 
   it('relays only https://trends.google.com requests and passes the response through', async () => {
@@ -181,6 +229,79 @@ describe('Streamable HTTP MCP transport', () => {
     const missing = await call('nope');
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: { code: 'INVALID_INPUT', message: expect.stringContaining('Unknown tool') } });
+  });
+
+  it('aborts a /tools call when the client disconnects', async () => {
+    let signal: AbortSignal | undefined;
+    const tool = {
+      name: 'trends_now',
+      description: 'test',
+      inputSchema: {},
+      execute: async (_input: unknown, context?: { signal?: AbortSignal }) => {
+        signal = context?.signal;
+        await new Promise((_resolve, reject) => context!.signal!.addEventListener('abort', () => {
+          const error = new Error('client disconnected');
+          error.name = 'AbortError';
+          reject(error);
+        }));
+        return { ok: true };
+      },
+    } as unknown as GtfaTool;
+    const { http } = await start(undefined, { tools: [tool] });
+    const controller = new AbortController();
+    const pending = realFetch(`http://127.0.0.1:${http.port}/tools/trends_now`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geos: ['US'] }),
+      signal: controller.signal,
+    }).catch(() => undefined);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    controller.abort();
+    await pending;
+    await vi.waitFor(() => expect(signal!.aborted).toBe(true));
+  });
+
+  it('aborts an /mcp tool call at the configured deadline', async () => {
+    let signal: AbortSignal | undefined;
+    const hanging: Transport = async req => new Promise((_resolve, reject) => {
+      signal = req.signal;
+      req.signal?.addEventListener('abort', () => {
+        const error = new Error('deadline');
+        error.name = 'AbortError';
+        reject(error);
+      });
+    });
+    const { http } = await start(hanging, { deadlineMs: 50 });
+    const client = new Client({ name: 'deadline-test', version: '1' });
+    const transport = new StreamableHTTPClientTransport(new URL(http.url));
+    cleanups.push(() => client.close());
+    await client.connect(transport);
+    await client.callTool({ name: 'trends_now', arguments: { geos: ['US'] } }).catch(() => undefined);
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('aborts a /tools call at the configured deadline', async () => {
+    const tool = {
+      name: 'trends_now',
+      description: 'test',
+      inputSchema: {},
+      execute: async (_input: unknown, context?: { signal?: AbortSignal }) => {
+        await new Promise((_resolve, reject) => context!.signal!.addEventListener('abort', () => {
+          const error = new Error('deadline');
+          error.name = 'AbortError';
+          reject(error);
+        }));
+        return { ok: true };
+      },
+    } as unknown as GtfaTool;
+    const { http } = await start(undefined, { tools: [tool], deadlineMs: 20 });
+    const response = await realFetch(`http://127.0.0.1:${http.port}/tools/trends_now`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geos: ['US'] }),
+    });
+    expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({ error: { code: 'TRENDS_TIMEOUT' } });
   });
 
   it('exits Standby after the idle window with no in-flight requests', () => {

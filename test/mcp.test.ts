@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/mcp.js';
+import { VERSION } from '../src/version.js';
+import { TRENDING_GEOS } from '../src/geos.js';
 import { askEnvelope, compareEnvelope, blockedVerdict, SCHEMA_VERSION } from '../src/tools.js';
 import type { TermSnapshot } from '../src/snapshot.js';
 import type { Transport } from '../src/transport.js';
-const body = readFileSync(new URL('./fixtures/trending/SG-24.txt', import.meta.url), 'utf8');
+const body = readFileSync(new URL('./fixtures/trending/SG-24.html', import.meta.url), 'utf8');
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of cleanups.splice(0)) await close(); });
 async function connect(transport: Transport = async () => ({ status: 200, headers: {}, body }), extras: { snapshotDir?: string } = {}) {
@@ -40,6 +42,29 @@ describe('MCP offline', () => {
     expect(explore).toContain('{"keyword":"a","geo":"US","time":"now 1-d"}');
     expect(explore).toContain('"category":0,"property":""');
   });
+  it('reports the package version in serverInfo', async () => {
+    const client = await connect();
+    expect(client.getServerVersion()).toMatchObject({ name: 'google-trends-for-agent', version: VERSION });
+    expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
+  });
+  it('propagates MCP cancellation to the tool fetch signal', async () => {
+    let signal: AbortSignal | undefined;
+    const hanging: Transport = async req => new Promise((_resolve, reject) => {
+      signal = req.signal;
+      req.signal?.addEventListener('abort', () => {
+        const error = new Error('cancelled');
+        error.name = 'AbortError';
+        reject(error);
+      });
+    });
+    const client = await connect(hanging);
+    const controller = new AbortController();
+    const pending = client.callTool({ name: 'trends_now', arguments: { geos: ['US'] } }, undefined, { signal: controller.signal }).catch(error => error);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    controller.abort();
+    await pending;
+    await vi.waitFor(() => expect(signal!.aborted).toBe(true));
+  });
   it('every tool carries the light-use guidance', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
@@ -51,7 +76,7 @@ describe('MCP offline', () => {
     expect(r.isError).not.toBe(true);
     expect(r.structuredContent).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: 'ok', hours: 24, geos: ['SG'], summary: { geos: 1, ok: 1, failed: 0 } });
     const sg = (r.structuredContent!.byGeo as { geo: string; ok: boolean; items: Record<string, unknown>[] }[])[0];
-    expect(sg.geo).toBe('SG'); expect(sg.items.length).toBe(5);
+    expect(sg.geo).toBe('SG'); expect(sg.items.length).toBe(3);
     expect(Object.keys(sg.items[0]).sort()).toEqual(['active', 'categories', 'endedAt', 'growthPct', 'link', 'newsCount', 'query', 'rank', 'relatedQueries', 'startedAt', 'title', 'traffic', 'trafficLabel'].sort());
     expect(JSON.parse((r.content as { text: string }[])[0].text)).toEqual(r.structuredContent);
   });
@@ -74,6 +99,18 @@ describe('MCP offline', () => {
     const r = await client.callTool({ name: 'trends_compare', arguments: { keywords: ['x', 'y'], geo: 'ZZ' } });
     expect(r.isError).toBe(true);
     expect(r.structuredContent).toMatchObject({ ok: false, status: 'error', error: { code: 'INVALID_INPUT' } });
+    expect(transport).not.toHaveBeenCalled();
+  });
+  it('uppercases and dedupes geos, and rejects more than 30 explicit geos without HTTP', async () => {
+    const transport = vi.fn<Transport>(async () => ({ status: 200, headers: {}, body }));
+    const client = await connect(transport);
+    const r = await client.callTool({ name: 'trends_now', arguments: { geos: ['sg', 'SG', 'us'], limit: 1 } });
+    expect(r.structuredContent).toMatchObject({ ok: true, geos: ['SG', 'US'], summary: { geos: 2, ok: 2, failed: 0 } });
+    expect(transport).toHaveBeenCalledTimes(2);
+    transport.mockClear();
+    const tooMany = await client.callTool({ name: 'trends_now', arguments: { geos: TRENDING_GEOS.slice(0, 31).map(geo => geo.code) } });
+    expect(tooMany.isError).toBe(true);
+    expect(tooMany.structuredContent).toMatchObject({ ok: false, status: 'error', error: { code: 'INVALID_INPUT', message: expect.stringMatching(/at most 30/) } });
     expect(transport).not.toHaveBeenCalled();
   });
   it('returns upstream errors and stops lists on a block', async () => {

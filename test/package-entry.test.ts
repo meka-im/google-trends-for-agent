@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { VERSION } from '../src/version.js';
 
 const root = new URL('../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
@@ -21,6 +22,12 @@ describe('package root entry', () => {
     expect(entry.inject).toEqual(['tools']);
     expect(entry.apply).toBeTypeOf('function');
     expect(entry.Config).toBeUndefined();
+  });
+
+  it('reads one version from package.json', () => {
+    const pkg = JSON.parse(read('package.json'));
+    expect(pkg.version).toBe('0.2.0');
+    expect(VERSION).toBe(pkg.version);
   });
 
   it('exports only the plugin root, client, locale, icon, and manifest', () => {

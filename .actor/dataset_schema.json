@@ -33,8 +33,8 @@
       "status": {
         "type": "string",
         "title": "Status",
-        "description": "Outcome for this row: ok, no_data, blocked, rate_limited, or error.",
-        "enum": ["ok", "no_data", "blocked", "rate_limited", "error"],
+        "description": "Outcome for this row: ok, no_data, blocked, rate_limited, skipped, or error.",
+        "enum": ["ok", "no_data", "blocked", "rate_limited", "skipped", "error"],
         "example": "ok"
       },
       "interestLatest": {

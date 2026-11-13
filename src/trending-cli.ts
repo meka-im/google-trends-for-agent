@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { DEFAULT_TRENDING_GEOS, TRENDING_GEOS } from './geos.js';
+import { normalizeTrendingGeos, TRENDING_GEOS } from './geos.js';
 import { fetchTrending, listTrending, type TrendingHours, type TrendingResponse, type TrendingOptions } from './trending.js';
 import { nowEnvelope, schemaRejectionEnvelope } from './tools.js';
 
@@ -40,9 +40,10 @@ export async function runTrendingCli(args: string[], options: TrendingOptions = 
       ...(v['min-volume'] !== undefined ? { minVolume: number(v['min-volume']) } : {}),
       ...(v.limit !== undefined ? { limit: number(v.limit) } : {}), ...(v.category !== undefined ? { categories: v.category.split(',').map(number) } : {}) };
     const opts = { ...options, ...(v.timeout !== undefined ? { timeoutMs: number(v.timeout) } : {}), ...(v['min-interval'] !== undefined ? { minIntervalMs: number(v['min-interval']) } : {}) };
-    const geos = v['all-geos'] ? 'all' : v['default-geos'] ? DEFAULT_TRENDING_GEOS.map(g => g.code) : v.geo!.split(',');
+    const all = !!v['all-geos'];
+    const geos = normalizeTrendingGeos(all ? 'all' : v['default-geos'] ? 'default' : v.geo!.split(','));
     if (v.json) { const batch = await listTrending({ ...input, geos }, opts); const invalid = batch.results.find(r => r.error?.code === 'INVALID_INPUT'); result = invalid ? schemaRejectionEnvelope(invalid.error!.message) : nowEnvelope(batch.results, input.hours as TrendingHours); results = batch.results; }
-    else if (geos !== 'all' && geos.length === 1) { const response = await fetchTrending({ ...input, geo: geos[0] }, opts); result = response; results = [response]; }
+    else if (!all && geos.length === 1) { const response = await fetchTrending({ ...input, geo: geos[0] }, opts); result = response; results = [response]; }
     else { const batch = await listTrending({ ...input, geos }, opts); result = batch; results = batch.results; }
   } catch (e) {
     const response: TrendingResponse = { status: 'error', geo: '', hours: 24, fetchedAt: new Date().toISOString(), items: [], error: { code: 'INVALID_INPUT', message: e instanceof Error ? e.message : 'invalid input' }, meta: { upstreamRequests: 0, durationMs: 0 } };

@@ -74,7 +74,9 @@ describe('runOnce mapping', () => {
       topRelated: ['sora 2', 'sora video'], topRising: ['sora 2 api'],
       chartKey: null, chartUrl: null, error: null, fetchedAt: '2026-11-12T09:30:00.000Z',
     });
-    expect(logs).toEqual(['Sora: ok', 'Veo: ok']);
+    expect(logs).toEqual(['Row 1: ok', 'Row 2: ok']);
+    expect(logs.join('\n')).not.toContain('Sora');
+    expect(logs.join('\n')).not.toContain('Veo');
     expect(values.OUTPUT).toMatchObject({ status: 'completed', tool: 'ask', geo: 'US', delivered: 2, completed: true, partial: false });
     // Apify's setValue rejects an object value with an explicit contentType; JSON is the default.
     expect(options.OUTPUT).toBeUndefined();
@@ -153,19 +155,36 @@ describe('runOnce mapping', () => {
     expect(pushed[0]).toMatchObject({ term: 'query 0', tool: 'now', status: 'ok', interestLatest: null, topRelated: ['a', 'b'] });
   });
 
-  it('marks a rate-limited row and keeps the run partial when another row succeeds', async () => {
+  it('marks a rate-limited row, skips the remaining terms, and keeps the run partial', async () => {
     let call = 0;
-    const { deps, pushed, values } = harness(async (_name, input) => {
+    const { deps, pushed, values, logs } = harness(async (_name, input) => {
       call += 1;
       return call === 1
         ? askEnvelope(String(input.term))
         : { ok: false, status: 'error', error: { code: 'RATE_LIMITED', message: 'slow down' } };
     });
-    const result = await runOnce({ tool: 'ask', terms: ['good', 'slow'], geo: 'US', window: 'now 1-d' }, deps);
-    expect(pushed.map(row => row.status)).toEqual(['ok', 'rate_limited']);
+    const result = await runOnce({ tool: 'ask', terms: ['good', 'slow', 'later'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(pushed.map(row => row.status)).toEqual(['ok', 'rate_limited', 'skipped']);
     expect(pushed[1]!.error).toEqual({ code: 'RATE_LIMITED', message: 'slow down' });
-    expect(values.OUTPUT).toMatchObject({ status: 'partial', delivered: 1, blocked: 1, errors: 0, partial: true, completed: false });
+    expect(pushed[2]!.error).toEqual({ code: 'RATE_LIMITED', message: 'skipped after upstream block/rate limit' });
+    expect(call).toBe(2);
+    expect(logs).toEqual(['Row 1: ok', 'Row 2: rate_limited', 'Row 3: skipped']);
+    expect(values.OUTPUT).toMatchObject({ status: 'partial', delivered: 1, blocked: 1, skipped: 1, errors: 0, partial: true, completed: false });
     expect(result.failed).toBe(false);
+  });
+  it('marks the run failed when a first blocked term leaves nothing delivered', async () => {
+    const { deps, pushed, values } = harness(async () => ({ ok: false, status: 'blocked', error: { code: 'BLOCKED', message: 'challenge page' } }));
+    const result = await runOnce({ tool: 'ask', terms: ['blocked', 'later'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(pushed.map(row => row.status)).toEqual(['blocked', 'skipped']);
+    expect(pushed[1]!.error).toEqual({ code: 'BLOCKED', message: 'skipped after upstream block/rate limit' });
+    expect(values.OUTPUT).toMatchObject({ status: 'failed', delivered: 0, blocked: 1, skipped: 1, partial: false, completed: false });
+    expect(result.failed).toBe(true);
+  });
+  it('logs index and status only, never the search term', async () => {
+    const { deps, logs } = harness(async () => { throw new Error('upstream failed'); });
+    await runOnce({ tool: 'ask', terms: ['private query one', 'private query two'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(logs).toEqual(['Row 1: error', 'Row 2: error']);
+    for (const message of logs) expect(message).not.toMatch(/private query/);
   });
 
   it('treats all no_data rows as completed, and all errors as failed', async () => {
