@@ -20,7 +20,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import {
   APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
-  apifyEstimatedCalls, regionLabel, type EgressMode,
+  GTFA_STORE_URL, apifyEstimatedCalls, regionLabel, type EgressMode,
 } from '../options.js';
 
 /** Cordis service name used by the client bundle. */
@@ -247,6 +247,7 @@ export const EN: Record<string, string> = {
   publicActorHint: 'Fixed public Actor. Runs and billing stay in your Apify account; nothing to deploy.',
   publicActorCost: 'About ${cost} of platform usage per isolated call (estimate); no Actor fee.',
   viewSource: 'View source on GitHub →',
+  storePage: 'Apify Store page →',
   actorHint: 'Your google-trends-for-agent Actor. It fetches Google Trends with its on-platform residential proxy and exits after 60 s idle.',
   actorNone: 'Select an Actor',
   actorRefresh: 'Refresh',
@@ -385,6 +386,7 @@ export const ZH: Record<string, string> = {
   publicActorHint: '固定的公共 Actor。运行和计费都在你的 Apify 账号内，无需部署。',
   publicActorCost: '单次独立调用约 ${cost} 平台用量（估算），无 Actor 费用。',
   viewSource: '在 GitHub 查看源码 →',
+  storePage: 'Apify Store 页面 →',
   actorHint: '你的 google-trends-for-agent Actor。它使用平台内住宅代理访问 Google Trends，并在空闲 60 秒后退出。',
   actorNone: '选择 Actor',
   actorRefresh: '刷新',
@@ -1534,7 +1536,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
         {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
       </> : <Field label={t('publicActor')} hint={t('publicActorHint')}>
         <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
-        <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a></p>
+        <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a> · <a style={styles.signupPrimary} href={GTFA_STORE_URL} target="_blank" rel="noopener noreferrer">{t('storePage')}</a></p>
         <p style={styles.hint}>{template(t('publicActorCost'), { cost: publicCost })}</p>
       </Field>}
     </section> : null}

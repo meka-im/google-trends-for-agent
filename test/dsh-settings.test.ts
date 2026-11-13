@@ -7,7 +7,8 @@ import {
   type ApifyActorsView, type ApifyUsageView, type Draft,
 } from '../src/client/index.js';
 import {
-  APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL, apifyEstimatedCalls,
+  APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
+  GTFA_STORE_URL, apifyEstimatedCalls,
 } from '../src/options.js';
 
 const t = (key: string) => EN[key] ?? key;
@@ -191,12 +192,13 @@ describe('dsh settings form', () => {
     expect(html).not.toContain('Upgrade →');
   });
 
-  it('keeps the public route read-only with a source link and no deploy controls', () => {
+  it('keeps the public route read-only with source and Store links and no deploy controls', () => {
     const html = render({ draft: { egress: 'actor-public' }, usage: readyUsage, actors: oneActor });
     expect(html).toContain('Public Actor');
     expect(html).toContain('Actor: meka.im/google-trends-for-agent');
     expect(html).toContain('View source on GitHub →');
     expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent"');
+    expect(html).toContain(`href="${GTFA_STORE_URL}" target="_blank" rel="noopener noreferrer">Apify Store page →</a>`);
     expect(html).toContain('About $0.0025 of platform usage per isolated call');
     expect(html).toContain('Apify token');
     expect(html).not.toContain('aria-label="Actor"');
@@ -313,7 +315,7 @@ describe('dsh settings form', () => {
 describe('settings i18n and egress compatibility', () => {
   it('has the same keys in English and Chinese', () => {
     expect(Object.keys(ZH).sort()).toEqual(Object.keys(EN).sort());
-    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'testVersionMismatch', 'publicActorCost', 'viewSource']) {
+    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'testVersionMismatch', 'publicActorCost', 'viewSource', 'storePage']) {
       expect(EN[key], key).toBeTruthy();
       expect(ZH[key], key).toBeTruthy();
     }

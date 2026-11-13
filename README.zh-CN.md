@@ -96,7 +96,7 @@ npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
 
 开源：同一份代码服务全部三种路线。
 
-Apify Store 页面：即将上线
+Apify Store：[meka.im/google-trends-for-agent](https://apify.com/meka.im/google-trends-for-agent)
 
 ## dsh 插件
 

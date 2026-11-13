@@ -96,7 +96,7 @@ The same four tools work from three egress paths:
 
 Open source: the same code serves all three routes.
 
-Apify Store page: coming soon
+Apify Store: [meka.im/google-trends-for-agent](https://apify.com/meka.im/google-trends-for-agent)
 
 ## dsh plugin
 

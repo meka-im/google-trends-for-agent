@@ -61,7 +61,7 @@ describe('Actor Store metadata', () => {
       build: 'latest',
     });
     expect(store.isSourceCodeHidden).toBe(false);
-    expect(store.pricing).toBe('usage-only (no Actor fee) — not configured on Apify yet');
+    expect(store.pricing).toBe('usage-only (no Actor fee): pay per platform usage, no monetization');
   });
 
   it('uses a small example input that matches the README Quick start and the input schema', () => {
