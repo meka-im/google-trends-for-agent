@@ -10,7 +10,9 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src=".actor/icon.png" alt="google-trends-for-agent" width="44" height="44" align="middle"> <strong>在 Apify Store 打开 →</strong></a></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
@@ -22,107 +24,80 @@
 </p>
 <p align="center"><sub>真实快照输出，已裁剪。完整信封还包含序列、锚点、逐查询估算、警告和元数据。</sub></p>
 
-## 词条图库
+## 选择路线
 
-<table>
-  <tr><th align="center">已成熟词</th><th align="center">新词与上升词</th></tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion 美国 7 天每日搜索量图：峰值 45.9k，最新 30.3k" width="400"><br><sub><b>notion</b> · 峰值 45.9k · 最新 30.3k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon 美国 7 天每日搜索量图：峰值 18.0k，最新 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · 峰值 18.0k · 最新 7.7k 次搜索/天</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney 美国 7 天每日搜索量图：峰值 17.9k，最新 8.1k" width="400"><br><sub><b>midjourney</b> · 峰值 17.9k · 最新 8.1k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 美国 7 天每日搜索量图：峰值 786，最新 0" width="400"><br><sub><b>genie 4</b> · 峰值 786 · 最新 0 次搜索/天</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity 美国 7 天每日搜索量图：峰值 31.8k，最新 25.4k" width="400"><br><sub><b>perplexity</b> · 峰值 31.8k · 最新 25.4k 次搜索/天</sub></td>
-    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 美国 7 天每日搜索量图：峰值 786，最新 0" width="400"><br><sub><b>pika h3</b> · 峰值 786 · 最新 0 次搜索/天</sub></td>
-  </tr>
-</table>
-<p align="center"><sub>估算以 <code>gpts</code> 锚点 ≈ 3,500 次搜索/天校准；美国、近 7 天，标签使用 UTC，抓取于 2026-11-12 UTC。</sub></p>
+| 路线 | 一键使用 | 费用 |
+| --- | --- | --- |
+| **本机直连（你的 IP）** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | 免费；无需 Apify 账号。 |
+| **公共 Actor（meka.im）** | [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent) | 无 Actor 费用；实测单次独立调用约 $0.0024–0.0029，10 次调用的会话中约 $0.0009/次。免费版每月 $5 ≈ 1,700–5,400 次调用。 |
+| **自行部署** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork)；dsh 插件**部署到我的 Apify 账号**；Console → **Link Git repository**（分支 `main`，启用 **Standby**）；或 `apify push`。 | 每次调用费用相同，另加每次构建约 $0.005。 |
 
-## 从 GitHub 安装（Install from GitHub）
-
-需要 Node.js 20+。无需发布到 npm；`npx` 会从 git 检出构建。
-
-```sh
-# 固定版本（推荐）
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa --help
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa doctor
-
-# 最新 main
-npx -y github:meka-im/google-trends-for-agent gtfa --help
-```
-
-全局安装使用同一 git 地址：`npm install -g github:meka-im/google-trends-for-agent#v0.1.0`。该包安装两个命令：CLI 使用 `gtfa`，MCP 服务器使用 `gtfa-mcp`。
-
-## 快速开始
-
-一次快照，返回校准后的每日搜索量：
-
-```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
-```
-
-MCP 服务器默认通过 stdio 运行。让客户端指向 GitHub 包（建议固定 tag）：
+通过公共 Standby 端点使用远程 MCP：
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
-      "command": "npx",
-      "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"]
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp",
+      "headers": { "Authorization": "Bearer <APIFY_TOKEN>" }
     }
   }
 }
 ```
 
-如需本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`），加上可选参数：
+同一份开源代码服务全部三种路线；HTTP 和一次性运行细节见 [`.actor/README.md`](.actor/README.md)。
+
+| | 本机直连（你的 IP） | 公共 Actor | 自行部署 |
+| --- | --- | --- | --- |
+| **准备** | Node 20+，一条 `npx` 命令 | 免费 Apify 账号 + Token，粘贴 MCP URL | Apify 账号；Fork、构建（约 1 分钟）、启用 Standby |
+| **适用** | 同一台机器上的 Agent（stdio 或 localhost） | 能访问远程 HTTPS MCP 或 HTTP 端点的任何 Agent | 同公共 Actor |
+| **限流** | 取决于你的 IP 在 Google 的信誉；429 有限重试和退避，不换 IP | 美国住宅代理；遇到 429 或验证页时轮换会话 | 同公共 Actor |
+| **延迟** | 无冷启动 | 首次调用有冷启动（实测 +约 3 秒，可能更长）；`trends_ask` 每次约 8 秒 | 同公共 Actor |
+| **依赖** | 你的网络 | Apify 可用性；meka.im 发布更新 | Apify 可用性；更新需自己重新构建 |
+| **费用** | 免费 | 独立调用约 $0.0024–0.0029 · 会话中约 $0.0009 | 相同 + 构建费 |
+
+费用按 Apify 免费版价格实测（$0.2/CU，住宅代理 $8/GB）；公式和运行数据见 [Actor costs](docs/reference.md#actor-costs)。
+
+## 安装与快速开始
+
+需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
-# MCP 端点：http://127.0.0.1:4321/mcp
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-## 选择路线
+CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
 
-同一套四个工具支持三种出口：
+```json
+{
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"] } }
+}
+```
 
-| 路线 | 配置 | 费用 |
-| --- | --- | --- |
-| 本机直连 | 用 `npx` 运行 CLI/MCP 服务器，或安装 dsh 插件；请求从你的 IP 发出。 | 免费；无需 Apify 账号。 |
-| 公共 Actor（meka.im） | MCP 客户端使用 Standby URL 和你的 Apify Token，或在插件里选择**公共 Actor**；无需部署。 | 你的 Apify 账号内的平台用量；无 Actor 费用（单次独立调用约 $0.0025，估算）。 |
-| 自行部署 | 把同一份开源代码放进你的账号：dsh 插件一键部署、Console 关联 Git 仓库，或 `apify push`。 | 你的账号内同样的平台用量。 |
+本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
-开源：同一份代码服务全部三种路线。
-
-Apify Store：[meka.im/google-trends-for-agent](https://apify.com/meka.im/google-trends-for-agent)
+```sh
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+```
 
 ## dsh 插件
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
-# 首次运行会打印 pnpm 给出的完整 allowBuilds key 并失败。把该 key 加到
-# ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑同一条命令。
+# 首次运行会打印 pnpm 的 allowBuilds key 并失败；把该 key 加到 ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds: 下，然后重跑。
 ```
 
-安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**（如果 bundle 显示 Off，请先开启）。该 bundle 为 Agent 提供四个原生工具：`trends_ask`、`trends_snapshot`、`trends_compare` 和 `trends_now`，直接在进程内调用 gtfa 核心库，并随包提供 `gtfa` skill；无需 MCP 服务器或 CLI 子进程。
+安装后打开 **dsh web → Plugins → Google Trends → gtfa → Configure**，再进入 **连接 → 出口**，选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**。该 bundle 把四个工具注册为进程内原生工具，并附带 `gtfa` skill；Token 保存、用量卡片和测试连接的细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 
-在 **Connection → Egress** 选择一种路线：
+## 词条图库
 
-- **本机直连** — 请求从运行 dsh 的机器发出（仍支持 `HTTPS_PROXY`）。
-- **公共 Actor（meka.im）** — 经公共 Actor 转发；运行和计费都在你的 Apify 账号内，无需部署。填入 Apify Token 或设置 `APIFY_TOKEN`。
-- **我自己的 Actor** — 在你的账号里部署或选择 `google-trends-for-agent`。一键启动 Git 构建，等待 `succeeded`；也可在 Console 关联仓库或自行运行 `apify push`。
-
-两种 Actor 路线共用 Token 输入、用量卡片、测试连接和同一套住宅代理转发；设置页显示实测约 $0.0025/次的估算。**测试连接**会先请求 `GET /health`（检查 relay 版本，不耗代理流量），再发一次极小的 HEAD 转发。所有可选项都使用下拉框、分段控件或开关，修改即时生效。Token 以明文保存在 profile 的 `cordis.patch.yml`（权限 0600），界面不回显，也不会写入日志或返回；留空并设置 `APIFY_TOKEN` 可让它不进入 profile。
-
-## 自行部署
-
-- **插件一键部署：** **Plugins → Google Trends → Configure → My own Actor → Deploy to my Apify account →**。
-- **Console：** Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent`（分支 `main`），然后在 Settings → Server 开启 **Standby**。
-- **CLI：** 克隆仓库后运行 `apify push`。
-
-Standby/MCP/HTTP 细节、一次性运行输入、数据集和商店说明见 [`.actor/README.md`](.actor/README.md)。
+<table>
+  <tr><th align="center">已成熟词</th><th align="center">新词与上升词</th></tr>
+  <tr>
+    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion 美国 7 天每日搜索量图：峰值 45.9k，最新 30.3k" width="400"><br><sub><b>notion</b> · 峰值 45.9k · 最新 30.3k 次搜索/天</sub></td><td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon 美国 7 天每日搜索量图：峰值 18.0k，最新 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · 峰值 18.0k · 最新 7.7k 次搜索/天</sub></td>
+  </tr>
+</table>
+<p align="center"><sub>更多图表：<a href="docs/assets/traffic-midjourney-us-7d.svg">midjourney</a> · <a href="docs/assets/traffic-genie-4-us-7d.svg">genie 4</a> · <a href="docs/assets/traffic-perplexity-us-7d.svg">perplexity</a> · <a href="docs/assets/traffic-pika-h3-us-7d.svg">pika h3</a>。估算以 <code>gpts</code> 锚点 ≈ 3,500 次搜索/天校准；美国、近 7 天，标签使用 UTC，抓取于 2026-11-12 UTC。</sub></p>
 
 ## MCP 工具
 
@@ -147,40 +122,20 @@ Standby/MCP/HTTP 细节、一次性运行输入、数据集和商店说明见 [`
 
 完整选项和示例见[参考文档](docs/reference.md#cli-surface)。
 
-## 锚点与数字如何计算
+## 数字如何计算
 
-`snapshot` 和 `ask --validate` 把词和一个锚点放在同一个 0–100 尺度上，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 换算。锚点按时间窗口自动选择：
+`snapshot` 和 `ask --validate` 把词条与锚点放在同一个 0–100 尺度上，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 计算。这些是基于锚点的估算，不是 Google 实测搜索量；没有可用校准或锚点未通过可靠性门槛时，流量为 `null`。
 
-| 窗口 | 锚点 | 美国基线 | 为什么用它 |
-| --- | --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/天**，±50% | 全天都有人搜（24 小时内 99.4% 的点非零），短窗口也能校准；`gpts` 在短窗口里太稀疏。 |
-| `now 7-d` 及更长 | `gpts` | **3,500/天**，±50% | 基准尺子，其他基线都由它推出。 |
+| 窗口 | 锚点 | 美国基线 |
+| --- | --- | --- |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/天**，±50% |
+| `now 7-d`、`today 1-m`、`today 3-m`、`today 12-m`、`today 5-y`、`all` | `gpts` | **3,500/天**，±50% |
 
-**63,000 怎么来的：** 在 7 天共享尺度上，`sudoku` 平均是 `gpts` 的 18.035 倍，18.035 × 3,500 ≈ 63,123。经 `thesaurus` 中转（7.341 × 3,500 ≈ 25,694，再 × 2.441 ≈ 62,720）结果一致，所以短窗口和长窗口用的是同一把尺子。3,500 的基线是用 sudoku、thesaurus、calculator 的公开关键词工具量，经实测 Trends 比例反推的——来源见[参考文档](docs/reference.md#calibration-and-the-anchor)。备选：`thesaurus` ≈25,700/天；`chairs` ≈143,000/天。
-
-- `--anchor` / MCP `anchor` 可强制两个窗口都用同一个锚点。每次快照都会返回 `anchor`（请求窗口）和 `anchor7d`（7 天校验），写明用了哪个锚点和基线。
-- 用 version 2 的 `baselines.json` 覆盖或新增基线（模板：[examples/baselines.json](examples/baselines.json)）：
-
-```json
-{ "version": 2,
-  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 }],
-  "windowAnchors": { "short": "sudoku", "long": "gpts" } }
-```
-
-```sh
-GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp 同样读取
-```
-
-- 只有满足以下条件才输出数值流量：至少一个非缺口锚点、`anchorLevel ≥ 1`、非缺口锚点中至少 25% 非零。
-- 这些是**基于锚点的估算**，不是 Google 实测搜索量。失败保持显式：用 `ok`、`status` 和 `error.code` 代替编造数字。
+推导过程、锚点覆盖、基线文件和 null 流量规则见[校准与锚点](docs/reference.md#calibration-and-the-anchor)。
 
 ## 文档
 
-- [Reference：CLI、MCP 信封、退出码、校准与限制（英文）](docs/reference.md)
-- [MCP API 字段指南（中文）](docs/mcp-api.md)
-- [架构图](docs/assets/architecture.svg)
-- [更新日志](CHANGELOG.md)
-- [基线](examples/baselines.json)
+[参考文档](docs/reference.md) · [MCP 字段指南（中文）](docs/mcp-api.md) · [架构图](docs/assets/architecture.svg) · [更新日志](CHANGELOG.md) · [基线](examples/baselines.json)
 
 ## 开发
 
@@ -193,8 +148,6 @@ npm run typecheck
 npm run build
 npm run trends -- --help
 ```
-
-需要 Node.js 20+。`npm run build` 会将 JavaScript 和类型声明写入 `dist/`。库入口（`src/index.ts`）导出客户端、快照、校准、图表、Trending Now 和时区 API。
 
 ## 许可证
 

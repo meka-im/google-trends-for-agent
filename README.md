@@ -10,7 +10,9 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-384%20passed-22c55e?style=flat-square" alt="384 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src=".actor/icon.png" alt="google-trends-for-agent" width="44" height="44" align="middle"> <strong>Open in Apify Store →</strong></a></p>
 
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
@@ -22,107 +24,80 @@
 </p>
 <p align="center"><sub>Real snapshot output, trimmed. The full envelope also includes the series, anchor points, per-query estimates, warnings, and metadata.</sub></p>
 
-## Term gallery
+## Choose a route
 
-<table>
-  <tr><th align="center">Established terms</th><th align="center">New &amp; rising terms</th></tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion US 7-day searches/day chart: peak 45.9k, latest 30.3k" width="400"><br><sub><b>notion</b> · peak 45.9k · latest 30.3k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon US 7-day searches/day chart: peak 18.0k, latest 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · peak 18.0k · latest 7.7k searches/day</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-midjourney-us-7d.svg" alt="midjourney US 7-day searches/day chart: peak 17.9k, latest 8.1k" width="400"><br><sub><b>midjourney</b> · peak 17.9k · latest 8.1k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-genie-4-us-7d.svg" alt="genie 4 US 7-day searches/day chart: peak 786, latest 0" width="400"><br><sub><b>genie 4</b> · peak 786 · latest 0 searches/day</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/assets/traffic-perplexity-us-7d.svg" alt="perplexity US 7-day searches/day chart: peak 31.8k, latest 25.4k" width="400"><br><sub><b>perplexity</b> · peak 31.8k · latest 25.4k searches/day</sub></td>
-    <td align="center"><img src="docs/assets/traffic-pika-h3-us-7d.svg" alt="pika h3 US 7-day searches/day chart: peak 786, latest 0" width="400"><br><sub><b>pika h3</b> · peak 786 · latest 0 searches/day</sub></td>
-  </tr>
-</table>
-<p align="center"><sub>Estimates calibrated to the <code>gpts</code> anchor ≈ 3,500 searches/day; US, last 7 days, labels in UTC, fetched 2026-11-12 UTC.</sub></p>
+| Route | One click | Cost |
+| --- | --- | --- |
+| **Local (your IP)** | `npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US` | Free; no Apify account. |
+| **Public Actor (meka.im)** | [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent) | No Actor fee; measured ~$0.0024–0.0029 per isolated call, ~$0.0009 per call in a 10-call session. Free plan's $5/month ≈ 1,700–5,400 calls. |
+| **Self-deploy** | [Fork](https://github.com/meka-im/google-trends-for-agent/fork); dsh plugin **Deploy to my Apify account**; Console → **Link Git repository** (branch `main`, enable **Standby**); or `apify push`. | Same per-call usage, plus ~$0.005 per build. |
 
-## Install from GitHub
-
-Requires Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout.
-
-```sh
-# pinned release (recommended)
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa --help
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa doctor
-
-# latest main
-npx -y github:meka-im/google-trends-for-agent gtfa --help
-```
-
-For a global install, use the same git spec: `npm install -g github:meka-im/google-trends-for-agent#v0.1.0`. The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server.
-
-## Quick start
-
-One snapshot, calibrated searches/day:
-
-```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
-```
-
-The MCP server runs over stdio by default. Point a client at the GitHub package (pin the tag for reproducibility):
+Remote MCP over the public Standby endpoint:
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
-      "command": "npx",
-      "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"]
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp",
+      "headers": { "Authorization": "Bearer <APIFY_TOKEN>" }
     }
   }
 }
 ```
 
-For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`), add the optional flag:
+The same open-source code serves all three routes; HTTP and one-off details are in [`.actor/README.md`](.actor/README.md).
+
+| | Local (your IP) | Public Actor | Self-deploy |
+| --- | --- | --- | --- |
+| **Setup** | Node 20+, one `npx` command | Free Apify account + token; paste the MCP URL | Apify account; fork, build (~1 min), enable Standby |
+| **Works for** | Agents on the same machine (stdio or localhost) | Any agent that can reach a remote HTTPS MCP or HTTP endpoint | Same as Public Actor |
+| **Rate limits** | Your IP's reputation with Google; bounded 429 retries and backoff, no IP rotation | US residential proxy; session rotates on 429 or a challenge | Same as Public Actor |
+| **Latency** | No cold start | Cold start on the first call (+~3 s measured, can be longer); ~8 s per `trends_ask` | Same as Public Actor |
+| **Depends on** | Your network | Apify uptime; meka.im publishes updates | Apify uptime; you rebuild to update |
+| **Cost** | Free | ~$0.0024–0.0029 isolated · ~$0.0009 in a session | Same + builds |
+
+Costs are measured on Apify's Free-plan rates ($0.2/CU, residential $8/GB); formula and run data in [Actor costs](docs/reference.md#actor-costs).
+
+## Install & quick start
+
+Node.js 20+ is required. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
-npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321
-# MCP endpoint: http://127.0.0.1:4321/mcp
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa snapshot Sora --geo US --json --pretty
 ```
 
-## Choose a route
+The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
-The same four tools work from three egress paths:
+```json
+{
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "github:meka-im/google-trends-for-agent#v0.1.0", "gtfa-mcp"] } }
+}
+```
 
-| Route | Setup | Cost |
-| --- | --- | --- |
-| Local (this machine) | `npx` the CLI/MCP server, or install the dsh plugin. Requests leave your IP. | Free; no Apify account. |
-| Public Actor (meka.im) | Point an MCP client at the Standby URL with your Apify token, or choose **Public Actor** in the plugin. Nothing to deploy. | Apify platform usage in your account; no Actor fee (about $0.0025 per isolated call, estimate). |
-| Self-deploy | Put the same open-source code in your own account: dsh plugin one-click, Console → Link Git repository, or `apify push`. | Same platform usage in your account. |
+For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
-Open source: the same code serves all three routes.
-
-Apify Store: [meka.im/google-trends-for-agent](https://apify.com/meka.im/google-trends-for-agent)
+```sh
+npx -y github:meka-im/google-trends-for-agent#v0.1.0 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+```
 
 ## dsh plugin
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
-# The first run prints pnpm's exact allowBuilds key and fails. Add that key under
-# allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run the same command.
+# First run prints pnpm's allowBuilds key and fails; add it under allowBuilds: in ~/.dsh/profiles/web/pnpm-workspace.yaml, then re-run.
 ```
 
-After install, open **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). The bundle gives the agent four native tools — `trends_ask`, `trends_snapshot`, `trends_compare`, and `trends_now` — executed in-process by gtfa's core library, plus a bundled `gtfa` skill. No MCP server or CLI subprocess is needed.
+After install, open **dsh web → Plugins → Google Trends → gtfa → Configure**, then **Connection → Egress** and pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. The bundle adds the four tools as native in-process tools plus a `gtfa` skill; token storage, the usage card, and Test connection are covered in the [dsh plugin reference](docs/reference.md#dsh-plugin).
 
-Under **Connection → Egress**, pick one route:
+## Term gallery
 
-- **Local (this machine)** — requests leave the machine running dsh (`HTTPS_PROXY` is still honored).
-- **Public Actor (meka.im)** — relay through the public Actor; runs and billing stay in your Apify account, and there is nothing to deploy. Paste an Apify token or set `APIFY_TOKEN`.
-- **My own Actor** — deploy or pick `google-trends-for-agent` in your account. One click starts a Git build; wait for `succeeded`. You can also link the repository in Console or run `apify push` yourself.
-
-Both Actor routes share the token field, usage card, Test connection, and the same residential-proxy relay; the settings page shows the measured ~$0.0025/call estimate. **Test connection** calls `GET /health` (relay version check, no proxy traffic) and then one tiny HEAD relay. Choices use selects, segmented controls, and toggles; changes apply live. The token is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leave it blank with `APIFY_TOKEN` to keep it out of the profile.
-
-## Deploy it yourself
-
-- **Plugin one-click:** **Plugins → Google Trends → Configure → My own Actor → Deploy to my Apify account →**.
-- **Console:** Actors → Create → **Link Git repository** → `https://github.com/meka-im/google-trends-for-agent` (branch `main`), then enable **Standby** under Settings → Server.
-- **CLI:** clone the repository and run `apify push`.
-
-Standby/MCP/HTTP details, the one-off input, dataset and Store notes live in [`.actor/README.md`](.actor/README.md).
+<table>
+  <tr><th align="center">Established terms</th><th align="center">New &amp; rising terms</th></tr>
+  <tr>
+    <td align="center"><img src="docs/assets/traffic-notion-us-7d.svg" alt="notion US 7-day searches/day chart: peak 45.9k, latest 30.3k" width="400"><br><sub><b>notion</b> · peak 45.9k · latest 30.3k searches/day</sub></td><td align="center"><img src="docs/assets/traffic-gemini-4-carbon-us-7d.svg" alt="gemini 4 carbon US 7-day searches/day chart: peak 18.0k, latest 7.7k" width="400"><br><sub><b>gemini 4 carbon</b> · peak 18.0k · latest 7.7k searches/day</sub></td>
+  </tr>
+</table>
+<p align="center"><sub>More charts: <a href="docs/assets/traffic-midjourney-us-7d.svg">midjourney</a> · <a href="docs/assets/traffic-genie-4-us-7d.svg">genie 4</a> · <a href="docs/assets/traffic-perplexity-us-7d.svg">perplexity</a> · <a href="docs/assets/traffic-pika-h3-us-7d.svg">pika h3</a>. Estimates calibrated to the <code>gpts</code> anchor ≈ 3,500 searches/day; US, last 7 days, labels in UTC, fetched 2026-11-12 UTC.</sub></p>
 
 ## MCP tools
 
@@ -147,40 +122,20 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
 
-## Anchors and how the numbers work
+## How the numbers work
 
-`snapshot` and `ask --validate` put the term and an anchor on one shared 0–100 scale, then calibrate with `traffic = round(score ÷ anchorLevel × dailySearches)`. The anchor is picked by time window:
+`snapshot` and `ask --validate` put the term and an anchor on one shared 0–100 scale, then compute `traffic = round(score ÷ anchorLevel × dailySearches)`. These are anchor-based estimates, not measured Google search volume. Traffic stays `null` when no calibration exists or the anchor fails its reliability gate.
 
-| Window | Anchor | US baseline | Why this anchor |
-| --- | --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/day**, ±50% | Searched around the clock (99.4% of 24h points nonzero), so short windows calibrate. `gpts` is too sparse there. |
-| `now 7-d` and longer | `gpts` | **3,500/day**, ±50% | The reference ruler that every other baseline is derived from. |
+| Window | Anchor | US baseline |
+| --- | --- | --- |
+| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/day**, ±50% |
+| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | **3,500/day**, ±50% |
 
-**How 63,000 is derived:** on a 7-day shared scale `sudoku` averages 18.035 × `gpts`, so 18.035 × 3,500 ≈ 63,123. Going through `thesaurus` (7.341 × 3,500 ≈ 25,694, then × 2.441 ≈ 62,720) lands in the same place, so short and long windows use one ruler. The 3,500 baseline is back-derived from public keyword-tool volumes for sudoku, thesaurus, and calculator through measured Trends ratios — sources in [reference](docs/reference.md#calibration-and-the-anchor). Alternates: `thesaurus` ≈25,700/day; `chairs` ≈143,000/day.
-
-- `--anchor` / MCP `anchor` forces one anchor for both windows. Every snapshot reports `anchor` (requested window) and `anchor7d` (the 7-day check) with the term and baseline used.
-- Override or add baselines with a version 2 `baselines.json` (template: [examples/baselines.json](examples/baselines.json)):
-
-```json
-{ "version": 2,
-  "anchors": [{ "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 }],
-  "windowAnchors": { "short": "sudoku", "long": "gpts" } }
-```
-
-```sh
-GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp reads it too
-```
-
-- Numeric traffic stays `null` unless the anchor has a non-gap point, `anchorLevel ≥ 1`, and at least 25% of non-gap points are nonzero.
-- These are anchor-based **estimates**, not measured Google search volume. Failures stay explicit: `ok`, `status`, and `error.code` replace invented numbers.
+Derivation, anchor overrides, baseline files, and null-traffic rules: [Calibration and the anchor](docs/reference.md#calibration-and-the-anchor).
 
 ## Docs
 
-- [Reference: CLI, MCP envelopes, exit codes, calibration, limits](docs/reference.md)
-- [MCP API field guide (中文)](docs/mcp-api.md)
-- [Architecture](docs/assets/architecture.svg)
-- [Changelog](CHANGELOG.md)
-- [Baselines](examples/baselines.json)
+[Reference](docs/reference.md) · [MCP field guide (中文)](docs/mcp-api.md) · [Architecture](docs/assets/architecture.svg) · [Changelog](CHANGELOG.md) · [Baselines](examples/baselines.json)
 
 ## Development
 
@@ -193,8 +148,6 @@ npm run typecheck
 npm run build
 npm run trends -- --help
 ```
-
-Node.js 20+ is required. `npm run build` writes JavaScript and declarations to `dist/`. The library entrypoint (`src/index.ts`) exports the client, snapshot, calibration, chart, Trending Now, and time-zone APIs.
 
 ## License
 

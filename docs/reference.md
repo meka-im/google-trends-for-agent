@@ -49,7 +49,7 @@ Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the 
 
 `dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). pnpm keys git builds by commit, so the first run prints that key (it changes when main moves), add it under `allowBuilds:` in `~/.dsh/profiles/web/pnpm-workspace.yaml`, then re-run. The bundle registers the same four tools as native in-process tools and a bundled `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
 
-Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile.
+Enable it in **dsh web → Plugins → Google Trends → gtfa → Configure** (switch the bundle on if it shows Off). Settings are `.volatile()` and apply live. `role('secret')` only redacts token reads: a token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned. Leave it blank and set `APIFY_TOKEN` to keep it out of the profile. The usage card shows this cycle's plan and usage; the public-Actor cost line shows the measured ≈$0.0025 per isolated-call estimate.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -155,7 +155,13 @@ The built-in baselines are in [examples/baselines.json](../examples/baselines.js
 }
 ```
 
-Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot), `gtfa-mcp` (stdio or `--http`), and the Actor; library callers pass `baselines`. User anchors win by term + geo, then the built-ins apply. Every `windowAnchors` term must exist in `anchors` or the built-ins. Version 1 is rejected, and an invalid file fails with a clear error instead of falling back. An explicit `--anchor` / MCP `anchor` wins for every window (a per-call MCP `anchor` beats the Actor's server-wide anchor input); otherwise the primary window chooses its automatic anchor and the extra `now 7-d` fetch uses the 7-day anchor. `anchor` and `anchor7d` report each window's term and baseline.
+Load it with `GTFA_BASELINES` for `gtfa` (ask/snapshot), `gtfa-mcp` (stdio or `--http`), and the Actor; library callers pass `baselines`:
+
+```sh
+GTFA_BASELINES=./baselines.json gtfa snapshot Sora --json   # gtfa-mcp reads it too
+```
+
+User anchors win by term + geo, then the built-ins apply. Every `windowAnchors` term must exist in `anchors` or the built-ins. Version 1 is rejected, and an invalid file fails with a clear error instead of falling back. An explicit `--anchor` / MCP `anchor` wins for every window (a per-call MCP `anchor` beats the Actor's server-wide anchor input); otherwise the primary window chooses its automatic anchor and the extra `now 7-d` fetch uses the 7-day anchor. `anchor` and `anchor7d` report each window's term and baseline.
 
 `traffic.low` / `traffic.high` apply that tolerance to the average. Numeric traffic is `null` when no matching geo + anchor baseline exists, or when the anchor reliability gate fails:
 
@@ -166,6 +172,26 @@ Load it with `GTFA_BASELINES=/path/to/baselines.json` for `gtfa` (ask/snapshot),
 A real 24-hour Sora run with `gpts` failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. That is why short windows now use `sudoku`: in a US 24-hour check it was 99.4% nonzero (CV 0.21), and small AI terms such as `gemini 4 carbon`, `pika h3`, and `genie 4` stayed nonzero next to it. A 7-day Sora run with `gpts` calibrated normally: average **36,795**, latest **39,238** (39.2k), peak **55,262** (55.3k) searches/day.
 
 These numbers are **estimates from an anchor**, not measured Google search volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from a separate 7-day fetch and give you a second check; that fetch uses `gpts` unless an explicit anchor was given. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent. Cache keys include the filter window and anchor term, so a 1-day `sudoku` snapshot and a 7-day `gpts` snapshot never collide.
+
+## Actor costs
+
+Both Actor routes run in the caller's Apify account with the same image and Standby settings (single-tenant, 512 MB, 60 s idle), so a call costs the same on the public Actor and on a self-deployed copy. There is no Actor fee. Self-deploy adds a build each time you update (measured $0.0048–0.0058 per build).
+
+```text
+cost ≈ (runSecs × 0.5 GB ÷ 3600) × $0.2/CU + residentialGB × $8/GB
+runSecs ≈ request time + ~60 s idle tail (an isolated call measured 67–68 s)
+```
+
+Measured on 2026-11-13 against the public Standby URL (US, `now 1-d`, sequential calls; Free-plan rates). Costs are Apify's final per-run `usageTotalUsd`; storage and data-transfer items add under $0.0001 per Standby run.
+
+| Case | Run time | CU | Residential | Cost | Free $5 covers |
+| --- | --- | --- | --- | --- | --- |
+| Isolated `trends_ask` (cold, 10.8 s response) | 67 s | 0.0094 | 61 KB | $0.0024 | ≈ 2,100 calls |
+| Isolated `trends_snapshot` (cold, 31 s response) | 68 s | 0.0094 | 122 KB | $0.0029 | ≈ 1,700 calls |
+| 10 × `trends_ask` in one session (8.0–24.9 s each, median 8.3 s) | 160 s | 0.0222 | 592 KB | $0.0092 | ≈ 540 sessions (5,400 calls) |
+| Each extra warm `trends_ask` | — | — | ~59 KB | ≈ $0.0008 | — |
+
+The warm figure is (session − isolated ask) ÷ 9. The cold-start overhead (+~3 s) is the cold ask's response time minus the warm median; Apify can take longer on a cold start. Warm asks take ~8 s because MCP requests are spaced 1500 ms apart. Most of an isolated call's cost is the 60 s idle tail, so batching calls into one session is the cheapest pattern. One-off runs bill the same way without the idle tail (one measured run: two snapshots in 32 s, $0.0031). The plugin's ≈$0.0025 per call (≈2,000 calls per $5) matches an isolated `trends_ask`; isolated snapshots cost about 20% more.
 
 ## Rate limits, retries, and timeouts
 
