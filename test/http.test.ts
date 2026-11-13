@@ -261,6 +261,53 @@ describe('Streamable HTTP MCP transport', () => {
     await vi.waitFor(() => expect(signal!.aborted).toBe(true));
   });
 
+  it('aborts a relay when the client disconnects and does not retry upstream', async () => {
+    let calls = 0;
+    let signal: AbortSignal | undefined;
+    const pendingTransport: Transport = async req => {
+      calls += 1;
+      signal = req.signal;
+      await new Promise((_resolve, reject) => req.signal?.addEventListener('abort', () => {
+        const error = new Error('client disconnected');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true }));
+      return { status: 200, headers: {}, body: 'late' };
+    };
+    const { http } = await start(pendingTransport);
+    const controller = new AbortController();
+    const pending = realFetch(`http://127.0.0.1:${http.port}/egress/fetch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://trends.google.com/trends/', method: 'GET', headers: {} }),
+      signal: controller.signal,
+    }).catch(() => undefined);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    controller.abort();
+    await pending;
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(calls).toBe(1);
+  });
+
+  it('logs only a stable label for an unexpected request error', async () => {
+    const logs: string[] = [];
+    const http = await startHttpMcpServer({
+      port: 0,
+      log: message => logs.push(message),
+      createMcpServer: () => { throw new Error('private search term'); },
+    });
+    cleanups.push(() => http.close());
+    const response = await realFetch(`http://127.0.0.1:${http.port}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: '{}',
+    });
+    expect(response.status).toBe(500);
+    expect(logs.join('\n')).toContain('HTTP request failed: Error');
+    expect(logs.join('\n')).not.toContain('private search term');
+  });
+
   it('aborts an /mcp tool call at the configured deadline', async () => {
     let signal: AbortSignal | undefined;
     const hanging: Transport = async req => new Promise((_resolve, reject) => {

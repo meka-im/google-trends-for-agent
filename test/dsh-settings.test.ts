@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -228,6 +229,14 @@ describe('dsh settings form', () => {
     expect(html).toContain('or deploy manually');
     expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent#deploy-it-yourself"');
     expect(html).toContain('aria-label="Actor"');
+  });
+
+  it('keeps the manual deploy anchor in both READMEs', () => {
+    const en = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+    const zh = readFileSync(new URL('../README.zh-CN.md', import.meta.url), 'utf8');
+    expect(en).toContain('### Deploy it yourself');
+    expect(zh).toContain('<a id="deploy-it-yourself"></a>');
+    expect(zh).toContain('### 自行部署');
   });
 
   it('shows Actor list loading and error states for actor-own', () => {

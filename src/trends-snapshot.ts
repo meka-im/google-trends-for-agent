@@ -208,6 +208,12 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const weekSnap = snap.filter.time === 'now 7-d' ? snap : opts.week;
   const week = weekSnap ? (weekSnap === snap ? primary : calibrate(weekSnap, chartOptions)) : undefined;
   const filter = snap.filter, anchorTerm = primary.anchorTerm, traffic = primary.traffic;
+  // A blocked/rate-limited secondary window still means the upstream stopped us;
+  // surface its code so one-off batches halt while keeping the primary data.
+  const blockedWeek = weekSnap && weekSnap !== snap && ['BLOCKED', 'RATE_LIMITED'].includes(weekSnap.error?.code ?? '');
+  const blockError = ['BLOCKED', 'RATE_LIMITED'].includes(snap.error?.code ?? '') ? snap.error : blockedWeek ? weekSnap.error : undefined;
+  const status = blockError ? 'blocked' as const : snap.status;
+  const error = blockError ?? snap.error;
   const geoLabel = filter.geo || 'Worldwide';
   const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter.geo, opts.baselines);
   if (primary.gapCount) warnings.push(`${primary.gapCount} low-sample gap point${primary.gapCount === 1 ? '' : 's'} in interest series (zero values between nonzero points) excluded from aggregates and verdict`);
@@ -252,14 +258,14 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const chart = { svg: includeSvg ? primary.svg : '', path: chartPath };
   const chart7d = week ? (weekSnap === snap ? chart : { svg: includeSvg ? week.svg : '', path: weekChartPath }) : { svg: '', path: null };
   const traffic7d = week ? week.traffic : nullTraffic();
-  const ok = ['ok', 'no_data', 'partial'].includes(snap.status);
+  const ok = ['ok', 'no_data', 'partial'].includes(status);
   const dailyLabel = primary.trafficAverage === null ? 'no calibrated traffic' : `≈ ${compact(primary.trafficAverage)} searches/day`;
   const ratioLabel = primary.anchor.ratio === null ? '' : `, ${primary.anchor.ratio}× ${anchorTerm}`;
   const summary = ok
     ? `${snap.term} ${dailyLabel} (${filter.geo}·${shortTime(filter.time)})${ratioLabel}; ${verdict.label}`
-    : `${snap.term}: ${snap.status}`;
+    : `${snap.term}: ${status}`;
   return {
-    ok, schemaVersion: 1 as const, status: snap.status, term: snap.term, summary,
+    ok, schemaVersion: 1 as const, status, term: snap.term, summary,
     filter: { geo: filter.geo, time: filter.time, category: filter.category, property: filter.property || 'web' },
     anchor: primary.anchor, anchor7d, traffic,
     series: {
@@ -270,7 +276,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
     chart7d, traffic7d,
     tables: terms,
     verdict,
-    ...errorNote(snap.error),
+    ...errorNote(error),
     meta: {
       cached: opts.cached, ageMin: Math.round(opts.ageMin * 10) / 10, fetchedAt: snap.fetchedAt, snapshotId: snap.id,
       exploreUrl: 'https://trends.google.com/trends/explore?' + new URLSearchParams({ q: snap.term, geo: filter.geo, date: filter.time, cat: String(filter.category), gprop: filter.property || 'web' }),

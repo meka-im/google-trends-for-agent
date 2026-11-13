@@ -323,6 +323,14 @@ function buildOutput(tool: ActorRunTool, geo: string, window: string, terms: str
   };
 }
 
+/** Stable Actor.fail text: counts only, never terms or row error details (those stay in OUTPUT). */
+export function actorFailMessage(output: ActorRunOutput): string {
+  const total = output.delivered + output.noData + output.blocked + output.skipped + output.errors;
+  if (!total) return 'Run failed; see OUTPUT';
+  const failed = output.blocked + output.skipped + output.errors;
+  return `Run failed: ${failed} of ${total} rows failed; see OUTPUT`;
+}
+
 interface ValidatedInput {
   tool: ActorRunTool;
   terms: string[];

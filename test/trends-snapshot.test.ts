@@ -242,6 +242,24 @@ describe('trends_snapshot traffic conversion', () => {
     expect(failed.meta.warnings).toContain('7-day window unavailable: upstream 503');
   });
 
+  it.each([['BLOCKED', undefined], ['RATE_LIMITED', 30]] as const)(
+    'surfaces a secondary-window %s as blocking while keeping primary traffic',
+    async (code, retryAfterSec) => {
+      const week = weekFixture();
+      week.status = 'blocked';
+      week.error = { code, message: `${code} from the 7-day window`, ...(retryAfterSec === undefined ? {} : { retryAfterSec }) };
+      const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, week });
+      expect(e).toMatchObject({
+        ok: false,
+        status: 'blocked',
+        error: { code, message: `${code} from the 7-day window`, ...(retryAfterSec === undefined ? {} : { retryAfterSec }) },
+        traffic: { average: 36540 },
+      });
+      expect(e.summary).toBe('Astra: blocked');
+      expect(e.meta.warnings?.join('\n')).toContain('7-day window blocked');
+    },
+  );
+
   it('breaks the dashed anchor line across anchor gaps instead of painting zeros', async () => {
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null, svg: true });
     // Anchor gaps at indices 1 and 4 split the dashed line; the only drawable

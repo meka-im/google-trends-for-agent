@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chartKeyFor, runOnce, type ActorRunDeps, type ActorRunRow } from '../src/actor-run.js';
+import { actorFailMessage, chartKeyFor, runOnce, type ActorRunDeps, type ActorRunRow } from '../src/actor-run.js';
 import type { GtfaTool } from '../src/tools.js';
 
 const FIELDS: Record<string, unknown> = {
@@ -172,6 +172,27 @@ describe('runOnce mapping', () => {
     expect(values.OUTPUT).toMatchObject({ status: 'partial', delivered: 1, blocked: 1, skipped: 1, errors: 0, partial: true, completed: false });
     expect(result.failed).toBe(false);
   });
+  it.each(['BLOCKED', 'RATE_LIMITED'] as const)('stops a snapshot batch after a %s secondary-window block', async code => {
+    let calls = 0;
+    const envelope = (term: string, blocked: boolean) => ({
+      ok: !blocked, status: blocked ? 'blocked' : 'ok', term,
+      filter: { geo: 'US', time: 'now 1-d', category: 0, property: 'web' },
+      traffic: { average: 36540 }, series: { points: [{ t: '2026-10-31T00:00:00.000Z', score: 40 }, { t: '2026-10-31T01:00:00.000Z', score: 60 }] },
+      anchor: { term: 'sudoku' }, verdict: { label: 'rising' }, tables: {},
+      ...(blocked ? { error: { code, message: '7-day window blocked' } } : {}),
+      meta: { fetchedAt: '2026-10-31T05:00:00.000Z' },
+    });
+    const { deps, pushed, values } = harness(async (_name, input) => {
+      calls += 1;
+      return envelope(String(input.term), calls === 2);
+    });
+    const result = await runOnce({ tool: 'snapshot', terms: ['first', 'second', 'third'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(calls).toBe(2);
+    expect(pushed.map(row => row.status)).toEqual(['ok', code === 'BLOCKED' ? 'blocked' : 'rate_limited', 'skipped']);
+    expect(pushed[2]!.error).toEqual({ code, message: 'skipped after upstream block/rate limit' });
+    expect(values.OUTPUT).toMatchObject({ status: 'partial', delivered: 1, blocked: 1, skipped: 1, completed: false });
+    expect(result.failed).toBe(false);
+  });
   it('marks the run failed when a first blocked term leaves nothing delivered', async () => {
     const { deps, pushed, values } = harness(async () => ({ ok: false, status: 'blocked', error: { code: 'BLOCKED', message: 'challenge page' } }));
     const result = await runOnce({ tool: 'ask', terms: ['blocked', 'later'], geo: 'US', window: 'now 1-d' }, deps);
@@ -185,6 +206,14 @@ describe('runOnce mapping', () => {
     await runOnce({ tool: 'ask', terms: ['private query one', 'private query two'], geo: 'US', window: 'now 1-d' }, deps);
     expect(logs).toEqual(['Row 1: error', 'Row 2: error']);
     for (const message of logs) expect(message).not.toMatch(/private query/);
+  });
+
+  it('builds a term-free Actor.fail message while keeping details in OUTPUT', async () => {
+    const { deps, values } = harness(async () => ({ ok: false, status: 'error', error: { code: 'INVALID_INPUT', message: 'duplicate keyword: "private query"' } }));
+    const result = await runOnce({ tool: 'ask', terms: ['private query'], geo: 'US', window: 'now 1-d' }, deps);
+    expect(result.failed).toBe(true);
+    expect((values.OUTPUT as { message: string }).message).toContain('private query');
+    expect(actorFailMessage(result.output)).toBe('Run failed: 1 of 1 rows failed; see OUTPUT');
   });
 
   it('treats all no_data rows as completed, and all errors as failed', async () => {

@@ -5,7 +5,7 @@ import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './a
 import { createDefaultTransport, errorLabel, type Transport } from './transport.js';
 import { createTools, type GtfaTool } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
-import { runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
+import { actorFailMessage, runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
 import { VERSION } from './version.js';
 
 interface ActorInput extends ActorRunInput {
@@ -29,7 +29,7 @@ try {
       setValue: (key, value, options) => Actor.setValue(key, value, options),
       log: message => console.log(message),
     });
-    await Actor.fail(result.output.message);
+    await Actor.fail(actorFailMessage(result.output));
   }
   const geoInput = text(input.geo, 'US');
   const geo = geoInput.toUpperCase() === 'WORLDWIDE' ? '' : geoInput;
@@ -86,7 +86,7 @@ try {
       setValue: (key, value, options) => Actor.setValue(key, value, options),
       log: message => console.log(message),
     });
-    if (result.failed) await Actor.fail(result.output.message);
+    if (result.failed) await Actor.fail(actorFailMessage(result.output));
     else await Actor.exit();
   } else {
     const port = resolveStandbyPort();

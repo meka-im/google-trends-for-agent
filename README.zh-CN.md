@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-407%20passed-22c55e?style=flat-square" alt="407 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-416%20passed-22c55e?style=flat-square" alt="416 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src=".actor/icon.png" alt="google-trends-for-agent" width="44" height="44" align="middle"> <strong>在 Apify Store 打开 →</strong></a></p>
 
@@ -41,7 +41,9 @@
 
 公共 Standby 实测：单次 `trends_ask` ≈ $0.0024（2026-11-13 实测，Apify 免费版费率）；快照 ≈ $0.0029；额外热调用 ≈ $0.0008。快照、会话和计算公式见 [Actor costs](docs/reference.md#actor-costs)。
 
-**自行部署**
+<a id="deploy-it-yourself"></a>
+
+### 自行部署
 
 1. [Fork 仓库](https://github.com/meka-im/google-trends-for-agent/fork)。
 2. 在 Apify Console 用 **Link Git repository**（分支 `main`）创建 Actor，或在克隆目录运行 `apify push`。
@@ -148,7 +150,7 @@ dsh plugin --profile web add github:meka-im/google-trends-for-agent
 
 ```sh
 npm install
-npm test          # 407 个测试
+npm test          # 416 个测试
 npm run typecheck
 npm run build
 npm run trends -- --help

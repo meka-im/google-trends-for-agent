@@ -133,16 +133,19 @@ export interface ListTrendingResponse { status: 'ok' | 'partial' | 'error'; resu
 export async function listTrending(input: ListTrendingInput, options: TrendingOptions = {}): Promise<ListTrendingResponse> {
   const geos = normalizeTrendingGeos(input.geos, false);
   const results: TrendingResponse[] = [];
-  let blocked = false;
+  let halted: { code: TrendsErrorCode; message: string } | undefined;
   let shared: TrendingOptions;
   try { shared = { ...options, transport: options.transport ?? createDefaultTransport(), limiter: options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 }) }; }
   catch { shared = options; }
   for (const geo of geos) {
     throwIfAborted(options.signal);
-    const result = blocked ? failure({ ...input, geo }, 'BLOCKED', 'skipped after upstream block') : await fetchTrending({ ...input, geo }, shared);
+    const result = halted ? failure({ ...input, geo }, halted.code, halted.message) : await fetchTrending({ ...input, geo }, shared);
     throwIfAborted(options.signal);
     results.push(result);
-    if (options.stopOnBlocked !== false && result.error?.code === 'BLOCKED') blocked = true;
+    if (options.stopOnBlocked !== false) {
+      if (result.error?.code === 'BLOCKED') halted = { code: 'BLOCKED', message: 'skipped after upstream block' };
+      else if (result.error?.code === 'RATE_LIMITED') halted = { code: 'RATE_LIMITED', message: 'skipped after upstream rate limit' };
+    }
   }
   const ok = results.filter(r => r.status === 'ok').length;
   return { status: ok === results.length ? 'ok' : ok ? 'partial' : 'error', results, summary: { geos: results.length, ok, failed: results.length - ok } };

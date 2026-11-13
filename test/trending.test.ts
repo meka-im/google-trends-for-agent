@@ -132,6 +132,18 @@ describe('Trending Now offline', () => {
     await listTrending({ geos: ['SG', 'US', 'JP'] }, { ...opts, transport: blocked, stopOnBlocked: false });
     expect(calls).toBe(3);
   });
+  it('stops on rate limit and can opt out', async () => {
+    let calls = 0, clock = 0;
+    const limited: Transport = async req => ++calls === 2 ? { status: 429, headers: { 'retry-after': '30' }, body: '' } : transport(req);
+    const timed = { ...opts, transport: limited, now: () => clock, sleep: async (ms: number) => { clock += ms; } };
+    const batch = await listTrending({ geos: ['SG', 'US', 'JP'] }, timed);
+    expect(calls).toBe(2); expect(batch.status).toBe('partial');
+    expect(batch.results[1].error).toMatchObject({ code: 'RATE_LIMITED', retryAfterSec: 30 });
+    expect(batch.results[2].error).toEqual({ code: 'RATE_LIMITED', message: 'skipped after upstream rate limit' });
+    calls = 0; clock = 0;
+    await listTrending({ geos: ['SG', 'US', 'JP'] }, { ...timed, stopOnBlocked: false });
+    expect(calls).toBe(3);
+  });
   it('diffs by normalized query', async () => {
     const prev = await fetchTrending({ geo: 'SG' }, opts);
     const next = structuredClone(prev);
