@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { TrendsFilter } from './filter.js';
 import { BUILTIN_ANCHOR_TERMS } from './options.js';
 
 export interface Anchor { term: string; dailySearches?: number; tolerance?: number; geo: string }
@@ -38,11 +39,28 @@ export function anchorDailySearches(a: Anchor): number | null {
   const daily = a.dailySearches;
   return daily !== undefined && Number.isFinite(daily) && daily > 0 ? daily : null;
 }
-/** Match a calibration by term + geo in user baselines first, then the built-in US anchors. */
-export function findAnchor(baselines: Baselines | undefined, term: string, geo: string): Anchor | undefined {
+/** Calibration is published only for web search across all categories. */
+function supportsBaseline(filter: Pick<TrendsFilter, 'category' | 'property'>): boolean {
+  return filter.category === 0 && ['', 'web'].includes(filter.property.trim().toLowerCase());
+}
+/** Explain why an anchor must not be applied to the requested search scope. */
+export function baselineScopeMismatch(filter: Pick<TrendsFilter, 'category' | 'property'>): string | undefined {
+  if (supportsBaseline(filter)) return;
+  const property = filter.property.trim().toLowerCase() || 'web';
+  return `Baseline calibration applies only to web/all categories; requested category ${filter.category}, property ${property}`;
+}
+/** Match a calibration by term + normalized geo in user baselines first, then the built-in US anchors. */
+export function findAnchor(
+  baselines: Baselines | undefined,
+  term: string,
+  geo: string,
+  filter: Pick<TrendsFilter, 'category' | 'property'> = { category: 0, property: '' },
+): Anchor | undefined {
+  if (!supportsBaseline(filter)) return undefined;
   const wanted = term.trim().toLowerCase();
-  return baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo === geo)
-    ?? BUILTIN_ANCHORS.find(a => a.term === wanted && a.geo === geo);
+  const wantedGeo = geo.trim().toUpperCase();
+  return baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo.trim().toUpperCase() === wantedGeo)
+    ?? BUILTIN_ANCHORS.find(a => a.term === wanted && a.geo.trim().toUpperCase() === wantedGeo);
 }
 /** Validate a version 2 baselines value; version 1 is rejected rather than translated. */
 export function parseBaselines(parsed: unknown, source = 'baselines'): Baselines {

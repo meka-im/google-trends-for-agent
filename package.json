@@ -33,6 +33,7 @@
     "AGENTS.md",
     "README.md",
     "README.zh-CN.md",
+    ".actor/README.md",
     "docs/mcp-api.md",
     "docs/reference.md",
     "LICENSE",
@@ -55,12 +56,20 @@
     "undici": "^6.21.0",
     "zod": "^4.6.7"
   },
+  "bundleDependencies": [
+    "apify"
+  ],
   "peerDependencies": {
     "@deepseek-ai/schemastery": "~3.18.5"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/schemastery": {
       "optional": true
+    }
+  },
+  "overrides": {
+    "@crawlee/core": {
+      "minimatch": "^11.0.1"
     }
   },
   "devDependencies": {

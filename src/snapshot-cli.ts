@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { resolveFilter } from './filter.js';
 import { SnapshotStore } from './snapshot.js';
 import { fetchTrafficSnapshot, trafficSnapshotEnvelope, trafficSnapshotError } from './trends-snapshot.js';
-import type { queryTrends } from './api.js';
+import { queryTrends } from './api.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { resolveTimeZone } from './timezone.js';
 
@@ -14,6 +14,7 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   --anchor TERM                     Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+
   --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
+  --timeout MS                      Request timeout (integer 1000-60000; Explore default 8000)
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
   --chart-dir DIR                   SVG output directory (default .gtfa/charts)
   --tz <IANA>                       Chart time zone (default GTFA_TZ, then UTC)
@@ -23,6 +24,25 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   Environment: GTFA_BASELINES=/path/baselines.json overrides anchor baselines
   --help`;
 
+function timeoutValue(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1000 || value > 60000) {
+    throw new Error('timeout must be an integer between 1000 and 60000');
+  }
+  return value;
+}
+
+function withTimeout(query: typeof queryTrends, timeoutMs: number | undefined): typeof queryTrends {
+  if (timeoutMs === undefined) return query;
+  return (input, options) => {
+    const body = input && typeof input === 'object' && !Array.isArray(input)
+      ? { ...(input as Record<string, unknown>), timeoutMs }
+      : input;
+    return query(body, options);
+  };
+}
+
 /** `snapshot` command: calibrated traffic estimate, chart, and related queries. */
 export async function runSnapshotCli(args: string[], options: { query?: typeof queryTrends; baselines?: Baselines; chartDir?: string | null } = {}) {
   let json = false, pretty = false;
@@ -30,10 +50,12 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       geo: { type: 'string' }, time: { type: 'string' }, anchor: { type: 'string' }, 'max-age': { type: 'string' },
       store: { type: 'string' }, 'chart-dir': { type: 'string' }, tz: { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
-      fresh: { type: 'boolean' }, help: { type: 'boolean' },
+      fresh: { type: 'boolean' }, timeout: { type: 'string' }, help: { type: 'boolean' },
     } });
     json = v.json ?? false; pretty = v.pretty ?? false;
     if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? snapshotHelp : JSON.stringify({ help: snapshotHelp }), stderr: '' };
+    const timeoutMs = timeoutValue(v.timeout);
+    const query = withTimeout(options.query ?? queryTrends, timeoutMs);
     const term = positionals.join(' ').trim();
     if (!term) throw new Error('provide a term');
     const maxAgeMin = v['max-age'];
@@ -44,7 +66,7 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
     if (!Number.isFinite(maxAge) || maxAge < 0) throw new Error('invalid max-age');
     const baselines = options.baselines ?? await loadBaselinesFromEnv();
     const result = await fetchTrafficSnapshot(term, {
-      filter, store, anchor: v.anchor, baselines, maxAgeMin: maxAge, query: options.query, timeZone,
+      filter, store, anchor: v.anchor, baselines, maxAgeMin: maxAge, query, timeZone,
       refresh: v.fresh ? 'always' : undefined,
     });
     const chartDir = v['chart-dir'] ?? options.chartDir;
@@ -53,7 +75,9 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
       week: result.week, timeZone, ...(result.weekError ? { weekError: result.weekError } : {}), ...(v.anchor ? { weekAnchor: v.anchor } : {}),
       ...(chartDir !== undefined ? { chartDir } : {}), svg: v.svg === true,
     });
-    const code = !envelope.ok ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1) : 0;
+    const code = !envelope.ok
+      ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1)
+      : envelope.status === 'partial' ? 2 : 0;
     const stderr = !envelope.ok ? `${envelope.error?.code ?? 'ERROR'}: ${envelope.error?.message ?? envelope.status}` : '';
     if (json) return { code, stdout: JSON.stringify(envelope, null, pretty ? 2 : undefined), stderr };
     if (!envelope.ok) return { code, stdout: JSON.stringify(envelope, null, pretty ? 2 : undefined), stderr };

@@ -7,7 +7,7 @@ import { renderTrafficChart, type TrafficChartPoint } from './chart.js';
 import { filterInput, resolveFilter, settledPoints, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints } from './gaps.js';
 import { gateLowSample, isLowSample, LOW_SAMPLE_WARNING, normalizeKeyword, SnapshotStore, type TermSnapshot } from './snapshot.js';
-import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
+import { anchorDailySearches, baselineScopeMismatch, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, round2 } from './calibration.js';
 import type { InterestOverTime, RelatedQueries } from './core.js';
 import { resolveTimeZone } from './timezone.js';
@@ -114,29 +114,35 @@ async function fetchOne(term: string, opts: TrafficSnapshotOptions, store: Snaps
 }
 
 /** Cached snapshot fetch for trends_snapshot / CLI snapshot (same 360-minute default as ask).
- * Also loads a now 7-d comparison in parallel unless the primary window already is now 7-d. */
+ * Loads a now 7-d comparison after the primary unless the primary is blocked or already now 7-d. */
 export async function fetchTrafficSnapshot(term: string, opts: TrafficSnapshotOptions = {}): Promise<TrafficSnapshotResult> {
   resolveTimeZone(opts.timeZone);
   const store = opts.store ?? new SnapshotStore(), filter = resolveFilter(opts.filter);
   const explicit = opts.anchor?.trim();
   const anchorTerm = explicit || defaultAnchorFor(filter.time, opts.baselines);
   const weekAnchor = explicit || defaultAnchorFor('now 7-d', opts.baselines);
-  const primary = fetchOne(term, opts, store, filter, anchorTerm);
-  if (filter.time === 'now 7-d') {
-    const result = await primary;
-    return { ...result, week: result.snapshot };
+  const result = await fetchOne(term, opts, store, filter, anchorTerm);
+  if (filter.time === 'now 7-d') return { ...result, week: result.snapshot };
+  if (result.snapshot.status === 'blocked') {
+    const code = result.snapshot.error?.code ?? 'BLOCKED';
+    return { ...result, weekError: `Primary window ${code}; 7-day window skipped` };
   }
   let weekError: string | undefined;
-  const week = fetchOne(term, opts, store, { ...filter, time: 'now 7-d' }, weekAnchor)
-    .catch(e => { if (isAbortError(e)) throw e; weekError = e instanceof Error ? e.message : String(e); return undefined; });
-  const [result, weekResult] = await Promise.all([primary, week]);
-  return { ...result, ...(weekResult ? { week: weekResult.snapshot } : {}), ...(weekError ? { weekError } : {}) };
+  try {
+    const week = await fetchOne(term, opts, store, { ...filter, time: 'now 7-d' }, weekAnchor);
+    return { ...result, week: week.snapshot };
+  } catch (e) {
+    if (isAbortError(e)) throw e;
+    weekError = e instanceof Error ? e.message : String(e);
+    return { ...result, weekError };
+  }
 }
 
 /** Baseline block for a window that has no snapshot (e.g. the extra 7-day fetch failed). */
-function baselineAnchor(term: string, geo: string, baselines?: Baselines) {
-  const calibration = findAnchor(baselines, term, geo);
+function baselineAnchor(term: string, filter: TrendsFilter, baselines?: Baselines) {
+  const calibration = findAnchor(baselines, term, filter.geo, filter);
   const daily = calibration ? anchorDailySearches(calibration) : null;
+  const scopeMismatch = baselineScopeMismatch(filter);
   return {
     term,
     dailySearches: daily === null ? null : round(daily),
@@ -144,7 +150,11 @@ function baselineAnchor(term: string, geo: string, baselines?: Baselines) {
     level: null,
     ratio: null,
     source: 'baseline' as const,
-    note: 'No now 7-d snapshot; baseline only',
+    note: scopeMismatch
+      ? `${scopeMismatch}; traffic fields are null`
+      : daily === null
+        ? `No calibration for geo ${filter.geo || 'Worldwide'}; baseline only`
+        : 'No now 7-d snapshot; baseline only',
   };
 }
 
@@ -152,12 +162,15 @@ function baselineAnchor(term: string, geo: string, baselines?: Baselines) {
 function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
   const filter = snap.filter;
   const anchorTerm = snap.anchor?.term ?? defaultAnchorFor(filter.time, opts.baselines);
-  const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
+  const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo, filter);
   const daily = calibration ? anchorDailySearches(calibration) : null;
   const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
+  const scopeMismatch = baselineScopeMismatch(filter);
+  const scopeWarning = scopeMismatch ? `${scopeMismatch}; traffic fields are null` : undefined;
   const lowSample = isLowSample(snap);
   const c = calibrateTraffic(snap.interest.points, snap.anchor?.points ?? [], { filter, dailySearches: lowSample ? null : daily, tolerance });
   if (lowSample) { c.ratio = null; c.note = LOW_SAMPLE_WARNING; c.warning = LOW_SAMPLE_WARNING; }
+  else if (daily === null) c.note = scopeMismatch ? `${scopeMismatch}; traffic fields are null` : `No calibration for geo ${filter.geo || 'Worldwide'}; traffic fields are null`;
   const anchor = {
     term: anchorTerm,
     dailySearches: daily === null ? null : round(daily),
@@ -175,7 +188,7 @@ function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
     anchorKept: c.anchorKept, anchorLevel: c.anchorLevel, kept: c.kept, factor: c.factor,
     trafficAverage: c.traffic.average, gapCount: c.traffic.gapCount, traffic: c.traffic, anchor,
     seriesTraffic: c.seriesTraffic, anchorTraffic: c.anchorTraffic, svg,
-    ...(c.warning ? { warning: c.warning } : {}),
+    ...(c.warning ? { warning: c.warning } : scopeWarning ? { warning: scopeWarning } : {}),
   };
 }
 
@@ -218,9 +231,12 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const status = blockError ? 'blocked' as const : snap.status;
   const error = blockError ?? snap.error;
   const geoLabel = filter.geo || 'Worldwide';
-  const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter.geo, opts.baselines);
+  const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter, opts.baselines);
   if (primary.gapCount) warnings.push(`${primary.gapCount} low-sample gap point${primary.gapCount === 1 ? '' : 's'} in interest series (zero values between nonzero points) excluded from aggregates and verdict`);
-  if (primary.daily === null) warnings.push(`No anchor calibration for geo ${geoLabel}; traffic fields are null`);
+  if (primary.daily === null) {
+    const scopeMismatch = baselineScopeMismatch(filter);
+    warnings.push(scopeMismatch ? `${scopeMismatch}; traffic fields are null` : `No anchor calibration for geo ${geoLabel}; traffic fields are null`);
+  }
   else if (primary.warning) warnings.push(primary.warning);
   if (snap.warnings?.length) warnings.push(...snap.warnings);
   if (weekSnap && weekSnap !== snap) {
@@ -232,12 +248,10 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   if (opts.weekError) warnings.push(`7-day window unavailable: ${opts.weekError}`);
   else if (!weekSnap) warnings.push('7-day window unavailable: no now 7-d snapshot');
   const terms = {
-    popular: snap.popular.map(r => ({ rank: r.rank, query: r.query, value: r.value, formattedValue: String(r.value), estDaily: primary.trafficAverage === null ? null : round(r.value / 100 * primary.trafficAverage) })),
+    popular: snap.popular.map(r => ({ rank: r.rank, query: r.query, value: r.value, formattedValue: String(r.value), estDaily: null })),
     rising: snap.rising.map(r => {
       const formatted = r.formattedValue ?? (r.breakout ? 'Breakout' : `+${r.value}%`);
-      const match = snap.popular.find(p => p.query.trim().toLowerCase() === r.query.trim().toLowerCase());
-      const estDaily = match && primary.trafficAverage !== null ? round(match.value / 100 * primary.trafficAverage) : null;
-      return { rank: r.rank, query: r.query, value: r.value, formattedValue: formatted, breakout: r.breakout, estDaily };
+      return { rank: r.rank, query: r.query, value: r.value, formattedValue: formatted, breakout: r.breakout, estDaily: null };
     }),
   };
   const verdict = verdictFor(blockError ? { ...snap, status: 'blocked', error: blockError } : snap, traffic);

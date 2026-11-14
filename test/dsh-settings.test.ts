@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ConfigPage, EN, ZH, deployApifyActor, fromSnapshot, loadApifyActors, loadApifyUsage, opsFor,
-  resolveDeployBuild, withPendingAnchor, type ApifyActorsView, type ApifyUsageView, type Draft,
+  resolveDeployBuild, setBaselineOverride, validateDraft, withPendingAnchor,
+  type ApifyActorsView, type ApifyUsageView, type Draft,
 } from '../src/client/index.js';
 import {
   APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -431,6 +432,67 @@ describe('saving the new-anchor row', () => {
     expect(saved.newAnchor.term).toBe('');
     const off = { ...base, baselineOverride: false };
     expect(withPendingAnchor(off)).toBe(off);
+  });
+});
+
+describe('US baseline overrides', () => {
+  it('starts with both editable US defaults and keeps saved rows and windows', () => {
+    const empty = fromSnapshot(undefined);
+    const draft = setBaselineOverride(empty, true);
+    expect(draft.anchors).toEqual([
+      { term: 'gpts', geo: 'US', dailySearches: '3500', tolerance: '0.5' },
+      { term: 'sudoku', geo: 'US', dailySearches: '63000', tolerance: '0.5' },
+    ]);
+
+    const html = render({ draft });
+    expect(html).toMatch(/aria-label="Searches\/day gpts"[^>]*value="3500"/);
+    expect(html).toMatch(/aria-label="Searches\/day sudoku"[^>]*value="63000"/);
+
+    const saved = fromSnapshot({
+      baselines: {
+        anchors: [
+          { term: 'gpts', geo: 'US', dailySearches: 3500, tolerance: 0.5 },
+          { term: 'custom', geo: 'GB', dailySearches: 1200, tolerance: 0.25 },
+        ],
+        windowAnchors: { short: 'custom', long: 'gpts' },
+      },
+    });
+    expect(setBaselineOverride(saved, true)).toMatchObject({
+      anchors: saved.anchors,
+      windowShort: 'custom',
+      windowLong: 'gpts',
+    });
+  });
+
+  it('allows removed or other-geo built-ins but rejects a current term and geo duplicate', () => {
+    const draft = setBaselineOverride(fromSnapshot(undefined), true);
+    const duplicate = validateDraft({
+      ...draft,
+      newAnchor: { term: 'sudoku', geo: 'US', dailySearches: '100', tolerance: '0.5' },
+    }, t);
+    expect(duplicate.newAnchorTerm).toBe(EN.duplicateAnchor);
+
+    const otherGeo = validateDraft({
+      ...draft,
+      newAnchor: { term: 'sudoku', geo: 'GB', dailySearches: '100', tolerance: '0.5' },
+    }, t);
+    expect(otherGeo.newAnchorTerm).toBeUndefined();
+
+    const removed = { ...draft, anchors: draft.anchors.filter(anchor => anchor.term !== 'sudoku') };
+    const restored = {
+      ...removed,
+      newAnchor: { term: 'sudoku', geo: 'US', dailySearches: '63000', tolerance: '0.5' },
+    };
+    expect(validateDraft(restored, t).newAnchorTerm).toBeUndefined();
+    expect(opsFor(withPendingAnchor(restored), t)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        op: 'set',
+        path: ['baselines'],
+        value: expect.objectContaining({
+          anchors: expect.arrayContaining([expect.objectContaining({ term: 'sudoku', geo: 'US' })]),
+        }),
+      }),
+    ]));
   });
 });
 

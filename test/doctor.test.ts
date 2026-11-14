@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runDoctor } from '../src/doctor.js';
 import type { TrendsResponse } from '../src/api.js';
 import type { Transport } from '../src/transport.js';
@@ -43,10 +43,45 @@ describe('gtfa doctor', () => {
     expect(r.checks[2].detail).not.toContain('alice');
     expect(r.checks[2].detail).not.toContain('secret');
   });
-  it('reports actionable fetch and challenge failures', async () => {
-    const rate = await runDoctor({ env: {}, nodeVersion: 'v20.0.0', transport: async () => response(200, 'captcha'), query: async () => ({ status: 'error', input: {}, error: { code: 'RATE_LIMITED', message: 'rate limit' }, meta: { upstreamRequests: 1, durationMs: 1, warnings: [], fetchedAt: '2026-01-01T00:00:00.000Z' } }) });
+  it('reports actionable fetch failures', async () => {
+    const rate = await runDoctor({ env: {}, nodeVersion: 'v20.0.0', transport: okTransport, query: async () => ({ status: 'error', input: {}, error: { code: 'RATE_LIMITED', message: 'rate limit' }, meta: { upstreamRequests: 1, durationMs: 1, warnings: [], fetchedAt: '2026-01-01T00:00:00.000Z' } }) });
     expect(rate.ok).toBe(false);
-    expect(rate.checks[1]).toMatchObject({ name: 'reachability', ok: false, hint: expect.stringContaining('HTTPS_PROXY/HTTP_PROXY') });
     expect(rate.checks[3]).toMatchObject({ name: 'fetch', ok: false, detail: expect.stringContaining('RATE_LIMITED'), hint: expect.stringContaining('retryAfterSec') });
+  });
+
+  it.each([
+    ['redirect', 302, '', { location: 'https://www.google.com/sorry/index' }],
+    ['challenge page', 200, '<html>unusual traffic captcha</html>', {}],
+    ['rate limit', 429, '', {}],
+  ] as const)('stops the gpts fetch after a reachability %s', async (_name, status, body, headers) => {
+    const query = vi.fn(okQuery);
+    const r = await runDoctor({ env: {}, nodeVersion: 'v20.0.0', transport: async () => response(status, body, headers), query });
+    expect(r.ok).toBe(false);
+    expect(query).not.toHaveBeenCalled();
+    expect(r.checks[1]).toMatchObject({ name: 'reachability', ok: false });
+    expect(r.checks[3]).toMatchObject({ name: 'fetch', ok: false, detail: expect.stringContaining('skipped after upstream') });
+  });
+
+  it('keeps rate-limit semantics for a 429 that also contains challenge text', async () => {
+    const query = vi.fn(okQuery);
+    const r = await runDoctor({ env: {}, nodeVersion: 'v20.0.0', transport: async () => response(429, 'captcha'), query });
+    expect(query).not.toHaveBeenCalled();
+    expect(r.checks[1]).toMatchObject({ ok: false, hint: expect.stringContaining('retryAfterSec') });
+    expect(r.checks[3].detail).toContain('RATE_LIMITED');
+  });
+
+  it('passes the selected timeout to both reachability and fetch', async () => {
+    const transportTimeouts: number[] = [];
+    const queryTimeouts: number[] = [];
+    const r = await runDoctor({
+      env: {},
+      nodeVersion: 'v20.0.0',
+      timeoutMs: 1500,
+      transport: async request => { transportTimeouts.push(request.timeoutMs); return response(); },
+      query: async input => { queryTimeouts.push(Number(input.timeoutMs)); return okQuery(); },
+    });
+    expect(r.ok).toBe(true);
+    expect(transportTimeouts).toEqual([1500]);
+    expect(queryTimeouts).toEqual([1500]);
   });
 });

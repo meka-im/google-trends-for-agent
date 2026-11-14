@@ -6,7 +6,9 @@ export interface DoctorCliResult { stdout: string; stderr: string; code: number 
 const help = `gtfa doctor — check this machine can reach Google Trends
 
 Usage:
-  gtfa doctor [--json] [--pretty]
+  gtfa doctor [--json] [--pretty] [--timeout MS]
+
+  --timeout MS   Per-request timeout, 1000–60000 (default 8000)
 
 Checks:
   node           Node.js >= 20
@@ -28,16 +30,26 @@ export function formatDoctor(result: DoctorResult): string {
 }
 
 export async function runDoctorCli(argv: string[]): Promise<DoctorCliResult> {
-  let values: { json?: boolean; pretty?: boolean; help?: boolean };
+  let values: { json?: boolean; pretty?: boolean; help?: boolean; timeout?: string };
+  let timeoutMs: number | undefined;
   try {
-    values = parseArgs({ args: argv, options: { json: { type: 'boolean' }, pretty: { type: 'boolean' }, help: { type: 'boolean' } } }).values;
+    values = parseArgs({
+      args: argv,
+      options: { json: { type: 'boolean' }, pretty: { type: 'boolean' }, help: { type: 'boolean' }, timeout: { type: 'string' } },
+    }).values;
+    if (values.help) return { stdout: values.json ? JSON.stringify({ help }) : help, stderr: '', code: 0 };
+    if (values.timeout !== undefined) {
+      timeoutMs = Number(values.timeout);
+      if (!/^\d+$/.test(values.timeout) || !Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 60000) {
+        throw new Error('timeout must be an integer from 1000 to 60000');
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'invalid arguments';
     return { stdout: JSON.stringify({ ok: false, error: { code: 'INVALID_INPUT', message }, checks: [], summary: { passed: 0, failed: 0 } }), stderr: '', code: 4 };
   }
-  if (values.help) return { stdout: values.json ? JSON.stringify({ help }) : help, stderr: '', code: 0 };
   try {
-    const result = await runDoctor();
+    const result = await runDoctor({ timeoutMs });
     return { stdout: values.json ? JSON.stringify(result, null, values.pretty ? 2 : undefined) : formatDoctor(result), stderr: '', code: result.ok ? 0 : 1 };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'doctor failed';

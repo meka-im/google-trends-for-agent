@@ -105,12 +105,17 @@ function collect(result: unknown): Tables {
 }
 
 const headers = (rows: Row[]): string[] => [...new Set(rows.flatMap(row => Object.keys(row)))];
-/** CSV consumers may remove whitespace before deciding whether a cell is a formula. */
-const safeCsv = (value: Scalar | undefined): string => {
-  const text = value == null ? '' : String(value);
-  return typeof value === 'string' && /^[\s\uFEFF]*[=+@-]/u.test(text) ? `'${text}` : text;
-};
-const quote = (value: Scalar | undefined) => `"${safeCsv(value).replace(/"/g, '""')}"`;
+/**
+ * Encode one RFC 4180 cell. Objects and arrays are JSON encoded before the
+ * single CSV encoding pass, so their commas and quotes remain inside one cell.
+ */
+export function csvCell(value: unknown): string {
+  const text = value == null ? '' : typeof value === 'string' ? value :
+    typeof value === 'object' ? JSON.stringify(value) ?? '' : String(value);
+  // CSV consumers may remove whitespace before deciding whether a cell is a formula.
+  const safe = typeof value === 'string' && /^[\s\uFEFF]*[=+@-]/u.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[char]!));
 
 function xml(value: unknown): string {
@@ -133,7 +138,7 @@ export async function formatGTrendsExport(result: unknown, format: GTrendsExport
       return { type, ...fields, ...(sourceType !== undefined ? { sourceType } : {}) };
     }));
     const columns = headers(rows);
-    const body = '\uFEFF' + [columns.map(quote).join(','), ...rows.map(row => columns.map(key => quote(row[key])).join(','))].join('\r\n') + '\r\n';
+    const body = '\uFEFF' + [columns.map(csvCell).join(','), ...rows.map(row => columns.map(key => csvCell(row[key])).join(','))].join('\r\n') + '\r\n';
     return { filename, contentType: 'text/csv; charset=utf-8', body };
   }
   if (format === 'html') {

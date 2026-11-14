@@ -8,7 +8,8 @@ export function resolveFilter(args: Partial<TrendsFilter> = {}, config?: Partial
     catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
   }
   const defined = (x: object) => Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined));
-  return { ...DEFAULT_FILTER, ...defined({ geo: env.GTFA_GEO, time: env.GTFA_TIME }), ...defined(config ?? {}), ...defined(args) };
+  const resolved = { ...DEFAULT_FILTER, ...defined({ geo: env.GTFA_GEO, time: env.GTFA_TIME }), ...defined(config ?? {}), ...defined(args) };
+  return { ...resolved, geo: resolved.geo.trim().toUpperCase() };
 }
 export function filterInput(f: TrendsFilter) {
   return { geo: f.geo, timeRange: f.time, category: f.category, searchType: (f.property === 'froogle' ? 'shopping' : f.property || 'web') as GTrendsSearchType, ...(f.hl ? { locale: f.hl } : {}) };

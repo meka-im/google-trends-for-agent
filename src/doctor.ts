@@ -1,6 +1,8 @@
 import { queryTrends, type TrendsResponse } from './api.js';
 import { GTrendsError } from './core.js';
-import { createDefaultTransport, getProxyConfig, redactProxyUrl, type Transport } from './transport.js';
+import {
+  createDefaultTransport, getProxyConfig, isChallengeResponse, isRateLimitResponse, redactProxyUrl, type Transport,
+} from './transport.js';
 
 export const REQUIRED_NODE_MAJOR = 20;
 export const DOCTOR_TIMEOUT_MS = 8000;
@@ -32,6 +34,11 @@ const hintFor = (code?: string): string => {
 };
 
 const failureDetail = (error: unknown): string => error instanceof GTrendsError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error);
+type StopFetchCode = 'BLOCKED' | 'RATE_LIMITED';
+interface ReachabilityResult {
+  check: DoctorCheck;
+  stopFetchCode?: StopFetchCode;
+}
 
 function nodeCheck(version: string): DoctorCheck {
   const major = Number(/^v?(\d+)/.exec(version)?.[1] ?? 0);
@@ -56,26 +63,39 @@ function proxyCheck(env: NodeJS.ProcessEnv): { check: DoctorCheck; proxy: Doctor
   }
 }
 
-async function reachabilityCheck(transport: Transport | undefined, transportError: unknown, timeoutMs: number): Promise<DoctorCheck> {
-  if (!transport) return { name: 'reachability', ok: false, detail: `could not create transport: ${failureDetail(transportError)}`, hint: hintFor('NETWORK_ERROR') };
+async function reachabilityCheck(transport: Transport | undefined, transportError: unknown, timeoutMs: number): Promise<ReachabilityResult> {
+  if (!transport) return {
+    check: { name: 'reachability', ok: false, detail: `could not create transport: ${failureDetail(transportError)}`, hint: hintFor('NETWORK_ERROR') },
+  };
   const started = Date.now();
   try {
     const res = await transport({ url: 'https://trends.google.com/trends/', method: 'HEAD', headers: { 'user-agent': 'Mozilla/5.0', accept: 'text/html' }, timeoutMs });
     const ms = Date.now() - started;
-    const challenge = /\/sorry(?:\/|\b)/i.test(res.headers.location ?? '') || /captcha|unusual traffic/i.test(res.body);
-    if (res.status === 429) return { name: 'reachability', ok: false, detail: `Google Trends responded HTTP 429 in ${ms} ms (rate limited)`, hint: hintFor('RATE_LIMITED') };
-    if (challenge) return { name: 'reachability', ok: false, detail: `Google Trends returned a challenge page in ${ms} ms`, hint: hintFor('BLOCKED') };
-    if (res.status >= 400) return { name: 'reachability', ok: false, detail: `Google Trends responded HTTP ${res.status} in ${ms} ms`, hint: hintFor(res.status >= 500 ? 'TRENDS_TEMPORARILY_UNAVAILABLE' : 'TRENDS_PROTOCOL_CHANGED') };
-    return { name: 'reachability', ok: true, detail: `Google Trends responded HTTP ${res.status} in ${ms} ms` };
+    if (isRateLimitResponse(res)) return {
+      check: { name: 'reachability', ok: false, detail: `Google Trends responded HTTP 429 in ${ms} ms (rate limited)`, hint: hintFor('RATE_LIMITED') },
+      stopFetchCode: 'RATE_LIMITED',
+    };
+    if (isChallengeResponse(res)) return {
+      check: { name: 'reachability', ok: false, detail: `Google Trends returned a challenge page in ${ms} ms`, hint: hintFor('BLOCKED') },
+      stopFetchCode: 'BLOCKED',
+    };
+    if (res.status >= 400) return {
+      check: { name: 'reachability', ok: false, detail: `Google Trends responded HTTP ${res.status} in ${ms} ms`, hint: hintFor(res.status >= 500 ? 'TRENDS_TEMPORARILY_UNAVAILABLE' : 'TRENDS_PROTOCOL_CHANGED') },
+    };
+    return { check: { name: 'reachability', ok: true, detail: `Google Trends responded HTTP ${res.status} in ${ms} ms` } };
   } catch (error) {
-    return { name: 'reachability', ok: false, detail: `could not reach Google Trends: ${failureDetail(error)}`, hint: hintFor(error instanceof GTrendsError ? error.code : 'NETWORK_ERROR') };
+    const code = error instanceof GTrendsError ? error.code : undefined;
+    return {
+      check: { name: 'reachability', ok: false, detail: `could not reach Google Trends: ${failureDetail(error)}`, hint: hintFor(code ?? 'NETWORK_ERROR') },
+      ...(code === 'BLOCKED' || code === 'RATE_LIMITED' ? { stopFetchCode: code } : {}),
+    };
   }
 }
 
-async function fetchCheck(query: ((input: Record<string, unknown>) => Promise<TrendsResponse>) | undefined, skipped?: string): Promise<DoctorCheck> {
+async function fetchCheck(query: ((input: Record<string, unknown>) => Promise<TrendsResponse>) | undefined, timeoutMs: number, skipped?: string): Promise<DoctorCheck> {
   if (!query) return { name: 'fetch', ok: false, detail: skipped ?? 'skipped because no transport is available', hint: hintFor('NETWORK_ERROR') };
   try {
-    const result = await query({ queries: ['gpts'], geo: 'US', timeRange: 'now 1-d', dataTypes: ['interestOverTime'], maxRetries: 1 });
+    const result = await query({ queries: ['gpts'], geo: 'US', timeRange: 'now 1-d', dataTypes: ['interestOverTime'], maxRetries: 1, timeoutMs });
     const timeline = (result.data?.interestOverTime as { timeline?: unknown[] } | undefined)?.timeline;
     const points = Array.isArray(timeline) ? timeline.length : 0;
     if (result.status === 'ok' && points > 0) return { name: 'fetch', ok: true, detail: `gpts US 24h fetch returned ${points} interest points (${result.meta.upstreamRequests} upstream requests)` };
@@ -98,9 +118,12 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorResu
     try { transport = createDefaultTransport(env); }
     catch (error) { transportError = error; }
   }
-  const checks: DoctorCheck[] = [nodeCheck(nodeVersion), await reachabilityCheck(transport, transportError, timeoutMs), proxy.check];
-  const query = options.query ?? (transport && proxy.valid ? (input: Record<string, unknown>) => queryTrends({ ...input, timeoutMs }, { transport }) : undefined);
-  checks.push(await fetchCheck(query, !proxy.valid ? 'skipped because the proxy configuration is invalid' : !transport ? 'skipped because no transport is available' : undefined));
+  const reachability = await reachabilityCheck(transport, transportError, timeoutMs);
+  const checks: DoctorCheck[] = [nodeCheck(nodeVersion), reachability.check, proxy.check];
+  const query = options.query ?? (transport && proxy.valid ? (input: Record<string, unknown>) => queryTrends(input, { transport }) : undefined);
+  checks.push(reachability.stopFetchCode
+    ? { name: 'fetch', ok: false, detail: `skipped after upstream ${reachability.stopFetchCode}`, hint: hintFor(reachability.stopFetchCode) }
+    : await fetchCheck(query, timeoutMs, !proxy.valid ? 'skipped because the proxy configuration is invalid' : !transport ? 'skipped because no transport is available' : undefined));
   const failed = checks.filter(c => !c.ok).length;
   return {
     ok: failed === 0,

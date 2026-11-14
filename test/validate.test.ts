@@ -24,6 +24,8 @@ it('resolves args > config > env > defaults, including worldwide and web', () =>
   expect(resolveFilter({}, {}, {})).toEqual(DEFAULT_FILTER);
   expect(resolveFilter({ geo: '', property: '' }, { geo: 'GB', time: 'today 1-m' }, { GTFA_GEO: 'JP', GTFA_TIME: 'now 7-d' })).toMatchObject({ geo: '', time: 'today 1-m', property: '' });
   expect(resolveFilter({}, {}, { GTFA_GEO: 'JP' }).geo).toBe('JP');
+  expect(resolveFilter({ geo: ' us ' }, {}, {}).geo).toBe('US');
+  expect(resolveFilter({ geo: '   ' }, {}, {}).geo).toBe('');
 });
 it('drops two daily points and one hourly point', () => {
   const points = [0, 1, 2, 3, 4].map(i => ({ time: new Date(Date.UTC(2026, 0, i + 1)).toISOString() }));
@@ -55,6 +57,33 @@ it('uses the full shared-scale comparison window and calibrates only matching ge
       expect(r.anchor.note).toContain('无法估');
     }
   }
+});
+it.each([
+  { label: 'non-web property', filter: { property: 'youtube' } },
+  { label: 'category', filter: { category: 1 } },
+] as const)('keeps ratio but omits absolute traffic for a $label', async ({ filter }) => {
+  const baselines = { version: 2 as const, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 12000, tolerance: 0.2 }] };
+  const query = mock([20, 20, 20, 20, 100]);
+  const [r] = await validateTerms(['x'], { store: await store(), filter, query, baselines });
+  expect(r.anchor).toMatchObject({ dailySearches: null, ratio: 3.6, band: 'high' });
+  expect(r.anchor.traffic).toEqual({ unit: 'searches/day', average: null, latest: null, settledLatest: null, peak: null, low: null, high: null, gapCount: 0 });
+  expect(r.anchor.note).toContain('Baseline calibration applies only to web/all categories');
+  expect(r.anchor.note).not.toContain('No calibration for geo');
+  expect(verdictEnvelope(r).warnings).toEqual([expect.stringContaining('web/all categories')]);
+});
+it('uses an explicit web property with the default US baseline', async () => {
+  const [r] = await validateTerms(['x'], { store: await store(), filter: { property: 'web' }, query: mock([20, 20, 20, 20, 100]) });
+  expect(r.anchor).toMatchObject({ term: 'sudoku', dailySearches: 63000, ratio: 3.6, traffic: { average: 226800 } });
+});
+it('normalizes geo before ask cache lookup, upstream input, and response display', async () => {
+  const s = await store(), query = mock([10, 10, 20, 20, 0]);
+  const first = await askTerm('x', { store: s, filter: { geo: ' us ' }, query });
+  const second = await askTerm('x', { store: s, filter: { geo: 'us' }, query });
+  expect(first.snapshot.filter.geo).toBe('US');
+  expect(second.source).toBe('cache');
+  expect(second.snapshot.id).toBe(first.snapshot.id);
+  expect(query).toHaveBeenCalledTimes(1);
+  expect((query as any).mock.calls[0][0].geo).toBe('US');
 });
 it('matches trends_snapshot traffic for the same fixture comparison', async () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/traffic-snapshot.json', import.meta.url), 'utf8')) as TermSnapshot;
