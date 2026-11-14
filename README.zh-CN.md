@@ -66,7 +66,7 @@
 CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。下方固定的是已审查的完整源码 commit，不是 release tag；只有需要有意跟随当前 `main` 时才省略 ref。
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 完整 SHA 的 GitHub `npx` 入口已用 npm 11.19.1 验证。npm 10.9.4 可能先成功构建同一完整 SHA 依赖，随后在 npm 打包阶段因 `GitFetcher` 缺少 Arborist 依赖而报错。遇到该报错时，请使用下方的 clone → checkout → `npm ci` → pack 持久安装流程，或升级 npm。CLI 和安装后的包仍要求 Node.js 20+。
@@ -78,7 +78,7 @@ npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach 8304fab20544c877ab0f38a461d96c0ec3f69656
+git checkout --detach 56dc29bff769530f2e59f5565a873a26e50feee2
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
@@ -89,7 +89,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2", "gtfa-mcp"] } }
 }
 ```
 
@@ -104,7 +104,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 检查包下载和数据抓取两段连通性：

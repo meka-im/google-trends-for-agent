@@ -51,7 +51,7 @@ curl -X POST 'https://meka-im--google-trends-for-agent.apify.actor/tools/trends_
 
 | Route | Setup | Cost |
 | --- | --- | --- |
-| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. This pins reviewed source commit `8304fab20544c877ab0f38a461d96c0ec3f69656`, not a release tag. | Free. |
+| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. This pins reviewed source commit `56dc29bff769530f2e59f5565a873a26e50feee2`, not a release tag. | Free. |
 | This Actor | Use the Standby URL or one-off runs with your Apify token. Nothing to deploy. | Apify platform usage in your account; no Actor fee. |
 | Self-deploy | Put the same open-source code in your own account: dsh plugin one-click, Console → Link Git repository, or `apify push`. | Apify platform usage in your account. |
 
