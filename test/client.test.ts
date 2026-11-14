@@ -34,7 +34,7 @@ describe('offline client sessions', () => {
     expect(f.calls.every(c => c.headers['user-agent'] === 'Mozilla/5.0')).toBe(true);
     expect(f.calls[1].headers.cookie).toBe('NID=session');
     expect(f.calls[2].headers.cookie).toBe('NID=session');
-    expect(f.calls.every(c => c.timeoutMs === 8000)).toBe(true);
+    expect(f.calls.every(c => c.timeoutMs === 30000)).toBe(true);
   });
   it('collects metro and city requests with explicit resolution', async () => {
     const f = fixtureTransport();

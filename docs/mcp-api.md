@@ -21,18 +21,20 @@
 | 图表时区 | 默认 `UTC`；显式 `tz` / `--tz` / `timeZone` > `GTFA_TZ` > `UTC`；用 `Intl.DateTimeFormat` 校验并规范化 IANA 名称（大小写变体映射到同一时区，共用标签与图表文件），非法名称返回 `INVALID_INPUT` |
 | `geo` 匹配 | 缓存、filter 和基线匹配先 trim 再转大写；空字符串 `""` 保留为 Worldwide，不替换成 `US`。当前 `parseBaselines` 拒绝空 `geo` 锚点行，因此 Worldwide 不能用用户基线校准 |
 | Web / 分类 | MCP 固定 Web、`category=0`（不可从这四个工具改） |
-| `timeoutMs` | 可选，整数 1000–60000。Explore 工具（ask / snapshot / compare）默认 8000 ms，`trends_now` 默认 15000 ms。CLI 的 `ask` / `snapshot` / `doctor` 使用 `--timeout MS`；dsh 与 Actor 继续使用 `timeoutMs`。 |
+| `timeoutMs` | 可选，整数 1000–60000。Explore 工具（ask / snapshot / compare）默认 30000 ms，`trends_now` 默认 15000 ms；doctor 仍为 8000 ms。CLI 的 `ask` / `snapshot` / `doctor` 使用 `--timeout MS`；dsh 与 Actor 继续使用 `timeoutMs`。 |
 
 **CLI 对照**
 
 | CLI | MCP |
 | --- | --- |
-| `gtfa ask <term> [--fresh] [--validate] [--diff …] [--points] [--category N] [--property PROPERTY] [--timeout MS]` | `trends_ask`（`--diff` 强制 JSON 输出） |
+| `gtfa ask <term> [--fresh] [--validate] [--diff …] [--points] [--category N] [--property PROPERTY] [--timeout MS] [--pretty]` | `trends_ask`（`--diff` 强制 JSON 输出） |
 | `gtfa snapshot <term> [--json] [--svg] [--tz IANA] [--timeout MS]` | `trends_snapshot` |
 | `gtfa compare a b …` 或 `--query a --query b` | `trends_compare` |
 | `gtfa now --geo SG [--hours 24] [--limit 10]` | `trends_now` |
 
 > `now` 的 `--hours` 是 Trending Now 窗口（4 / 24 / 48 / 168），**不是** Explore 的 `time`。
+
+`gtfa ask --pretty` 仅缩进 JSON；普通 ask、validation batch、diff 和结构化错误都会按该选项缩进，而 `ask --validate` 未传 `--json` 时仍输出表格。`--timeout MS` 是每个 Explore 请求的超时，不是整次调用的总时限。
 
 CLI-only：`gtfa ask --validate --from` 的 JSON 结果会为每行加入 `input`，保留源 JSON 对象中的 `variants`、`source`、`url`、`firstSeen` 等元数据；这些字段不参与查询。它按每行的 `snapshotId` 回读对应诊断结果，避免并发同 term/filter 写入时拿到另一行的最新文件。MCP 信封没有这个 `input` 字段。
 
@@ -52,7 +54,7 @@ CLI-only：`gtfa ask --validate --from` 的 JSON 结果会为每行加入 `input
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的快照；`true`：强制现拉 |
 | `validate` | boolean | 否 | `false` | `true`：附加裁决；锚点按窗口自动（1h/4h/1d 用 `sudoku`，7d 及以上用 `gpts`） |
 | `points` | boolean | 否 | `false` | `true`：返回完整 `interest.points`；默认省略以控制 Agent 上下文 |
-| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 本次命令中每个 Explore 请求的超时（毫秒） |
+| `timeoutMs` | integer（1000–60000） | 否 | 30000 | 本次命令中每个 Explore 请求的超时（毫秒） |
 
 ### 请求示例
 
@@ -232,7 +234,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的同类快照；`true`：强制现拉 |
 | `svg` | boolean | 否 | `false` | `true`：内联 `chart.svg` / `chart7d.svg` 文本；默认 `svg: ""`，但 `path` 仍会写入 |
 | `tz` | IANA string | 否 | `GTFA_TZ`，再退回 `UTC` | 图表时间轴时区（如 `Asia/Shanghai`）；非法名称返回 `INVALID_INPUT` |
-| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 主窗口及额外 7d 的每个 Explore 请求超时（毫秒） |
+| `timeoutMs` | integer（1000–60000） | 否 | 30000 | 主窗口及额外 7d 的每个 Explore 请求超时（毫秒） |
 
 ### 请求示例
 
@@ -414,7 +416,7 @@ ratio         = round2(mean(non-gap term scores) / anchorLevel)
 | `keywords` | string[1–5]，每项 1–100 | 是 | — | 要对比的不同关键词 |
 | `geo` | string | 否 | `US` | 国家 / 地区 |
 | `time` | Explore 枚举 | 否 | `now 1-d` | 时间窗 |
-| `timeoutMs` | integer（1000–60000） | 否 | 8000 | 本次 Explore 请求超时（毫秒） |
+| `timeoutMs` | integer（1000–60000） | 否 | 30000 | 本次 Explore 请求超时（毫秒） |
 
 > **去重：** trim + 大小写折叠后若有重复，直接 `INVALID_INPUT`，不发请求。
 

@@ -5,6 +5,7 @@ import { fetchTrafficSnapshot, trafficSnapshotEnvelope, trafficSnapshotError } f
 import { queryTrends } from './api.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { resolveTimeZone } from './timezone.js';
+import { DEFAULT_EXPLORE_TIMEOUT_MS } from './client.js';
 
 export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   One term + a shared-scale anchor comparison -> calibrated searches/day estimate,
@@ -14,7 +15,7 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   --anchor TERM                     Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+
   --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
-  --timeout MS                      Request timeout (integer 1000-60000; Explore default 8000)
+  --timeout MS                      Per-request timeout (integer 1000-60000; Explore default ${DEFAULT_EXPLORE_TIMEOUT_MS})
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
   --chart-dir DIR                   SVG output directory (default .gtfa/charts)
   --tz <IANA>                       Chart time zone (default GTFA_TZ, then UTC)

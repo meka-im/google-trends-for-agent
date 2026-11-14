@@ -8,6 +8,7 @@ import { queryTrends } from './api.js';
 import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { fetchTrending } from './trending.js';
+import { DEFAULT_EXPLORE_TIMEOUT_MS } from './client.js';
 
 export const askHelp = `Usage: gtfa ask <term> [options]
   Returns interest, popular (Top) and rising related queries, and regions for one term.
@@ -23,10 +24,11 @@ export const askHelp = `Usage: gtfa ask <term> [options]
   --points            Include the full interest series (omitted by default to keep agent context small)
   --fresh             Force live data; --refresh always|never|if-stale
   --max-age MIN       Reuse saved snapshots younger than MIN minutes (default 360)
-  --timeout MS        Request timeout (integer 1000-60000; Explore default 8000)
+  --timeout MS        Per-request timeout (integer 1000-60000; Explore default ${DEFAULT_EXPLORE_TIMEOUT_MS})
   --geo US --time "now 1-d" --category N --property ""
   --store DIR         Snapshot storage (default .gtfa/snapshots)
   --json              Agent envelope JSON (ask/validate; --diff implies JSON; --validate without --json prints a table)
+  --pretty            Indent JSON output; --validate without --json still prints a table
   Environment: GTFA_BASELINES=/path/baselines.json overrides anchor baselines`;
 
 /** Map an ask/validation envelope to the documented CLI exit code. */
@@ -60,14 +62,17 @@ function withTimeout(query: typeof queryTrends, timeoutMs: number | undefined): 
 
 /** `ask` command: snapshot reuse/fetch, optional verdict (--validate) and diff vs previous (--diff). */
 export async function runAskCli(args: string[], options: { query?: typeof queryTrends; trendingFetch?: typeof fetchTrending; stdin?: string; baselines?: Baselines } = {}) {
+  let pretty = args.includes('--pretty');
+  const outputJson = (value: unknown) => JSON.stringify(value, null, pretty ? 2 : undefined);
   try {
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       from: { type: 'string' }, geo: { type: 'string' }, time: { type: 'string' }, category: { type: 'string' }, property: { type: 'string' },
       anchor: { type: 'string' }, 'no-anchor': { type: 'boolean' }, trending: { type: 'boolean' }, 'max-age': { type: 'string' },
       store: { type: 'string' }, json: { type: 'boolean' }, refresh: { type: 'string' }, fresh: { type: 'boolean' },
-      validate: { type: 'boolean' }, diff: { type: 'boolean' }, points: { type: 'boolean' }, timeout: { type: 'string' }, help: { type: 'boolean' },
+      validate: { type: 'boolean' }, diff: { type: 'boolean' }, points: { type: 'boolean' }, timeout: { type: 'string' }, pretty: { type: 'boolean' }, help: { type: 'boolean' },
     } });
-    if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? askHelp : JSON.stringify({ help: askHelp }), stderr: '' };
+    pretty = v.pretty ?? false;
+    if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? askHelp : outputJson({ help: askHelp }), stderr: '' };
     const timeoutMs = timeoutValue(v.timeout);
     const query = withTimeout(options.query ?? queryTrends, timeoutMs);
     const trendingBase = options.trendingFetch ?? fetchTrending;
@@ -98,7 +103,7 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
       }));
       const code = rows.some(r => r.verdict === 'blocked') ? 3 : out.reduce((max, e) => Math.max(max, envelopeExitCode(e as { ok?: boolean; status?: string; error?: { code?: string } })), 0);
       if (!v.json && !v.diff) return { code, stdout: ['term | verdict | conf | est/day | band | latest/peak | top popular | top rising | top region', ...rows.map(r => [r.term, r.verdict, r.confidence, r.anchor.traffic.average === null ? '无法估' : String(r.anchor.traffic.average), r.anchor.band ?? '-', String(r.interest.settledLatest) + (r.freshSpike ? ' ⚡' + r.freshSpike.ratio.toFixed(0) + '× recheck ~' + r.freshSpike.recheckAfterMin + 'm' : '') + '/' + r.interest.peak, r.popular[0]?.query ?? '-', r.rising[0]?.query ?? '-', r.regions[0]?.name ?? '-'].join(' | '))].join('\n'), stderr };
-      return { code, stdout: JSON.stringify(!v.from && out.length === 1 ? out[0] : out), stderr };
+      return { code, stdout: outputJson(!v.from && out.length === 1 ? out[0] : out), stderr };
     }
     if (v.from) throw new Error('--from requires --validate');
     const term = positionals.join(' '); if (!term) throw new Error('provide a term');
@@ -106,9 +111,9 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
     const diff = await withDiff(a.snapshot);
     const envelope = blockedVerdict(askEnvelope(a.snapshot, { cached: a.source === 'cache', ageMin: a.ageMin, ...diff, includePoints: v.points }));
     if (a.snapshot.status === 'blocked') stderr = 'Warning: BLOCKED/RATE_LIMITED';
-    return { code: envelopeExitCode(envelope), stdout: JSON.stringify(envelope), stderr };
+    return { code: envelopeExitCode(envelope), stdout: outputJson(envelope), stderr };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return { code: 4, stdout: JSON.stringify(schemaRejectionEnvelope(message)), stderr: `INVALID_INPUT: ${message}` };
+    return { code: 4, stdout: outputJson(schemaRejectionEnvelope(message)), stderr: `INVALID_INPUT: ${message}` };
   }
 }

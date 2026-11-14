@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 — 2026-11-14
+
+- Raise the default timeout for each Explore request from 8000 ms to 30000 ms while keeping explicit `timeoutMs` / `--timeout` values, doctor's 8000 ms diagnostic default, Trending Now's 15000 ms default, and the 1000–60000 ms validation range unchanged.
+- Accept `gtfa ask --pretty` to indent JSON output for ordinary asks, validation batches, diffs, and structured errors without changing the default `ask --validate` table.
+
 ## 0.2.3 — 2026-11-14
 
 - Platform delivery is identified as npm package version `0.2.3`, distinct from the earlier `0.2.1` and `0.2.2` artifacts. This package includes the reviewed platform fixes below; the documented `8304fab20544c877ab0f38a461d96c0ec3f69656` source pin remains the previously reviewed source and does not install `0.2.3`.

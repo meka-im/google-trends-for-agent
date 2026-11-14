@@ -1,5 +1,7 @@
 import * as core from './core.js';
 import { abortError, createDefaultTransport, isAbortError, RateLimiter, Session, throwIfAborted, withRetry, type RateLimitOptions, type TimeoutSurface, type Transport } from './transport.js';
+/** Default timeout for each Explore request made by a TrendsClient. */
+export const DEFAULT_EXPLORE_TIMEOUT_MS = 30_000;
 export interface TrendsResult {
   status: 'ok' | 'partial' | 'error';
   input?: Record<string, unknown>;
@@ -31,7 +33,7 @@ export class TrendsClient {
       input = core.parseGTrendsInput(raw);
       const i = input;
       const request = (url: string, method = 'GET'): Promise<string> => withRetry(
-        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? 8000, signal: this.signal, timeoutSurface: this.timeoutSurface, headers: {
+        () => session.request({ url, method, timeoutMs: i.timeoutMs ?? DEFAULT_EXPLORE_TIMEOUT_MS, signal: this.signal, timeoutSurface: this.timeoutSurface, headers: {
           accept: 'application/json, text/plain, */*', 'accept-language': core.acceptLanguage(i.locale),
           'user-agent': 'Mozilla/5.0', referer: core.refererUrl(i),
         } }),
