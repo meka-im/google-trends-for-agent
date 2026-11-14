@@ -3,7 +3,7 @@
   "name": "google-trends-for-agent",
   "title": "Google Trends MCP & API for AI Agents — Open Source",
   "description": "Google Trends for AI agents: search interest, comparisons, calibrated searches/day estimates and trending searches as an MCP server, HTTP API or one-off run. Open source (MIT). Runs in your Apify account: no Actor fee; isolated trends_ask ≈ $0.0024 (measured 2026-11-13, Free-plan rates).",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "buildTag": "latest",
   "minMemoryMbytes": 256,
   "maxMemoryMbytes": 1024,

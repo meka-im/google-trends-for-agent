@@ -164,13 +164,15 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 
 | Command | What it does |
 | --- | --- |
-| `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, batch `--from`, and per-request `--timeout MS`. |
+| `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, batch `--from`, per-request `--timeout MS`, and `--pretty`. |
 | `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, SVG charts, and per-request `--timeout MS`. |
 | `gtfa compare <kw> [<kw> ...]` | Relative interest for 1–5 distinct keywords (also `--query` mode). |
 | `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window. |
 | `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch. `--timeout MS` bounds each network check; a challenge or HTTP 429 stops before the live fetch. `--json` for machines. |
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
+
+`gtfa ask --pretty` indents JSON for ordinary asks, validation batches, diffs, and errors while `ask --validate` without `--json` remains a table; `--timeout MS` applies to each Explore request rather than the whole call, so slow VMs can set it up to 60000.
 
 ## How the numbers work
 

@@ -166,13 +166,15 @@ pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使�
 
 | 命令 | 用途 |
 | --- | --- |
-| `gtfa ask <term>` | 单个词，可选 `--validate`、`--diff`、`--points`、批量 `--from`，并支持单次请求 `--timeout MS`。 |
+| `gtfa ask <term>` | 单个词，可选 `--validate`、`--diff`、`--points`、批量 `--from`，并支持单次请求 `--timeout MS` 和 `--pretty`。 |
 | `gtfa snapshot <term>` | 校准流量、相关查询、verdict、SVG 图表，并支持单次请求 `--timeout MS`。 |
 | `gtfa compare <kw> [<kw> ...]` | 1–5 个不同关键词的相对兴趣（也支持 `--query` 模式）。 |
 | `gtfa now --geo US` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
 | `gtfa doctor` | 检查 Node、Google Trends 可达性、代理，并执行一次 `gpts` 美国 24 小时抓取。`--timeout MS` 限制每项网络检查；遇到 challenge 或 HTTP 429 时不再执行 live fetch。`--json` 供机器读取。 |
 
 完整选项和示例见[参考文档](docs/reference.md#cli-surface)。
+
+`gtfa ask --pretty` 会缩进普通 ask、validation batch、diff 和错误 JSON，而 `ask --validate` 未传 `--json` 时仍输出表格；`--timeout MS` 作用于每个 Explore 请求，不是整次调用的总时限，慢速 VM 可显式提高到 60000。
 
 ## 数字如何计算
 

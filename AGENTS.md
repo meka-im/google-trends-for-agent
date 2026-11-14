@@ -104,7 +104,7 @@ Google Trends answers the same IPs it sees as ordinary browsers more often than 
 | Agent environment | Egress it uses | Can it reach a local server? | Recommended path |
 | --- | --- | --- | --- |
 | dots cloud computer | OpenAI data-center IP | Yes, it can connect to the user's local computer | Local stdio or local HTTP, or the Apify URL when remote |
-| Muse | Meta cloud VM | No; remote HTTPS MCP only, no localhost | Apify Actor URL (`/mcp` + bearer token) |
+| Muse | Meta cloud VM | User-provided verification shows the CLI and a self-built stdio MCP client ran inside the VM; VM-local HTTP access, access to the user's Mac, and host-native MCP registration remain unverified | Run the CLI/stdio MCP client inside the VM to validate protocol behavior; use the Actor URL only when the host supports remote MCP. Neither path substitutes for validating native registration |
 | Grok Bot | Shared box plus the user's registered computers | Yes, through the registered computers | Local stdio/HTTP on a registered computer, or the Apify URL for the shared box |
 
 Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most; on `BLOCKED`, stop and report.
@@ -120,7 +120,7 @@ Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryA
 
 Call `trends_ask` with `points: true` only when the full interest series is needed; it is omitted by default to save context. `trends_ask` (without `validate`), `trends_compare`, and `trends_now` return relative interest only; do not claim search volume from them. Only `trends_snapshot` and `trends_ask` with `validate: true` return searches/day, and those are anchor-based estimates. Snapshot Popular/Rising rows retain `estDaily` for schema compatibility, but it is always `null`; ask tables omit the field. Never derive absolute query volume from related-list values.
 
-The native tools accept `timeoutMs` from 1000 through 60000 ms. The CLI's corresponding `gtfa ask`, `gtfa snapshot`, and `gtfa doctor` option is `--timeout MS`. Ask/snapshot default to 8000 ms per Explore request, including anchor validation, `--trending`, and the extra 7-day request; doctor defaults to 8000 ms per diagnostic network check.
+The native tools accept `timeoutMs` from 1000 through 60000 ms. The CLI's corresponding `gtfa ask`, `gtfa snapshot`, and `gtfa doctor` option is `--timeout MS`. Ask/snapshot Explore requests default to 30000 ms, including anchor validation and the extra 7-day request. The `--trending` lookup defaults to 15000 ms; an explicit CLI `--timeout` value is also passed to it. Doctor remains at 8000 ms per diagnostic network check. `gtfa ask --pretty` only indents JSON; `ask --validate` without `--json` still prints its table.
 
 In `now 1-d` windows, trailing points can be 0 or low while Google back-fills. Use settled values and the window average; do not report a trailing 0 alone as a real drop. `settledLatest` excludes the last point in `now *` windows and then gaps; multiple trailing zeros can still remain. Non-`now` series with daily spacing exclude two tail points; other series exclude one. Averages exclude gaps but include unsettled tails.
 
