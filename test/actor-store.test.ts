@@ -7,6 +7,7 @@ function json(path: string): Record<string, unknown> {
 }
 
 const actor = json('../.actor/actor.json');
+const pkg = json('../package.json');
 const store = json('../.actor/store.json');
 const input = json('../.actor/input_schema.json');
 const dataset = json('../.actor/dataset_schema.json');
@@ -22,7 +23,7 @@ describe('Actor Store metadata', () => {
     expect(actor.title).toBe('Google Trends MCP & API for AI Agents — Open Source');
     expect(String(actor.description).length).toBeGreaterThan(0);
     expect(String(actor.description).length).toBeLessThanOrEqual(300);
-    expect(actor.version).toBe('0.2.2');
+    expect(actor.version).toBe(pkg.version);
     expect(actor.buildTag).toBe('latest');
     expect(actor.minMemoryMbytes).toBe(256);
     expect(actor.maxMemoryMbytes).toBe(1024);
