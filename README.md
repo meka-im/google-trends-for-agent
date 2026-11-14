@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/tests-422%20passed-22c55e?style=flat-square" alt="422 tests passing"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-en-dark.png"><img src="docs/assets/store-button-en.png" alt="Open in Apify Store" width="231" height="44"></picture></a></p>
 
@@ -22,7 +22,7 @@
 <p align="center">
   <img src="docs/assets/demo-terminal.svg" alt="Animated gtfa snapshot command revealing the trimmed JSON envelope for Sora" width="800">
 </p>
-<p align="center"><sub>Real snapshot output, trimmed. The full envelope also includes the series, anchor points, per-query estimates, warnings, and metadata.</sub></p>
+<p align="center"><sub>Real snapshot output, trimmed. The full envelope also includes the series, primary and 7-day traffic blocks, related-query context, warnings, and metadata.</sub></p>
 
 ## Choose a route
 
@@ -61,25 +61,33 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 
 ## Install & quick start
 
-The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
+The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run. The pinned ref below is a reviewed source commit, not a release tag. Omit the ref only when intentionally tracking the current `main`.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa snapshot Sora --geo US --json --pretty
 ```
+
+The full-SHA GitHub `npx` entry was verified with npm 11.19.1. npm 10.9.4 can build the same full-SHA dependency and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → checkout → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
 
 The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
 
 Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
-git clone --branch v0.2.2 --depth 1 https://github.com/meka-im/google-trends-for-agent.git && cd google-trends-for-agent && npm install && npm install -g "$(npm pack | tail -1)"
+git clone https://github.com/meka-im/google-trends-for-agent.git
+cd google-trends-for-agent
+git checkout --detach fc275da020a2d6d6892fdbfde29d1a53a1cb4347
+npm ci
+npm install -g "$(npm pack | tail -1)"
 ```
+
+The packed tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
 
 The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#v0.2.2", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347", "gtfa-mcp"] } }
 }
 ```
 
@@ -94,7 +102,7 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#v0.2.2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 Check both package-download and data-fetch connectivity:
@@ -156,17 +164,21 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 
 | Command | What it does |
 | --- | --- |
-| `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, and batch `--from`. |
-| `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, and SVG charts. |
+| `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, batch `--from`, and per-request `--timeout MS`. |
+| `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, SVG charts, and per-request `--timeout MS`. |
 | `gtfa compare <kw> [<kw> ...]` | Relative interest for 1–5 distinct keywords (also `--query` mode). |
 | `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window. |
-| `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch; `--json` for machines. |
+| `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch. `--timeout MS` bounds each network check; a challenge or HTTP 429 stops before the live fetch. `--json` for machines. |
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
 
 ## How the numbers work
 
 `snapshot` and `ask --validate` put the term and an anchor on one shared 0–100 scale, then compute `traffic = round(score ÷ anchorLevel × dailySearches)`. These are anchor-based estimates, not measured Google search volume. Traffic stays `null` when no calibration exists or the anchor fails its reliability gate.
+
+Calibration baselines—including version 2 files and user-provided anchor rows—apply only to **web searches in category 0**. A CLI filter using another property or category can still return relative interest, but `traffic` / `traffic7d` objects remain with their searches/day fields set to `null` and an explanation; the version 2 format is unchanged. Only snapshot Popular/Rising rows retain `estDaily` for schema compatibility, and it is always `null`: those related lists do not share the primary term's scale. Ask tables do not contain `estDaily`.
+
+Snapshot attempts its 7-day work sequentially. For a primary window other than `now 7-d`, it tries the separate 7-day request after the primary attempt finishes unless the primary ended in `BLOCKED` or `RATE_LIMITED`; other errors such as `NETWORK_ERROR` do not by themselves prevent that attempt. If the attempt is skipped, the empty chart, null traffic, and baseline metadata are returned with a warning. Caller cancellation or the overall deadline propagates through the whole snapshot and is not converted into those normal fallback fields.
 
 | Window | Anchor | US baseline |
 | --- | --- | --- |
@@ -185,7 +197,7 @@ Tests use local fixtures and mocked transports; they do not call Google.
 
 ```sh
 npm install
-npm test          # 422 tests
+npm test
 npm run typecheck
 npm run build
 npm run trends -- --help

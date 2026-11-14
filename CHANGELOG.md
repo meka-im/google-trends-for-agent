@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Keep snapshot Popular/Rising `estDaily` fields for schema compatibility but always return `null`; related-query scales cannot be converted into absolute volume.
+- Apply all version 2 calibration baselines, including user anchors, only to web/category 0. Filtered CLI requests keep traffic objects but set their numeric fields to `null` with an explanation; geo matching trims and uppercases while preserving `""` as Worldwide, which cannot currently be calibrated by an empty-geo baseline row.
+- Run a separate `now 7-d` snapshot sequentially after the primary attempt unless the primary is `BLOCKED` / `RATE_LIMITED`, and return shape-stable empty chart, null traffic, baseline metadata, and warnings when that request is skipped or completes with an ordinary 7-day error that produced no snapshot.
+- Add CLI `--timeout MS` to `ask`, `snapshot`, and `doctor`, with a 1000–60000 ms range and an 8000 ms default; Explore values propagate to primary, anchor-validation, `--trending`, and 7-day requests.
+- Stop validation and `batchTrends` after `BLOCKED` or `RATE_LIMITED` while preserving the error code and `retryAfterSec`; read `--from` diagnostics back by `snapshotId` and preserve source metadata under `input`.
+- Stop doctor and dsh Test connection after a challenge or HTTP 429 instead of probing again; make a partial snapshot exit with code 2, honor configured default filters in `compare` / `--query`, and keep CLI timeout advice distinct through `timeoutSurface`.
+- Propagate caller cancellation and the overall snapshot deadline, map the Actor HTTP deadline to `504` / `TRENDS_TIMEOUT`, avoid caching cancelled work as a permanent failure, and prevent a cancelled `RateLimiter` waiter from releasing later requests early.
+- Harden Trending Now CSV output with RFC 4180 quoting and spreadsheet-formula protection; serialize array fields as JSON before CSV encoding.
+- Make the dsh default US `gpts` / `sudoku` baselines editable; for a newly added row, only an identical normalized term + geo in the current list is treated as a duplicate, while other validation remains unchanged.
+- Pin install examples to reviewed source commit `fc275da020a2d6d6892fdbfde29d1a53a1cb4347` rather than the unavailable `v0.2.2` tag; persistent installs clone, detach at that commit, and use `npm ci`.
+- Package `.actor/README.md` with its three link targets fixed. Keep the root scoped `@crawlee/core` → `minimatch` override at `^11.0.1` (lock: `11.0.8`), an explicit security override outside Crawlee's declared `^9` range. Because dependency overrides do not propagate to consumers, bundle the audited `apify` dependency subtree in the packed artifact. This materially increases package size; verify audit on both the root tree and a clean consumer install of the tarball, and expect that consumer `npm ls` may still report the range mismatch.
+
 ## 0.2.2 — 2026-11-13
 
 - Gate low-average interest with empty related tables as low-confidence `no_data`; omit numeric traffic and unify ask/snapshot verdict labels.
