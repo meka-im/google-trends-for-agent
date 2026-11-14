@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 const args = ['--import', 'tsx', '--import', './test/cli-fetch.mjs', 'src/cli.ts'];
 const env = { ...process.env, HTTPS_PROXY: '', https_proxy: '' };
+const packageVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 // Capture through files so subprocess tests also work where pipe polling is restricted.
 function runCli(cliArgs: string[], options: { encoding: string; env: NodeJS.ProcessEnv }): { status: number | null; stdout: string; stderr: string } {
   const dir = mkdtempSync(join(tmpdir(), 'google-trends-for-agent-cli-'));
@@ -80,7 +81,7 @@ describe('CLI flags and exit codes', () => {
   });
   it('supports help and version offline', () => {
     expect((runCli([...args, '--help'], { encoding: 'utf8', env })).stdout).toContain('gtfa ask <term>');
-    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: '0.2.2' });
+    expect(JSON.parse(runCli([...args, '--version'], { encoding: 'utf8', env }).stdout)).toEqual({ name: 'google-trends-for-agent', version: packageVersion });
   });
   it.each(['--unknown', '--types', '--timeout', '--retries', '--min-interval'])('rejects invalid %s offline', flag => {
     const invalid = runCli([...args, '--query', 'x', flag, 'bogus'], { encoding: 'utf8', env });

@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-11-14
 
+- Platform delivery is identified as npm package version `0.2.3`, distinct from the earlier `0.2.1` and `0.2.2` artifacts. This package includes the reviewed platform fixes below; the documented `8304fab20544c877ab0f38a461d96c0ec3f69656` source pin remains the previously reviewed source and does not install `0.2.3`.
 - Keep snapshot Popular/Rising `estDaily` fields for schema compatibility but always return `null`; related-query scales cannot be converted into absolute volume.
 - Apply all version 2 calibration baselines, including user anchors, only to web/category 0. Filtered CLI requests keep traffic objects but set their numeric fields to `null` with an explanation; geo matching trims and uppercases while preserving `""` as Worldwide, which cannot currently be calibrated by an empty-geo baseline row.
 - Run a separate `now 7-d` snapshot sequentially after the primary attempt unless the primary is `BLOCKED` / `RATE_LIMITED`, and return shape-stable empty chart, null traffic, baseline metadata, and warnings when that request is skipped or completes with an ordinary 7-day error that produced no snapshot.
