@@ -28,14 +28,14 @@ describe('window anchor defaults', () => {
 
   it('honors windowAnchors and custom anchor terms', async () => {
     const b = await loadBaselines(write({ version: 2, anchors: [
-      { term: 'chairs', geo: 'US', dailySearches: 143000, tolerance: 0.5 },
+      { term: 'chairs', geo: ' us ', dailySearches: 143000, tolerance: 0.5 },
       { term: 'thesaurus', geo: 'US', dailySearches: 25700 },
     ], windowAnchors: { short: 'chairs', long: 'thesaurus' } }));
     expect(defaultAnchorFor('now 1-H', b)).toBe('chairs');
     expect(defaultAnchorFor('now 1-d', b)).toBe('chairs');
     expect(defaultAnchorFor('now 7-d', b)).toBe('thesaurus');
     expect(defaultAnchorFor('all', b)).toBe('thesaurus');
-    expect(findAnchor(b, 'chairs', 'US')).toMatchObject({ term: 'chairs', dailySearches: 143000 });
+    expect(findAnchor(b, 'chairs', ' US ')).toMatchObject({ term: 'chairs', dailySearches: 143000 });
   });
 
   it('prefers a user anchor over the built-in anchor with the same term and geo', () => {
@@ -43,6 +43,15 @@ describe('window anchor defaults', () => {
     expect(findAnchor(b, 'sudoku', 'US')).toMatchObject({ dailySearches: 12000, tolerance: 0.2 });
     expect(findAnchor(undefined, 'sudoku', 'US')).toMatchObject({ dailySearches: 63000, tolerance: 0.5 });
     expect(anchorDailySearches(findAnchor(b, 'sudoku', 'US')!)).toBe(12000);
+  });
+
+  it('applies both built-in and custom anchors only to web search across all categories', () => {
+    expect(findAnchor(undefined, 'sudoku', 'US', { category: 0, property: '' })).toMatchObject({ dailySearches: 63000 });
+    expect(findAnchor(undefined, 'sudoku', 'US', { category: 0, property: 'web' })).toMatchObject({ dailySearches: 63000 });
+    const custom: Baselines = { version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 12000 }] };
+    expect(findAnchor(custom, 'sudoku', 'US', { category: 0, property: 'youtube' })).toBeUndefined();
+    expect(findAnchor(custom, 'sudoku', 'US', { category: 1, property: 'web' })).toBeUndefined();
+    expect(findAnchor(undefined, 'sudoku', 'US', { category: 1, property: 'web' })).toBeUndefined();
   });
 });
 

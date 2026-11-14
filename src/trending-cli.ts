@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util';
 import { normalizeTrendingGeos, TRENDING_GEOS } from './geos.js';
 import { fetchTrending, listTrending, type TrendingHours, type TrendingResponse, type TrendingOptions } from './trending.js';
 import { nowEnvelope, schemaRejectionEnvelope } from './tools.js';
+import { csvCell } from './export.js';
 
 export function trendingExitCode(results: TrendingResponse[]): number {
   if (results.some(r => ['BLOCKED', 'RATE_LIMITED'].includes(r.error?.code ?? ''))) return 3;
@@ -33,7 +34,7 @@ export async function runTrendingCli(args: string[], options: TrendingOptions = 
     json = v.json ?? false;
     if (!['json', 'csv'].includes(v.format!)) throw new Error('format must be json or csv');
     format = v.json ? 'json' : v.format!; pretty = v.pretty ?? false;
-    if (v['list-geos']) return { code: 0, stdout: format === 'csv' ? 'code,name\n' + TRENDING_GEOS.map(g => `${g.code},${JSON.stringify(g.name)}`).join('\n') : JSON.stringify(TRENDING_GEOS, null, pretty ? 2 : undefined), stderr: '' };
+    if (v['list-geos']) return { code: 0, stdout: format === 'csv' ? [['code', 'name'].map(csvCell).join(','), ...TRENDING_GEOS.map(g => [g.code, g.name].map(csvCell).join(','))].join('\r\n') + '\r\n' : JSON.stringify(TRENDING_GEOS, null, pretty ? 2 : undefined), stderr: '' };
     if ([v.geo !== undefined, !!v['all-geos'], !!v['default-geos']].filter(Boolean).length !== 1) throw new Error('choose --geo, --all-geos, or --default-geos');
     const number = (s: string) => { if (!/^\d+$/.test(s) || !Number.isSafeInteger(Number(s))) throw new Error('numeric flags require non-negative integers'); return Number(s); };
     const input = { hours: (v.hours === undefined ? 24 : number(v.hours)) as TrendingHours, lang: v.lang ?? 'en',
@@ -49,8 +50,10 @@ export async function runTrendingCli(args: string[], options: TrendingOptions = 
     const response: TrendingResponse = { status: 'error', geo: '', hours: 24, fetchedAt: new Date().toISOString(), items: [], error: { code: 'INVALID_INPUT', message: e instanceof Error ? e.message : 'invalid input' }, meta: { upstreamRequests: 0, durationMs: 0 } };
     result = json ? schemaRejectionEnvelope(response.error!.message) : response; results = [response];
   }
-  const cell = (v: unknown) => JSON.stringify(typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''));
   const fields = ['geo', 'rank', 'title', 'query', 'volume', 'volumeLabel', 'growthPct', 'categoryIds', 'categories', 'startedAt', 'endedAt', 'active', 'relatedQueries', 'newsCount', 'errorCode', 'errorMessage'];
-  const csv = [fields.join(','), ...results.flatMap(r => r.error ? [fields.map(f => cell(f === 'geo' ? r.geo : f === 'errorCode' ? r.error!.code : f === 'errorMessage' ? r.error!.message : '')).join(',')] : r.items.map(item => fields.map(f => cell((item as unknown as Record<string, unknown>)[f])).join(',')))].join('\n');
+  const csvRows = [fields, ...results.flatMap(r => r.error
+    ? [fields.map(field => field === 'geo' ? r.geo : field === 'errorCode' ? r.error!.code : field === 'errorMessage' ? r.error!.message : '')]
+    : r.items.map(item => fields.map(field => (item as unknown as Record<string, unknown>)[field])))];
+  const csv = csvRows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
   return { code: trendingExitCode(results), stdout: format === 'csv' ? csv : JSON.stringify(result, null, pretty ? 2 : undefined), stderr: results.filter(r => r.error).map(r => `${r.error!.code}: ${r.error!.message}`).join('\n') };
 }

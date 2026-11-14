@@ -1,10 +1,10 @@
-import { queryTrends } from './api.js';
+import { queryTrends, type TrendsResponse } from './api.js';
 import type { InterestOverTime } from './core.js';
 import { resolveFilter, filterInput, type TrendsFilter } from './filter.js';
 import { settledNonGapPoints, summarizeInterest } from './gaps.js';
 import { askTerm, isLowSample, LOW_SAMPLE_WARNING, SnapshotStore, type TermSnapshot } from './snapshot.js';
 import { fetchTrending, type TrendingItem } from './trending.js';
-import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
+import { anchorDailySearches, baselineScopeMismatch, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
 import { calibrateTraffic, nullTraffic, type TrafficEstimate } from './calibration.js';
 export interface LeadInput { name: string; variants?: string[]; source?: string; url?: string; firstSeen?: string }
 export function parseLeadInput(json: unknown): LeadInput[] {
@@ -43,15 +43,49 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
   const filter = resolveFilter(opts.filter), store = opts.store ?? new SnapshotStore(), query = opts.query ?? queryTrends;
   const geoLabel = filter.geo || 'Worldwide';
   const anchorTerm = opts.anchor === false ? '' : opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
-  const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo);
+  const scopeMismatch = anchorTerm ? baselineScopeMismatch(filter) : undefined;
+  const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo, filter);
   const daily = calibration ? anchorDailySearches(calibration) : null;
   const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
-  const results: TermVerdict[] = [], rows = new Map<string, TermVerdict>(); let blocked = false;
-  const pending: { term: string; anchor: TermVerdict['anchor'] }[] = [];
+  const noCalibrationNote = scopeMismatch
+    ? `${scopeMismatch}; traffic fields are null`
+    : `无法估 (no calibration for geo ${geoLabel}); traffic fields are null`;
+  const scopeWarning = scopeMismatch ? `${scopeMismatch}; traffic fields are null` : undefined;
+  const results: TermVerdict[] = []; let blocked = false;
+  let blockError: NonNullable<TrendsResponse['error']> | undefined;
+  type PendingValidation = { term: string; anchor: TermVerdict['anchor']; row: TermVerdict };
+  const pending: PendingValidation[] = [];
+  const markBlocked = (entries: readonly PendingValidation[], error: NonNullable<TrendsResponse['error']>) => {
+    for (const { anchor, row } of entries) {
+      row.verdict = 'blocked';
+      row.confidence = 'low';
+      if (!row.reasons.includes(error.code)) row.reasons.push(error.code);
+      anchor.note = error.message;
+      if (error.retryAfterSec !== undefined) row.retryAfterSec = error.retryAfterSec;
+      delete row.freshSpike;
+    }
+  };
   const trending = opts.trending ? await (opts.trendingFetch ?? fetchTrending)({ geo: filter.geo, hours: 24 }) : undefined;
+  if (opts.stopOnBlocked !== false && ['BLOCKED', 'RATE_LIMITED'].includes(trending?.error?.code ?? '')) {
+    blocked = true;
+    blockError = trending!.error;
+  }
   for (const lead of parseLeadInput(input)) {
     const term = lead.name;
-    const answer = await askTerm(term, { filter, store, maxAgeMin: opts.maxAgeMin, refresh: opts.refresh, query: blocked ? async i => ({ status: 'error', input: i, error: { code: 'BLOCKED', message: 'skipped after upstream block' }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } }) : query });
+    const answer = await askTerm(term, {
+      filter,
+      store,
+      maxAgeMin: opts.maxAgeMin,
+      refresh: blocked ? 'always' : opts.refresh,
+      query: blocked
+        ? async input => ({
+            status: 'error',
+            input,
+            error: blockError ?? { code: 'BLOCKED', message: 'skipped after upstream block' },
+            meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] },
+          })
+        : query,
+    });
     const s = answer.snapshot, interest = summarizeInterest(s.interest.points, filter), settled = settledNonGapPoints(s.interest.points, filter), values = settled.map(p => p.value);
     const split = Math.ceil(values.length / 2), early = mean(values.slice(0, split)), tail = mean(values.slice(split));
     const ratio = early ? tail / early : tail > 0 ? Infinity : 0;
@@ -59,21 +93,35 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     let verdict: TermVerdict['verdict'] = 'flat';
     const reasons: string[] = [];
     let retryAfterSec: number | undefined;
-    if (s.status === 'blocked') { verdict = 'blocked'; reasons.push(s.error?.code ?? 'BLOCKED'); if (s.error?.retryAfterSec !== undefined) retryAfterSec = s.error.retryAfterSec; if (opts.stopOnBlocked !== false) blocked = true; }
+    if (s.status === 'blocked') {
+      verdict = 'blocked';
+      reasons.push(s.error?.code ?? 'BLOCKED');
+      if (s.error?.retryAfterSec !== undefined) retryAfterSec = s.error.retryAfterSec;
+      blockError ??= s.error ?? { code: 'BLOCKED', message: 'skipped after upstream block' };
+      if (opts.stopOnBlocked !== false) blocked = true;
+    }
     else if (s.status === 'error' || s.status === 'no_data' || isLowSample(s) || !values.some(v => v > 0)) { verdict = 'no_data'; reasons.push(s.error?.message ?? (isLowSample(s) ? LOW_SAMPLE_WARNING : 'No settled search interest')); }
     else if (spike) { verdict = 'spiking'; reasons.push(`Fresh spike: last points avg ${spike.recent.toFixed(0)} vs earlier 24h avg ${spike.baseline.toFixed(1)} (${spike.ratio.toFixed(1)}×); recheck in ~${spike.recheckAfterMin} min`); }
     else if (values.length >= 2 && ratio >= 1.5 || s.rising.some(r => r.breakout)) { verdict = 'rising'; reasons.push(s.rising.some(r => r.breakout) ? 'Breakout related queries' : 'Settled tail mean >= 1.5 × earlier mean'); }
     else if (Math.max(...values) >= 10 && tail >= early) { verdict = 'steady'; reasons.push('Settled peak >= 10 with no decline'); }
     else reasons.push('Insufficient sustained rise or declining interest');
-    const anchor: TermVerdict['anchor'] = { term: anchorTerm || 'none', dailySearches: daily === null ? null : Math.round(daily), ratio: null, band: null, traffic: nullTraffic(), note: anchorTerm ? 'Comparison unavailable' : 'Anchor disabled' };
-    if (anchorTerm && verdict !== 'blocked' && verdict !== 'no_data' && !blocked) pending.push({ term, anchor });
-    if (!anchor.traffic.average && filter.geo !== 'US') anchor.note = `无法估 (no calibration for geo ${geoLabel})`;
+    const anchor: TermVerdict['anchor'] = {
+      term: anchorTerm || 'none',
+      dailySearches: daily === null ? null : Math.round(daily),
+      ratio: null,
+      band: null,
+      traffic: nullTraffic(),
+      note: !anchorTerm ? 'Anchor disabled' : daily === null ? noCalibrationNote : 'Comparison unavailable',
+      ...(scopeWarning ? { warning: scopeWarning } : {}),
+    };
     const match = trending?.items.find(i => i.title.toLowerCase().includes(term.toLowerCase()) || i.query.toLowerCase().includes(term.toLowerCase()));
     const row: TermVerdict = { term, input: lead, filter, verdict, ...(spike && verdict === 'spiking' ? { freshSpike: spike } : {}), confidence: verdict === 'spiking' ? 'mid' : verdict === 'blocked' || verdict === 'no_data' || values.length < 4 ? 'low' : values.length >= 12 ? 'high' : 'mid', reasons,
       interest: { ...s.interest, points: interest.points, latest: interest.latest, peak: interest.peak, settledLatest: interest.settledLatest }, popular: s.popular.slice(0, 5), rising: s.rising.slice(0, 5), regions: s.regions.slice(0, 5), anchor, ...(match ? { trendingNow: match } : {}), ...(retryAfterSec !== undefined ? { retryAfterSec } : {}),
       snapshotId: s.id, fetchedAt: s.fetchedAt, source: answer.source, exploreUrl: 'https://trends.google.com/trends/explore?' + new URLSearchParams({ q: term, geo: filter.geo, date: filter.time, cat: String(filter.category), gprop: filter.property }) };
-    results.push(row); rows.set(term, row);
+    results.push(row);
+    if (anchorTerm && verdict !== 'blocked' && verdict !== 'no_data' && !blocked) pending.push({ term, anchor, row });
   }
+  if (blocked && blockError) markBlocked(pending, blockError);
   // One shared comparison per run: up to 4 terms + the anchor per Google request, so every
   // term in a batch is scaled against the same anchor curve.
   for (let i = 0; i < pending.length && !blocked; i += 4) {
@@ -85,8 +133,9 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
     const termSlots = batch.map(b => slot(b.term)), anchorSlot = slot(anchorTerm);
     const comparison = await query({ queries, ...filterInput(filter), dataTypes: ['interestOverTime'] });
     if (['BLOCKED', 'RATE_LIMITED'].includes(comparison.error?.code ?? '')) {
-      for (const b of batch) { const r = rows.get(b.term)!; r.verdict = 'blocked'; r.confidence = 'low'; r.reasons.push(comparison.error!.code); b.anchor.note = comparison.error!.message; if (comparison.error!.retryAfterSec !== undefined) r.retryAfterSec = comparison.error!.retryAfterSec; delete r.freshSpike; }
-      if (opts.stopOnBlocked !== false) blocked = true; continue;
+      markBlocked(opts.stopOnBlocked !== false ? pending.slice(i) : batch, comparison.error!);
+      if (opts.stopOnBlocked !== false) blocked = true;
+      continue;
     }
     const timeline = (comparison.data?.interestOverTime as InterestOverTime)?.timeline ?? [];
     const anchorPoints = timeline.map(p => ({ time: p.time, value: p.values[anchorSlot] ?? 0 }));
@@ -100,8 +149,9 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
       anchor.ratio = c.ratio;
       anchor.band = c.ratio === null ? null : c.ratio >= 1 ? 'high' : c.ratio >= .1 ? 'mid' : 'low';
       anchor.traffic = c.traffic;
-      anchor.note = daily === null ? `无法估 (no calibration for geo ${geoLabel}); traffic fields are null` : c.note;
+      anchor.note = daily === null ? noCalibrationNote : c.note;
       if (c.warning) anchor.warning = c.warning;
+      else if (scopeWarning) anchor.warning = scopeWarning;
       else delete anchor.warning;
     });
   }

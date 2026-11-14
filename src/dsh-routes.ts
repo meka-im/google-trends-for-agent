@@ -6,7 +6,7 @@ import {
   type ActorRelayTransport,
   type ApifyActorClientOptions,
 } from './apify-actor.js';
-import { abortError, createDefaultTransport, raceAbort, type Transport } from './transport.js';
+import { abortError, createDefaultTransport, isChallengeResponse, raceAbort, type Transport } from './transport.js';
 import { GTFA_PUBLIC_ACTOR_ID, type EgressMode } from './options.js';
 
 export const APIFY_USAGE_PATH = '/api/gtfa.apify-usage';
@@ -135,6 +135,9 @@ export async function testConnection(options: {
         ...(options.signal ? { signal: options.signal } : {}),
       }), options.signal);
       const latencyMs = elapsed(clock, startedAt);
+      if (isChallengeResponse(response)) {
+        return failure('local', 'http', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status);
+      }
       if (response.status < 200 || response.status >= 400) {
         return failure('local', 'http', `Google Trends returned HTTP ${response.status}.`, latencyMs, response.status);
       }
@@ -164,7 +167,7 @@ export async function testConnection(options: {
     transport = options.relayTransport?.(resolved.token, actorId)
       ?? createActorRelayTransport({ token: resolved.token, actorId });
     const health = (transport as Partial<ActorRelayTransport>).checkHealth;
-    if (typeof health === 'function') await health.call(transport);
+    if (typeof health === 'function') await health.call(transport, options.signal);
   } catch (error) {
     if (options.signal?.aborted) throw abortError(options.signal);
     const message = scrubSecrets(errorText(error), resolved.token);
@@ -185,6 +188,9 @@ export async function testConnection(options: {
       ...(options.signal ? { signal: options.signal } : {}),
     }), options.signal);
     const latencyMs = elapsed(clock, startedAt);
+    if (isChallengeResponse(response)) {
+      return failure(options.egress, 'http', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status, actorId);
+    }
     if (response.status === 401 || response.status === 403) {
       return failure(options.egress, 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status, actorId);
     }

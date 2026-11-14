@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createServer } from '../src/mcp.js';
 import { IdleExitController, isStandbyRun, parsePort, resolveStandbyPort, startHttpMcpServer, type HttpMcpServer, type IdleExitOptions } from '../src/http.js';
-import type { GtfaTool } from '../src/tools.js';
+import { createTools, type GtfaTool } from '../src/tools.js';
 import type { Transport } from '../src/transport.js';
 
 // test/setup.ts blocks global fetch; the SDK client needs real localhost HTTP.
@@ -349,6 +349,31 @@ describe('Streamable HTTP MCP transport', () => {
     });
     expect(response.status).toBe(504);
     expect(await response.json()).toMatchObject({ error: { code: 'TRENDS_TIMEOUT' } });
+  });
+
+  it('returns 504 for a trends_snapshot HTTP deadline and aborts its upstream signal', async () => {
+    const signals: AbortSignal[] = [];
+    const hanging: Transport = async req => new Promise((_resolve, reject) => {
+      signals.push(req.signal!);
+      req.signal?.addEventListener('abort', () => {
+        const error = new Error('deadline');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+    });
+    const snapshotDir = mkdtempSync(join(tmpdir(), 'gtfa-snapshot-deadline-'));
+    const tools = createTools({ transport: hanging, minIntervalMs: 0, snapshotDir });
+    cleanups.push(() => rmSync(snapshotDir, { recursive: true, force: true }));
+    const { http } = await start(hanging, { tools, deadlineMs: 25 });
+    const response = await realFetch(`http://127.0.0.1:${http.port}/tools/trends_snapshot`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ term: 'Astra', fresh: true }),
+    });
+    expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({ error: { code: 'TRENDS_TIMEOUT' } });
+    expect(signals.length).toBeGreaterThan(0);
+    await vi.waitFor(() => expect(signals.every(signal => signal.aborted)).toBe(true));
   });
 
   it('exits Standby after the idle window with no in-flight requests', () => {

@@ -48,6 +48,11 @@ export interface ApifyActorListOptions {
   signal?: AbortSignal;
 }
 
+export interface ResolveStandbyUrlOptions {
+  refresh?: boolean;
+  signal?: AbortSignal;
+}
+
 /** Saved config token wins; otherwise APIFY_TOKEN. */
 export function resolveApifyApiToken(
   configToken?: string | null,
@@ -176,7 +181,7 @@ export class ApifyActorClient {
   }
 
   /** Resolve the Actor's Standby base URL; cached for 60 s per token hash + Actor id. */
-  async resolveStandbyUrl(token: string, actorId: string, options: { refresh?: boolean; signal?: AbortSignal } = {}): Promise<string> {
+  async resolveStandbyUrl(token: string, actorId: string, options: ResolveStandbyUrlOptions = {}): Promise<string> {
     const trimmed = token.trim();
     const id = actorId.trim();
     if (!trimmed) throw new GTrendsError('INVALID_INPUT', 'Add an Apify token (or set APIFY_TOKEN) to use Apify egress.');
@@ -327,8 +332,8 @@ export function listMyActors(token: string, options: ApifyActorListOptions = {})
   return sharedClient.listMyActors(token, options);
 }
 
-export function resolveStandbyUrl(token: string, actorId: string): Promise<string> {
-  return sharedClient.resolveStandbyUrl(token, actorId);
+export function resolveStandbyUrl(token: string, actorId: string, options: ResolveStandbyUrlOptions = {}): Promise<string> {
+  return sharedClient.resolveStandbyUrl(token, actorId, options);
 }
 
 export function deployActor(token: string): Promise<ApifyDeployResult> {
@@ -343,7 +348,7 @@ export interface CreateActorRelayTransportOptions {
   /** Fetch implementation for tests. */
   fetch?: typeof globalThis.fetch;
   /** Standby URL resolver for tests; defaults to resolveStandbyUrl with the module cache. */
-  resolveStandbyUrl?: (token: string, actorId: string) => Promise<string>;
+  resolveStandbyUrl?: (token: string, actorId: string, options?: ResolveStandbyUrlOptions) => Promise<string>;
   /** First request timeout (cold Standby start). Default 120 s. */
   coldStartTimeoutMs?: number;
   /** Relay protocol this plugin speaks; defaults to RELAY_PROTOCOL_VERSION. */
@@ -352,7 +357,7 @@ export interface CreateActorRelayTransportOptions {
 
 /** A relay transport that can also run the one-time /health compatibility check. */
 export interface ActorRelayTransport extends Transport {
-  checkHealth: () => Promise<void>;
+  checkHealth: (signal?: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -363,64 +368,72 @@ export interface ActorRelayTransport extends Transport {
  */
 export function createActorRelayTransport(options: CreateActorRelayTransportOptions): ActorRelayTransport {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const resolve = options.resolveStandbyUrl ?? ((token: string, actorId: string) => sharedClient.resolveStandbyUrl(token, actorId));
+  const resolve = options.resolveStandbyUrl
+    ?? ((token: string, actorId: string, resolveOptions?: ResolveStandbyUrlOptions) => sharedClient.resolveStandbyUrl(token, actorId, resolveOptions));
   const coldStartTimeoutMs = options.coldStartTimeoutMs ?? COLD_START_TIMEOUT_MS;
   const relayVersion = options.relayVersion ?? RELAY_PROTOCOL_VERSION;
   let standby: string | undefined;
-  let resolving: Promise<string> | undefined;
   let first = true;
-  let health: Promise<void> | undefined;
+  let healthy = false;
 
-  const baseUrl = async (): Promise<string> => {
+  const baseUrl = async (signal?: AbortSignal): Promise<string> => {
+    throwIfAborted(signal);
     if (standby) return standby;
-    resolving ??= resolve(options.token.trim(), options.actorId.trim()).then(url => {
-      standby = url.replace(/\/+$/, '');
-      return standby;
-    }).finally(() => { resolving = undefined; });
-    return resolving;
+    const pending = Promise.resolve().then(() => resolve(options.token.trim(), options.actorId.trim(), signal ? { signal } : undefined));
+    const url = await raceAbort(pending, signal);
+    throwIfAborted(signal);
+    standby = url.replace(/\/+$/, '');
+    return standby;
   };
 
-  const checkHealth = async (): Promise<void> => {
-    health ??= (async () => {
-      const base = await baseUrl();
-      const timeout = AbortSignal.timeout(coldStartTimeoutMs);
-      let response: Response;
-      try {
-        response = await raceAbort(fetchImpl(`${base}/health`, {
-          method: 'GET',
-          headers: { authorization: `Bearer ${options.token.trim()}`, accept: 'application/json' },
-          redirect: 'manual',
-          signal: timeout,
-        }), timeout);
-      } catch (error) {
-        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-        throw new GTrendsError('NETWORK_ERROR', timedOut
-          ? `Your Apify Actor did not answer the health check within ${Math.round(coldStartTimeoutMs / 1000)} seconds. Retry; a cold Standby start can take up to two minutes.`
-          : 'Could not reach your Apify Actor health endpoint. Check its Standby URL and connectivity, then retry.');
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.');
-      }
-      if (response.status === 404) {
-        throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
-      }
-      if (!response.ok) {
-        throw new GTrendsError('NETWORK_ERROR', `Your Apify Actor health check returned HTTP ${response.status}. Retry in a moment.`);
-      }
-      let body: unknown;
-      try { body = await response.json(); }
-      catch { throw new GTrendsError('NETWORK_ERROR', 'Your Apify Actor returned a non-JSON health response. Redeploy the Actor and retry.'); }
-      const relay = record(body).relay;
-      if (relay !== relayVersion) {
-        const speaks = typeof relay === 'number' && Number.isFinite(relay) ? String(relay) : '?';
-        throw new GTrendsError('INVALID_INPUT', `This Actor build speaks relay v${speaks}; this plugin needs v${relayVersion}. Update the plugin or rebuild the Actor.`);
-      }
-    })().catch(error => {
-      // Keep a definite answer (bad token, wrong relay version); retry transient failures next call.
-      if (!(error instanceof GTrendsError && error.code === 'INVALID_INPUT')) health = undefined;
-      throw error;
-    });
-    return health;
+  const checkHealth = async (signal?: AbortSignal): Promise<void> => {
+    throwIfAborted(signal);
+    if (healthy) return;
+    const base = await baseUrl(signal);
+    throwIfAborted(signal);
+    const timeout = AbortSignal.timeout(coldStartTimeoutMs);
+    const combined = signal ? AbortSignal.any([timeout, signal]) : timeout;
+    let response: Response;
+    try {
+      response = await raceAbort(fetchImpl(`${base}/health`, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${options.token.trim()}`, accept: 'application/json' },
+        redirect: 'manual',
+        signal: combined,
+      }), combined);
+    } catch (error) {
+      if (signal?.aborted) throw abortError(signal);
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      throw new GTrendsError('NETWORK_ERROR', timedOut
+        ? `Your Apify Actor did not answer the health check within ${Math.round(coldStartTimeoutMs / 1000)} seconds. Retry; a cold Standby start can take up to two minutes.`
+        : 'Could not reach your Apify Actor health endpoint. Check its Standby URL and connectivity, then retry.');
+    }
+    throwIfAborted(signal);
+    if (response.status === 401 || response.status === 403) {
+      throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.');
+    }
+    if (response.status === 404) {
+      throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
+    }
+    if (!response.ok) {
+      throw new GTrendsError('NETWORK_ERROR', `Your Apify Actor health check returned HTTP ${response.status}. Retry in a moment.`);
+    }
+    let body: unknown;
+    try { body = await raceAbort(response.json(), combined); }
+    catch (error) {
+      if (signal?.aborted) throw abortError(signal);
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      throw new GTrendsError('NETWORK_ERROR', timedOut
+        ? `Your Apify Actor did not answer the health check within ${Math.round(coldStartTimeoutMs / 1000)} seconds. Retry; a cold Standby start can take up to two minutes.`
+        : 'Your Apify Actor returned a non-JSON health response. Redeploy the Actor and retry.');
+    }
+    throwIfAborted(signal);
+    const relay = record(body).relay;
+    if (relay !== relayVersion) {
+      const speaks = typeof relay === 'number' && Number.isFinite(relay) ? String(relay) : '?';
+      throw new GTrendsError('INVALID_INPUT', `This Actor build speaks relay v${speaks}; this plugin needs v${relayVersion}. Update the plugin or rebuild the Actor.`);
+    }
+    healthy = true;
   };
 
   const transport = async (request: TransportRequest): Promise<TransportResponse> => {
@@ -431,11 +444,10 @@ export function createActorRelayTransport(options: CreateActorRelayTransportOpti
     if (!options.actorId.trim()) {
       throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
     }
-    await checkHealth();
+    await checkHealth(request.signal);
     throwIfAborted(request.signal);
-    const base = await baseUrl();
+    const base = await baseUrl(request.signal);
     const timeoutMs = first ? Math.max(request.timeoutMs, coldStartTimeoutMs) : request.timeoutMs;
-    first = false;
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = request.signal ? AbortSignal.any([timeout, request.signal]) : timeout;
     let response: Response;
@@ -457,6 +469,8 @@ export function createActorRelayTransport(options: CreateActorRelayTransportOpti
         redirect: 'manual',
         signal,
       }), signal);
+      first = false;
+      throwIfAborted(request.signal);
     } catch (error) {
       if (request.signal?.aborted) throw abortError(request.signal);
       const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');

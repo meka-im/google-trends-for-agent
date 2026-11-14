@@ -82,11 +82,11 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.series.points[1]).toEqual({ t: '2026-10-31T01:00:00.000Z', score: 0, traffic: 0, gap: true });
     expect(e.series.anchorPoints[1]).toEqual({ t: '2026-10-31T01:00:00.000Z', score: 0 });
     expect(e.tables.popular).toEqual([
-      { rank: 1, query: 'astra app', value: 100, formattedValue: '100', estDaily: 36540 },
-      { rank: 2, query: 'astra ai', value: 50, formattedValue: '50', estDaily: 18270 },
+      { rank: 1, query: 'astra app', value: 100, formattedValue: '100', estDaily: null },
+      { rank: 2, query: 'astra ai', value: 50, formattedValue: '50', estDaily: null },
     ]);
     expect(e.tables.rising).toEqual([
-      { rank: 1, query: 'astra ai', value: 250, formattedValue: '+250%', breakout: false, estDaily: 18270 },
+      { rank: 1, query: 'astra ai', value: 250, formattedValue: '+250%', breakout: false, estDaily: null },
       { rank: 2, query: 'astra new', value: 5000, formattedValue: 'Breakout', breakout: true, estDaily: null },
     ]);
     expect(e.verdict).toMatchObject({ label: 'rising', confidence: 'mid', prioritize: true, reasons: ['Breakout related queries'] });
@@ -120,9 +120,29 @@ describe('trends_snapshot traffic conversion', () => {
 
   it('honors a matching baselines override', async () => {
     const e = await trafficSnapshotEnvelope(fixture(), { cached: false, ageMin: 0, chartDir: null,
-      baselines: { version: 2, anchors: [{ term: 'sudoku', dailySearches: 1000, geo: 'US', tolerance: 0.2 }] } });
+      baselines: { version: 2, anchors: [{ term: 'sudoku', dailySearches: 1000, geo: ' us ', tolerance: 0.2 }] } });
     expect(e.anchor).toMatchObject({ dailySearches: 1000, tolerance: 0.2, level: 100, ratio: 0.58 });
     expect(e.traffic).toMatchObject({ average: 580, low: 464, high: 696 });
+  });
+
+  it.each([
+    { label: 'non-web property', patch: { property: 'youtube' } },
+    { label: 'category', patch: { category: 1 } },
+  ] as const)('does not apply an unscoped custom baseline to $label', async ({ patch }) => {
+    const snap = fixture();
+    snap.filter = { ...snap.filter, ...patch };
+    const e = await trafficSnapshotEnvelope(snap, {
+      cached: false, ageMin: 0, chartDir: null,
+      baselines: { version: 2, anchors: [{ term: 'sudoku', geo: 'US', dailySearches: 12000, tolerance: 0.2 }] },
+    });
+    expect(e.anchor).toMatchObject({ dailySearches: null, tolerance: null, level: 100, ratio: 0.58 });
+    expect(e.traffic).toEqual({ unit: 'searches/day', average: null, latest: null, settledLatest: null, peak: null, low: null, high: null, gapCount: 1 });
+    expect(e.series.points.every(p => p.traffic === null)).toBe(true);
+    expect(e.tables.popular.every(r => r.estDaily === null)).toBe(true);
+    expect(e.tables.rising.every(r => r.estDaily === null)).toBe(true);
+    expect(e.anchor.note).toContain('Baseline calibration applies only to web/all categories');
+    expect(e.anchor.note).not.toContain('No calibration for geo');
+    expect(e.meta.warnings).toContainEqual(expect.stringContaining('web/all categories'));
   });
 
   it('leaves traffic fields null and adds a note without matching non-US calibration', async () => {
@@ -316,6 +336,7 @@ describe('trends_snapshot 7-day fetch', () => {
     const r = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never });
     expect(query).toHaveBeenCalledTimes(2);
     const calls = query.mock.calls.map(([input]) => input as { timeRange?: string; queries: string[] });
+    expect(calls.map(c => c.timeRange)).toEqual(['now 1-d', 'now 7-d']);
     expect(calls.map(c => c.timeRange).sort()).toEqual(['now 1-d', 'now 7-d']);
     expect(calls.find(c => c.timeRange === 'now 1-d')?.queries).toEqual(['Astra', 'sudoku']);
     expect(calls.find(c => c.timeRange === 'now 7-d')?.queries).toEqual(['Astra', 'gpts']);
@@ -332,6 +353,59 @@ describe('trends_snapshot 7-day fetch', () => {
     expect(e.chart7d?.svg).toContain('anchor (gpts)');
     expect(e.traffic7d).toMatchObject({ average: 1750, gapCount: 1 });
     expect(e.chart.path).not.toBe(e.chart7d?.path);
+  });
+
+  it.each(['BLOCKED', 'RATE_LIMITED'] as const)('skips the 7-day request when the primary window is %s', async code => {
+    const store = new SnapshotStore(temp());
+    const query = vi.fn(async (input: { timeRange?: string }) => ({
+      status: 'error' as const,
+      input,
+      error: { code, message: `${code} from primary` },
+      meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 1, durationMs: 0, warnings: [] },
+    }));
+    const r = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0].timeRange).toBe('now 1-d');
+    expect(r.snapshot.status).toBe('blocked');
+    expect(r.week).toBeUndefined();
+    expect(r.weekError).toBe(`Primary window ${code}; 7-day window skipped`);
+  });
+
+  it('keeps the primary snapshot and the non-abort 7-day error snapshot', async () => {
+    const store = new SnapshotStore(temp());
+    const query = vi.fn(async (input: { timeRange?: string }) => {
+      if (input.timeRange === 'now 7-d') throw new Error('week unavailable');
+      return timelineFor(fixture());
+    });
+    const r = await fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never });
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(r.snapshot.status).toBe('ok');
+    expect(r.week).toMatchObject({ status: 'error', error: { code: 'NETWORK_ERROR', message: expect.stringContaining('week unavailable') } });
+    expect(r.weekError).toBeUndefined();
+  });
+
+  it('propagates aborts from the 7-day request', async () => {
+    const store = new SnapshotStore(temp());
+    const abort = new Error('cancelled');
+    abort.name = 'AbortError';
+    const query = vi.fn(async (input: { timeRange?: string }) => {
+      if (input.timeRange === 'now 7-d') throw abort;
+      return timelineFor(fixture());
+    });
+    await expect(fetchTrafficSnapshot('Astra', { filter: { time: 'now 1-d' }, store, query: query as never }))
+      .rejects.toBe(abort);
+  });
+
+  it('normalizes geo before snapshot cache lookup and envelope display', async () => {
+    const store = new SnapshotStore(temp());
+    const query = vi.fn(async (input: { timeRange?: string }) => timelineFor(weekFixture()));
+    const first = await fetchTrafficSnapshot('Astra', { filter: { geo: ' us ', time: 'now 7-d' }, store, query: query as never });
+    const second = await fetchTrafficSnapshot('Astra', { filter: { geo: 'us', time: 'now 7-d' }, store, query: query as never });
+    expect(first.snapshot.filter.geo).toBe('US');
+    expect(second.source).toBe('cache');
+    expect(query).toHaveBeenCalledTimes(1);
+    const e = await trafficSnapshotEnvelope(second.snapshot, { cached: true, ageMin: second.ageMin, chartDir: null });
+    expect(e.filter.geo).toBe('US');
   });
 
   it('uses an explicit anchor for both windows when a baselines override exists', async () => {

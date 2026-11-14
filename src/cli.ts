@@ -7,7 +7,7 @@ import { queryTrends, batchTrends, errorResponse, type TrendsResponse } from './
 import { formatGTrendsExport } from './export.js';
 import { planTrendsRequest } from './input.js';
 import { publicInput } from './core.js';
-import { resolveFilter } from './filter.js';
+import { filterInput, resolveFilter } from './filter.js';
 import { compareEnvelope, findDuplicateKeyword, schemaRejectionEnvelope } from './tools.js';
 import { runDoctorCli } from './doctor-cli.js';
 import { VERSION } from './version.js';
@@ -63,9 +63,10 @@ function exitCode(results: TrendsResponse[]): number {
   return 1;
 }
 async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
   let format: 'json' | 'csv' = 'json';
   let pretty = false;
-  let json = false;
+  let json = rawArgs.includes('--json');
   let result: unknown;
   let results: TrendsResponse[];
   try {
@@ -83,15 +84,21 @@ async function main(): Promise<void> {
     format = json ? 'json' : values.format;
     pretty = values.pretty ?? false;
     const numeric = (value: string): number => { if (!/^\d+$/.test(value)) throw new Error('numeric flags require non-negative integers'); return Number(value); };
-    // Same defaults as MCP trends_compare / ask (US, now 1-d, honoring gtfa.config.json and GTFA_*); Explore URLs and explicit dates keep their own.
+    // Local queries inherit configured filters; Explore URLs keep their own missing-value defaults.
     const defaults = resolveFilter({ ...(values.geo !== undefined ? { geo: values.geo } : {}), ...(values.time ? { time: values.time } : {}) });
+    const defaultInput = filterInput(defaults);
+    const { timeRange: defaultTimeRange, ...defaultsWithoutTime } = defaultInput;
+    const requestDefaults = values.url
+      ? {}
+      : values.time || values.start || values.end
+        ? defaultsWithoutTime
+        : { ...defaultsWithoutTime, timeRange: defaultTimeRange };
     if (values.query) {
       const dup = findDuplicateKeyword(values.query);
       if (dup !== undefined) throw new Error(`duplicate keyword: "${dup.trim()}"; each keyword must be unique`);
     }
     const plan = await planTrendsRequest({
-      ...(!values.url ? { geo: defaults.geo } : {}),
-      ...(!values.url && !values.time && !values.start && !values.end ? { timeRange: defaults.time } : {}),
+      ...requestDefaults,
       ...(values.query ? { queries: values.query } : {}), ...(values.url ? { urls: values.url } : {}),
       ...(values.geo !== undefined ? { geo: values.geo } : {}), ...(values.time ? { timeRange: values.time } : {}),
       ...(values.start ? { startDate: values.start } : {}), ...(values.end ? { endDate: values.end } : {}),

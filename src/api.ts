@@ -27,21 +27,27 @@ export async function queryTrends(input: unknown, options: QueryOptions = {}): P
   }
 }
 export function compareTrends(keywords: string[], opts: Omit<TrendsInput, 'queries'> & QueryOptions = {}): Promise<TrendsResponse> {
-  const { transport, minIntervalMs, now, sleep, client, limiter, signal, ...input } = opts;
-  return queryTrends({ ...input, queries: keywords }, { transport, minIntervalMs, now, sleep, client, limiter, signal });
+  const { transport, minIntervalMs, now, sleep, client, limiter, signal, timeoutSurface, ...input } = opts;
+  return queryTrends({ ...input, queries: keywords }, { transport, minIntervalMs, now, sleep, client, limiter, signal, timeoutSurface });
 }
 export interface BatchOptions extends QueryOptions { stopOnBlocked?: boolean }
 export async function batchTrends(items: readonly unknown[], opts: BatchOptions = {}): Promise<{ status: TrendsResponse['status']; results: (TrendsResponse & { index: number })[] }> {
   const results: (TrendsResponse & { index: number })[] = [];
-  let blocked = false;
+  let stopError: NonNullable<TrendsResponse['error']> | undefined;
   let client: TrendsClient;
   try { client = opts.client ?? new TrendsClient(opts); }
   catch (e) { return { status: 'error', results: items.map((input, index) => ({ ...errorResponse(input, 'INVALID_INPUT', e instanceof Error ? e.message : 'invalid options'), index })) }; }
   for (const [index, input] of items.entries()) {
     throwIfAborted(opts.signal);
-    const result = blocked ? errorResponse(input, 'BLOCKED', 'skipped after upstream block') : await queryTrends(input, { client, signal: opts.signal });
+    let result: TrendsResponse;
+    if (stopError) {
+      result = errorResponse(input, stopError.code, stopError.code === 'BLOCKED' ? 'skipped after upstream block' : 'skipped after upstream rate limit');
+      if (stopError.retryAfterSec !== undefined) result.error!.retryAfterSec = stopError.retryAfterSec;
+    } else {
+      result = await queryTrends(input, { client, signal: opts.signal });
+    }
     results.push({ ...result, index });
-    if (opts.stopOnBlocked !== false && result.error?.code === 'BLOCKED') blocked = true;
+    if (opts.stopOnBlocked !== false && ['BLOCKED', 'RATE_LIMITED'].includes(result.error?.code ?? '')) stopError = result.error;
   }
   return { status: results.length && results.every(r => r.status === 'ok') ? 'ok' : results.every(r => r.status === 'error') ? 'error' : 'partial', results };
 }

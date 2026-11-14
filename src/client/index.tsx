@@ -627,6 +627,14 @@ function normalizeTolerance(value: unknown): string {
   return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1 ? String(numeric) : '';
 }
 
+function defaultUsBaselineAnchors(): AnchorDraft[] {
+  const [gptsTerm, sudokuTerm] = BUILTIN_ANCHOR_TERMS;
+  return [
+    { term: gptsTerm, geo: DEFAULT_GEO, dailySearches: '3500', tolerance: '0.5' },
+    { term: sudokuTerm, geo: DEFAULT_GEO, dailySearches: '63000', tolerance: '0.5' },
+  ];
+}
+
 function blankAnchor(geo = DEFAULT_GEO): AnchorDraft {
   return { term: '', geo, dailySearches: '', tolerance: '0.5' };
 }
@@ -670,6 +678,15 @@ export function fromSnapshot(value: Record<string, unknown> | undefined): Draft 
     newAnchor: blankAnchor(),
     windowShort: text(windows.short),
     windowLong: text(windows.long),
+  };
+}
+
+/** Enable a complete editable baseline without replacing saved anchors or window choices. */
+export function setBaselineOverride(draft: Draft, enabled: boolean): Draft {
+  return {
+    ...draft,
+    baselineOverride: enabled,
+    anchors: enabled && draft.anchors.length === 0 ? defaultUsBaselineAnchors() : draft.anchors,
   };
 }
 
@@ -772,10 +789,10 @@ export function validateDraft(draft: Draft, t: Translate): DraftValidation {
     const daily = draft.newAnchor.dailySearches.trim();
     if (term || daily) {
       if (!term) validation.newAnchorTerm = t('newAnchorTermRequired');
-      else if (
-        draft.anchors.some(anchor => anchor.term.trim().toLowerCase() === term.toLowerCase() && anchor.geo === draft.newAnchor.geo) ||
-        (draft.newAnchor.geo === DEFAULT_GEO && BUILTIN_ANCHOR_TERMS.some(value => value.toLowerCase() === term.toLowerCase()))
-      ) {
+      else if (draft.anchors.some(anchor =>
+        anchor.term.trim().toLowerCase() === term.toLowerCase() &&
+        anchor.geo.trim().toUpperCase() === draft.newAnchor.geo.trim().toUpperCase()
+      )) {
         validation.newAnchorTerm = t('duplicateAnchor');
       }
       if (!isPositiveNumber(daily)) validation.newAnchorDaily = t('invalidDaily');
@@ -1606,12 +1623,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
     <section style={styles.section}>
       <SectionHeader title={t('baselines')} description={t('baselinesDescription')} />
       <Toggle label={t('overrideBaselines')} hint={t('baselinesHint')} checked={draft.baselineOverride} disabled={!editable}
-        onChange={checked => edit({
-          baselineOverride: checked,
-          anchors: checked && draft.anchors.length === 0
-            ? [{ term: BUILTIN_ANCHOR_TERMS[0], geo: DEFAULT_GEO, dailySearches: '3500', tolerance: '0.5' }]
-            : draft.anchors,
-        })} />
+        onChange={checked => edit(setBaselineOverride(draft, checked))} />
       {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
       {draft.baselineOverride ? <>
         <div style={styles.anchorHead}>

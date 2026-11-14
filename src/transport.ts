@@ -176,7 +176,9 @@ export class RateLimiter {
     throwIfAborted(signal);
     const previous = this.tail;
     let release!: () => void;
-    this.tail = new Promise(resolve => { release = resolve; });
+    const turn = new Promise<void>(resolve => { release = resolve; });
+    // A cancelled waiter must not release later callers past an active predecessor.
+    this.tail = previous.then(() => turn);
     try {
       await raceAbort(previous, signal);
       throwIfAborted(signal);
