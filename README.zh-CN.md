@@ -66,19 +66,19 @@
 CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。下方固定的是已审查的完整源码 commit，不是 release tag；只有需要有意跟随当前 `main` 时才省略 ref。
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 完整 SHA 的 GitHub `npx` 入口已用 npm 11.19.1 验证。npm 10.9.4 可能先成功构建同一完整 SHA 依赖，随后在 npm 打包阶段因 `GitFetcher` 缺少 Arborist 依赖而报错。遇到该报错时，请使用下方的 clone → checkout → `npm ci` → pack 持久安装流程，或升级 npm。CLI 和安装后的包仍要求 Node.js 20+。
 
-零安装的 `npx` 路径首次从 git 构建约需 30–50 秒，之后每次调用仍增加约 7 秒启动开销。频繁使用建议持久安装或运行 MCP 服务器。
+零安装的 `npx` 路径会在首次使用时从 git 构建，耗时取决于网络和机器。频繁使用建议持久安装或运行 MCP 服务器。
 
 持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）。用打包后的 tarball 安装，之后可以删除 clone 目录：
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach fc275da020a2d6d6892fdbfde29d1a53a1cb4347
+git checkout --detach 8304fab20544c877ab0f38a461d96c0ec3f69656
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
@@ -89,7 +89,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656", "gtfa-mcp"] } }
 }
 ```
 
@@ -104,7 +104,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 检查包下载和数据抓取两段连通性：

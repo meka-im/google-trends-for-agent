@@ -11,7 +11,7 @@
 - Propagate caller cancellation and the overall snapshot deadline, map the Actor HTTP deadline to `504` / `TRENDS_TIMEOUT`, avoid caching cancelled work as a permanent failure, and prevent a cancelled `RateLimiter` waiter from releasing later requests early.
 - Harden Trending Now CSV output with RFC 4180 quoting and spreadsheet-formula protection; serialize array fields as JSON before CSV encoding.
 - Make the dsh default US `gpts` / `sudoku` baselines editable; for a newly added row, only an identical normalized term + geo in the current list is treated as a duplicate, while other validation remains unchanged.
-- Pin install examples to reviewed source commit `fc275da020a2d6d6892fdbfde29d1a53a1cb4347` rather than the unavailable `v0.2.2` tag; persistent installs clone, detach at that commit, and use `npm ci`.
+- Pin install examples to reviewed source commit `8304fab20544c877ab0f38a461d96c0ec3f69656` rather than the unavailable `v0.2.2` tag; persistent installs clone, detach at that commit, and use `npm ci`.
 - Package `.actor/README.md` with its three link targets fixed. Keep the root scoped `@crawlee/core` → `minimatch` override at `^11.0.1` (lock: `11.0.8`), an explicit security override outside Crawlee's declared `^9` range. Because dependency overrides do not propagate to consumers, bundle the audited `apify` dependency subtree in the packed artifact. This materially increases package size; verify audit on both the root tree and a clean consumer install of the tarball, and expect that consumer `npm ls` may still report the range mismatch.
 
 ## 0.2.2 — 2026-11-13

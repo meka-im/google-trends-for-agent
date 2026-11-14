@@ -64,19 +64,19 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run. The pinned ref below is a reviewed source commit, not a release tag. Omit the ref only when intentionally tracking the current `main`.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa snapshot Sora --geo US --json --pretty
 ```
 
 The full-SHA GitHub `npx` entry was verified with npm 11.19.1. npm 10.9.4 can build the same full-SHA dependency and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → checkout → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
 
-The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
+The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
 
 Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach fc275da020a2d6d6892fdbfde29d1a53a1cb4347
+git checkout --detach 8304fab20544c877ab0f38a461d96c0ec3f69656
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
@@ -87,7 +87,7 @@ The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656", "gtfa-mcp"] } }
 }
 ```
 
@@ -102,7 +102,7 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 Check both package-download and data-fetch connectivity:

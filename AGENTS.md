@@ -8,7 +8,7 @@ The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the p
 
 ```sh
 # Pinned reviewed commit (recommended; not a release tag)
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa --help
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa --help
 
 # Latest main
 npx -y -p github:meka-im/google-trends-for-agent gtfa --help
@@ -16,14 +16,14 @@ npx -y -p github:meka-im/google-trends-for-agent gtfa --help
 
 The full-SHA GitHub `npx` entry was verified with npm 11.19.1. npm 10.9.4 can build the same full-SHA dependency and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → checkout → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
 
-The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first run (~30–50 s); each later call adds ~7 s startup. For frequent use, prefer a persistent install or the MCP server.
+The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
 
 Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach fc275da020a2d6d6892fdbfde29d1a53a1cb4347
+git checkout --detach 8304fab20544c877ab0f38a461d96c0ec3f69656
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
@@ -39,7 +39,7 @@ Use this generic stdio configuration. The full SHA is a reviewed source commit, 
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347", "gtfa-mcp"]
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656", "gtfa-mcp"]
     }
   }
 }
@@ -83,8 +83,8 @@ The settings page's **Test connection** check calls Actor `/health` once when ap
 Run the doctor once after install, or whenever a call fails unexpectedly:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa doctor
-npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa doctor --json
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa doctor
+npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa doctor --json
 ```
 
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
@@ -97,7 +97,7 @@ Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY
 
 Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
 
-1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#fc275da020a2d6d6892fdbfde29d1a53a1cb4347 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
+1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#8304fab20544c877ab0f38a461d96c0ec3f69656 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
 3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
 
