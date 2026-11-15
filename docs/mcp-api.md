@@ -1,3 +1,5 @@
+> 0.2.7 接入变更：本文的四工具字段用于本机 MCP 和 dsh 原生插件。云端请使用 Apify 官方 MCP gateway，它暴露 Actor 输入与结果读取工具；旧 Actor Standby MCP 入口已停用。每次查询启动一个有时限的运行，完成即退出。
+
 # google-trends-for-agent · Agent API
 
 面向 Agent 的公开表面只有 **四个 MCP 工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点把 0–100 兴趣换算成每日搜索量估计；锚点按窗口自动选择（`now 1-H` / `now 4-H` / `now 1-d` 用 `sudoku`，`now 7-d` 及以上用 `gpts`）。正常返回时，`chart7d` / `traffic7d` / `anchor7d` 字段形状固定。主窗口不是 `now 7-d` 时，主尝试结束后，只要结果不是 `BLOCKED` / `RATE_LIMITED`，就顺序尝试一次额外的 `now 7-d` 请求；普通 `NETWORK_ERROR` 等错误本身不会阻止该尝试。主窗口为这两类停止错误时不发额外请求，仍返回空图、null 流量、基线信息与 warning。调用方取消或整体 deadline 会向上传播，不承诺返回该正常信封。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述本版本的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
@@ -14,7 +16,7 @@
 > 四个工具的名称和入参/输出契约不变。认证变化只影响如何取得 Apify 凭据。Apify 当前 OAuth 的唯一 scope 是 `full_api_access`，授权后会获得**完整 Apify API 访问权限**，而不是仅限本 Actor 或本工具的权限。
 
 - **dsh 原生工具：** 每次操作重新解析凭据：已存储的 OAuth session 优先；只有在没有存储 session 时，才依次使用已保存的 `apifyToken` 和环境变量 `APIFY_TOKEN`。解析来源为 `oauth` / `config` / `env`，usage API 的 `source` 也包含 `oauth`。已存储的 session 若过期或损坏且无法 refresh，应重新登录，不能静默回退或当作成功。OAuth 凭据不进入浏览器可见状态或模型可见的 tool input/output；Host 内部代码必须通过 credentials service 解析后调用 Apify。
-- **远程 Actor MCP：** 支持 OAuth 的客户端只配置 `https://meka-im--google-trends-for-agent.apify.actor/mcp`，再在客户端内完成 Apify 登录。不要手工构造 token URL 或 authorization URL。客户端管理自己的 OAuth 授权与续期流程；Actor 不处理 OAuth token refresh。
+- **远程 Actor MCP：** 支持 OAuth 的客户端只配置 `https://mcp.apify.com?tools=meka.im/google-trends-for-agent`，再在客户端内完成 Apify 登录。不要手工构造 token URL 或 authorization URL。客户端管理自己的 OAuth 授权与续期流程；Actor 不处理 OAuth token refresh。
 - **Bearer 回退：** 不支持 MCP OAuth 的客户端仍可在 `/mcp` 使用 `Authorization: Bearer <APIFY_TOKEN>`；Actor 的普通 HTTP API 继续使用 Bearer。
 - **已知兼容范围：** GrokBot 客户端曾用原生 OAuth 注册（client 名 `gtfa-apify`）并实测该 Actor URL 的四个工具；这不是全平台验证。匿名 protected-resource metadata 不完整，且匿名 `/mcp` 的 401 可能缺少 `WWW-Authenticate`，部分严格 OAuth 客户端会因此无法完成发现。[Apify 官方 gateway](https://mcp.apify.com) 支持 OAuth，可作为兼容替代，但可能把工具暴露为 Actor 调用，而不保证仍是四个直接同名的工具。
 - **dsh device flow token 生命周期：** 当前 access token 是长效 token，且没有 refresh token。不要承诺当前会定期刷新、轮换或过期自动续期；若 Apify 未来返回标准过期/刷新信息，dsh 插件可处理兼容响应。

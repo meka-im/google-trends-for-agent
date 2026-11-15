@@ -50,21 +50,7 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 }
 ```
 
-For a remote Actor, OAuth is the preferred MCP authentication path. In a client that supports remote MCP OAuth, configure only the URL and complete Apify's login in the client; do not construct a token URL or authorization URL:
-
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
-    }
-  }
-}
-```
-
-Apify's only current OAuth scope is `full_api_access`, which grants full Apify API access—not access limited to this Actor or tool. Tell the user before they authorize. Native OAuth registration and all four tools have been exercised with GrokBot against this URL (registered client name `gtfa-apify`), but compatibility is client-specific: strict clients may fail discovery because anonymous protected-resource metadata is incomplete and an anonymous `/mcp` 401 may lack `WWW-Authenticate`. Do not claim universal platform support. The official gateway `https://mcp.apify.com` also supports OAuth, but it may expose tools as Actor calls rather than the same four direct tool names.
-
-Bearer remains the compatibility fallback for clients without MCP OAuth: create a token in Apify Console and send `Authorization: Bearer <APIFY_TOKEN>` as before. Actor plain-HTTP endpoints continue to use Bearer. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor does not process OAuth token refresh. The dsh plugin does not use this remote MCP route; it has native OAuth support described below.
+Remote-only clients use Apify's managed gateway at `https://mcp.apify.com?tools=meka.im/google-trends-for-agent`, with OAuth handled by the client. The gateway exposes the Actor's input interface and result-reading/abort tools, not necessarily the four direct `trends_*` tool names. Use `tool` / `terms`, then read the returned Dataset. Local MCP and dsh retain the four native tools. Apify requests the account-wide `full_api_access` scope. The former Actor-owned `*.apify.actor/mcp` service is retired; do not connect to it or enable Standby.
 
 Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h; explicit lists are deduped and capped at 30. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
 
@@ -85,7 +71,7 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill; their names and contracts are unchanged. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor.
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill; their names and contracts are unchanged. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes run on demand with the residential proxy inside the Actor.
 
 When the dsh Host provides its credentials service, both Actor routes use Apify device OAuth first. Click **Sign in with Apify**; the page displays Apify's official authorization link and user code. The user confirms on Apify's official page, then the plugin stores the token through `ctx.credentials`; login needs no Save. Pending login checks Host status every 2 seconds, and the Host follows Apify's polling interval including `slow_down`. Closing the page pauses polling, reopening resumes, and expiry requires starting again. Apify's current device OAuth scope is only `full_api_access`: tell the user this grants full Apify API access, not access limited to this Actor or tool.
 
@@ -99,7 +85,7 @@ The manual token is an **Advanced / fallback** option. A token entered there is 
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
-The settings page's **Test connection** check calls Actor `/health` once when applicable and then one HEAD probe. A Google challenge or HTTP 429 ends the check; do not trigger repeated probes.
+For Actor routes, **Test connection** only reads API metadata and the latest build; it starts no paid run and does not test Google reachability. Local mode performs one HEAD probe and stops on a challenge or HTTP 429.
 
 ## Verify networking first
 
@@ -122,7 +108,7 @@ Google Trends answers the same IPs it sees as ordinary browsers more often than 
 
 1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
-3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). Prefer URL-only OAuth in the client; use `Authorization: Bearer APIFY_TOKEN` only for clients without MCP OAuth. The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
+3. **Apify Actor.** Use on-demand execution for remote agents or dsh Actor routes. Remote MCP connects to Apify's managed gateway; dsh uses the API to start one bounded run per tool call. Runs use the on-platform residential proxy and exit after completing the result. Successful local snapshot-cache hits start no cloud run. Keep Server / Standby disabled. Compute and proxy usage apply only to actual runs; there is no fixed per-call price. A call is capped at 300 seconds of Actor runtime. Caller cancellation attempts to abort its owned run, with the platform timeout as a final bound.
 
 | Agent environment | Egress it uses | Can it reach a local server? | Recommended path |
 | --- | --- | --- | --- |

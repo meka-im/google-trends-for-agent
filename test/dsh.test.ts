@@ -96,6 +96,21 @@ function config(extra: Partial<GtfaConfig> = {}): GtfaConfig {
   return { egress: 'local', snapshotDir: join(dir, 'snapshots'), chartDir: null, ...extra };
 }
 
+function onDemandFixture(tokens: string[] = [], actors: string[] = []) {
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const target = String(url);
+    if (target.includes('/runs?')) {
+      tokens.push(String((init!.headers as Record<string, string>).authorization).replace('Bearer ', ''));
+      actors.push(decodeURIComponent(new URL(target).pathname.split('/')[3]!));
+      return Response.json({ data: { id: 'run', status: 'SUCCEEDED', defaultKeyValueStoreId: 'store' } });
+    }
+    if (target.endsWith('/records/TOOL_RESPONSE')) return Response.json({ protocol: 1, result: {
+      ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 1-d' }, series: [], meta: { fetchedAt: new Date().toISOString() },
+    }, snapshots: [] });
+    throw new Error('Unexpected Actor request');
+  }) as unknown as typeof fetch;
+}
+
 describe('dsh plugin registration', () => {
   it('registers exactly the four tools with JSON-schema parameters and renders JSON text', async () => {
     const { ctx, tools } = fakeCtx();
@@ -184,90 +199,28 @@ describe('dsh plugin execution', () => {
     expect(credentialReads).toBe(0);
   });
 
-  it('resolves OAuth per request and rebuilds the live relay when its token changes', async () => {
-    const credentials = credentialsWithToken('oauth-a');
-    const seenTokens: string[] = [];
-    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith('/health')) {
-        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
-      }
-      const request = JSON.parse(String(init!.body)) as { url: string };
-      const body = request.url.includes('/explore')
-        ? fixture('explore-multi.txt')
-        : request.url.includes('/multiline')
-          ? fixture('multiline-multi.txt')
-          : '';
-      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
-    });
+  it('resolves OAuth for each on-demand run when its token changes', async () => {
+    const credentials = credentialsWithToken('oauth-a'), tokens: string[] = [];
     const { ctx, tools } = fakeCtx(credentials);
-    await register(ctx, config({
-      egress: 'actor-own',
-      apifyToken: 'config-token',
-      apifyActor: 'actor-1',
-    }), {
-      relay: {
-        fetch: relayFetch as unknown as typeof fetch,
-        resolveStandbyUrl: async token => {
-          seenTokens.push(token);
-          return 'https://actor.test';
-        },
-      },
-      minIntervalMs: 0,
+    await register(ctx, config({ egress: 'actor-own', apifyToken: 'config-token', apifyActor: 'actor-1' }), {
+      onDemand: { fetch: onDemandFixture(tokens), pollIntervalMs: 0 },
     });
     const compare = tools.get('trends_compare')!;
-    expect(await compare.execute(
-      { keywords: ['chatgpt', 'claude'] },
-      { signal: new AbortController().signal },
-    )).toMatchObject({ ok: true });
-
+    expect(await compare.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: true });
     await credentials.set(GTFA_APIFY_OAUTH_SESSION, JSON.stringify({ access_token: 'oauth-b' }));
-    expect(await compare.execute(
-      { keywords: ['chatgpt', 'claude'] },
-      { signal: new AbortController().signal },
-    )).toMatchObject({ ok: true });
-    expect(seenTokens).toEqual(['oauth-a', 'oauth-b']);
+    expect(await compare.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: true });
+    expect(tokens).toEqual(['oauth-a', 'oauth-b']);
   });
 
-  it('picks up a credentials service that is mounted after plugin registration', async () => {
+  it('picks up credentials mounted after registration for on-demand runs', async () => {
     const { ctx, tools, setCredentials } = fakeCtx();
-    const seenTokens: string[] = [];
-    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith('/health')) {
-        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
-      }
-      const request = JSON.parse(String(init!.body)) as { url: string };
-      const body = request.url.includes('/explore')
-        ? fixture('explore-multi.txt')
-        : request.url.includes('/multiline')
-          ? fixture('multiline-multi.txt')
-          : '';
-      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
-    });
-    await register(ctx, config({
-      egress: 'actor-own',
-      apifyActor: 'actor-1',
-    }), {
-      relay: {
-        fetch: relayFetch as unknown as typeof fetch,
-        resolveStandbyUrl: async token => {
-          seenTokens.push(token);
-          return 'https://actor.test';
-        },
-      },
-      minIntervalMs: 0,
-    });
+    const tokens: string[] = [];
+    await register(ctx, config({ egress: 'actor-own', apifyActor: 'actor-1' }), { onDemand: { fetch: onDemandFixture(tokens) } });
     const compare = tools.get('trends_compare')!;
-    expect(await compare.execute(
-      { keywords: ['chatgpt', 'claude'] },
-      { signal: new AbortController().signal },
-    )).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
-
+    expect(await compare.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     setCredentials(credentialsWithToken('late-oauth'));
-    expect(await compare.execute(
-      { keywords: ['chatgpt', 'claude'] },
-      { signal: new AbortController().signal },
-    )).toMatchObject({ ok: true });
-    expect(seenTokens).toEqual(['late-oauth']);
+    expect(await compare.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: true });
+    expect(tokens).toEqual(['late-oauth']);
   });
 
   it('executes trends_compare against a fixture transport', async () => {
@@ -297,7 +250,7 @@ describe('dsh plugin execution', () => {
       status: 'error',
       error: {
         code: 'INVALID_INPUT',
-        message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.',
+        message: 'Sign in with Apify to run an Actor query.',
       },
     });
   });
@@ -314,63 +267,24 @@ describe('dsh plugin execution', () => {
     });
   });
 
-  it('uses the Actor relay transport when actor-own egress has an Actor', async () => {
-    const relayCalls: string[] = [];
-    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith('/health')) {
-        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
-      }
-      const request = JSON.parse(String(init!.body)) as { url: string };
-      relayCalls.push(request.url);
-      const path = new URL(request.url).pathname;
-      const body = request.url.includes('/explore')
-        ? fixture('explore-multi.txt')
-        : request.url.includes('/multiline')
-          ? fixture('multiline-multi.txt')
-          : '';
-      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
-    });
+  it('runs the whole native tool in one on-demand Actor call', async () => {
+    const actors: string[] = [], tokens: string[] = [];
     const { ctx, tools } = fakeCtx();
     await register(ctx, config({ egress: 'actor-own', apifyToken: 'apify_api_token', apifyActor: 'actor-1' }), {
-      relay: {
-        fetch: relayFetch as unknown as typeof fetch,
-        resolveStandbyUrl: async () => 'https://actor.test',
-      },
-      minIntervalMs: 0,
+      onDemand: { fetch: onDemandFixture(tokens, actors) },
     });
-    const result = await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, { signal: new AbortController().signal });
-    expect(result).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 1-d' } });
-    expect(relayCalls.length).toBeGreaterThan(0);
-    expect(relayCalls.every(url => url.startsWith('https://trends.google.com/'))).toBe(true);
-    expect(relayFetch.mock.calls.every(call => ['https://actor.test/health', 'https://actor.test/egress/fetch'].includes(String(call[0])))).toBe(true);
-    expect(relayFetch.mock.calls.some(call => String(call[0]) === 'https://actor.test/health')).toBe(true);
+    expect(await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: true, schemaVersion: 1 });
+    expect(actors).toEqual(['actor-1']); expect(tokens).toEqual(['apify_api_token']);
   });
 
-  it('uses the public Actor id for actor-public without an apifyActor setting', async () => {
-    let seenActor: string | undefined;
-    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith('/health')) {
-        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
-      }
-      const request = JSON.parse(String(init!.body)) as { url: string };
-      const body = request.url.includes('/explore')
-        ? fixture('explore-multi.txt')
-        : request.url.includes('/multiline')
-          ? fixture('multiline-multi.txt')
-          : '';
-      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
-    });
+  it('uses the public Actor id for on-demand actor-public queries', async () => {
+    const actors: string[] = [];
     const { ctx, tools } = fakeCtx();
     await register(ctx, config({ egress: 'actor-public', apifyToken: 'apify_api_token', chartDir: null }), {
-      relay: {
-        fetch: relayFetch as unknown as typeof fetch,
-        resolveStandbyUrl: async (_token, actorId) => { seenActor = actorId; return 'https://actor.test'; },
-      },
-      minIntervalMs: 0,
+      onDemand: { fetch: onDemandFixture([], actors) },
     });
-    const result = await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, { signal: new AbortController().signal });
-    expect(result).toMatchObject({ ok: true, status: 'ok' });
-    expect(seenActor).toBe('meka.im~google-trends-for-agent');
+    expect(await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, {})).toMatchObject({ ok: true });
+    expect(actors).toEqual(['meka.im~google-trends-for-agent']);
   });
 
   it('respects an aborted exec.signal', async () => {

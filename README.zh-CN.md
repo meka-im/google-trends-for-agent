@@ -26,54 +26,35 @@
 
 ## 选择路线
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-zh-dark.png">
-  <img src="docs/assets/routes-zh.png" alt="路线对比：每次调用费用、免费 $5 可用次数、启动开销、限流应对、准备">
-</picture>
-
-<sub>冷 Actor 首次调用偶尔可能长达约 2 分钟。快照、热调用和构建费用见 [Actor costs](docs/reference.md#actor-costs)。</sub>
-
-- **本机直连** — [运行一条 npx 命令 →](#安装与快速开始)
-- **公共 Actor** — [在 Apify 试用 →](https://apify.com/meka.im/google-trends-for-agent)
-- **自行部署** — [Fork 并部署 →](#deploy-it-yourself)
+| 路线 | 执行位置 | 运行方式 |
+| --- | --- | --- |
+| 本机直连 | 本机 | CLI、stdio MCP 或 dsh 原生工具 |
+| 公共 Actor | 你的 Apify 账号 | 有查询才启动，完成即退出，无需部署 |
+| 自己的 Actor | 你的 Apify 账号 | 部署一次，随后按次运行 |
 
 <a id="deploy-it-yourself"></a>
 
 ### 自行部署
 
-1. [Fork 仓库](https://github.com/meka-im/google-trends-for-agent/fork)。
-2. 在 Apify Console 用 **Link Git repository**（分支 `main`）创建 Actor，或在克隆目录运行 `apify push`。
-3. 构建完成后，在 Settings → Server 启用 **Standby**。
-4. 在支持远程 MCP OAuth 的客户端中填入 `https://<user>--<actor>.apify.actor/mcp`，并在客户端内完成 Apify 登录。
+Fork 仓库，在 Apify Console 用 Link Git repository 构建，或运行 `apify push`。保持 Server / Standby 关闭。dsh 中选择“我自己的 Actor”，登录 Apify，再选择已构建的 Actor。
 
-支持 OAuth 的客户端只需配置所选部署的 Standby Actor URL；下方示例使用公共部署，OAuth 流程由客户端完成，不要手工构造 token URL 或 authorization URL：
+### 远程 MCP
 
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
-    }
-  }
-}
-```
-
-Apify 当前的 OAuth scope 只有 `full_api_access`：它授予完整 Apify API 访问权限，而不是仅限本 Actor 或本工具的权限。GrokBot 已用原生 OAuth 注册并对该 URL 的四个工具完成实测；兼容性取决于客户端，严格的 OAuth 客户端可能在发现阶段失败（见[参考文档](docs/reference.md#remote-mcp-authentication)）。远程 MCP 客户端管理自己的 OAuth 授权与续期流程；Actor 不处理 OAuth token refresh。[Apify 官方 gateway](https://mcp.apify.com) 也支持 OAuth，但可能把本项目工具暴露为 Actor 调用，而不是四个直接同名的工具。
-
-对于不支持 MCP OAuth 的客户端，请在 [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) 创建 Token，并将 Bearer header 作为兼容回退：
+仅支持远程 MCP 的客户端使用 Apify 官方托管入口，在客户端内完成 OAuth 登录：
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp",
-      "headers": { "Authorization": "Bearer <APIFY_TOKEN>" }
+      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
     }
   }
 }
 ```
 
-同一份开源代码服务全部三种路线；HTTP 和一次性运行细节见 [`.actor/README.md`](.actor/README.md)。
+该入口将本项目暴露为 Actor 工具，按次启动运行，并提供读取 Dataset、读取 key-value store 和停止运行的工具。它不承诺四个 `trends_*` 同名工具；本机 MCP 和 dsh 原生插件仍保留这四个工具。通过官方入口调用普通 `tool` / `terms` 输入后，用返回的 Dataset id 读取结果。
+
+旧的 `*.apify.actor/mcp` 常驻服务已停用。Apify OAuth 的 `full_api_access` 是完整账号 API 权限。没有 MCP OAuth 的客户端可通过安全凭据配置 Bearer header。费用与边界见 [Actor 参考](.actor/README.md) 和 [Actor costs](docs/reference.md#actor-costs)。
 
 ## 安装与快速开始
 

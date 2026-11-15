@@ -175,14 +175,8 @@ describe('Apify Actor client', () => {
         gitRepoUrl: 'https://github.com/meka-im/google-trends-for-agent',
         buildTag: 'latest',
       }],
-      actorStandby: {
-        isEnabled: true,
-        idleTimeoutSecs: 60,
-        memoryMbytes: 512,
-        desiredRequestsPerActorRun: 3,
-        maxRequestsPerActorRun: 4,
-        build: 'latest',
-      },
+      defaultRunOptions: { build: 'latest', timeoutSecs: 300, memoryMbytes: 256 },
+      actorStandby: { isEnabled: false },
     });
   });
 

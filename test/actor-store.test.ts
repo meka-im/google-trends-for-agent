@@ -20,16 +20,16 @@ const properties = (input.properties ?? {}) as Record<string, Record<string, unk
 
 describe('Actor Store metadata', () => {
   it('has the required titles, description, memory limits and paths', () => {
-    expect(actor.title).toBe('Google Trends MCP & API for AI Agents — Open Source');
+    expect(actor.title).toBe('Google Trends for AI Agents — On-demand');
     expect(String(actor.description).length).toBeGreaterThan(0);
     expect(String(actor.description).length).toBeLessThanOrEqual(300);
     expect(actor.version).toBe(pkg.version);
     expect(actor.buildTag).toBe('latest');
     expect(actor.minMemoryMbytes).toBe(256);
     expect(actor.maxMemoryMbytes).toBe(1024);
-    expect(actor.defaultMemoryMbytes).toBe(512);
-    expect(actor.usesStandbyMode).toBe(true);
-    expect(actor.webServerMcpPath).toBe('/mcp');
+    expect(actor.defaultMemoryMbytes).toBe(256);
+    expect(actor.usesStandbyMode).toBe(false);
+    expect(actor.webServerMcpPath).toBeUndefined();
     expect(actor.readme).toBe('./README.md');
     expect(actor.changelog).toBe('../CHANGELOG.md');
     expect(actor.input).toBe('./input_schema.json');
@@ -38,7 +38,7 @@ describe('Actor Store metadata', () => {
       dataset: './dataset_schema.json',
       keyValueStore: './key_value_store_schema.json',
     });
-    expect(actor.webServerSchema).toBe('./web_server_schema.json');
+    expect(actor.webServerSchema).toBeUndefined();
     expect(actor.dockerfile).toBe('./Dockerfile');
     expect(actor).not.toHaveProperty('meta');
     expect(actor.icon).toBe('./icon.png');
@@ -47,20 +47,12 @@ describe('Actor Store metadata', () => {
   });
 
   it('has SEO metadata, run defaults, Standby settings and pricing notes', () => {
-    expect(store.seoTitle).toBe('Google Trends MCP Server & API for AI Agents');
+    expect(store.seoTitle).toBe('Google Trends for AI Agents — On-demand');
     expect(String(store.seoTitle).length).toBeLessThanOrEqual(60);
     expect(String(store.seoDescription).length).toBeLessThanOrEqual(160);
-    expect(store.categories).toEqual(['MCP_SERVERS', 'AI', 'OPEN_SOURCE']);
-    expect(store.defaultRunOptions).toEqual({ build: 'latest', timeoutSecs: 300, memoryMbytes: 512 });
-    expect(store.actorStandby).toEqual({
-      isEnabled: true,
-      tenancy: 'single-tenant',
-      idleTimeoutSecs: 60,
-      memoryMbytes: 512,
-      desiredRequestsPerActorRun: 3,
-      maxRequestsPerActorRun: 4,
-      build: 'latest',
-    });
+    expect(store.categories).toEqual(['AI', 'OPEN_SOURCE']);
+    expect(store.defaultRunOptions).toEqual({ build: 'latest', timeoutSecs: 300, memoryMbytes: 256 });
+    expect(store.actorStandby).toEqual({ isEnabled: false });
     expect(store.isSourceCodeHidden).toBe(false);
     expect(store.pricing).toBe('usage-only (no Actor fee): pay per platform usage, no monetization');
   });

@@ -6,7 +6,7 @@
     "tool": {
       "title": "What to run",
       "type": "string",
-      "description": "One tool per run. Example: \"ask\" checks a single term and returns interest plus related queries. The public Actor's Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses geo, anchor, and proxyConfiguration at startup.",
+      "description": "One tool per run. Example: \"ask\" checks a single term and returns interest plus related queries.",
       "editor": "select",
       "enum": [
         "ask",
@@ -23,12 +23,12 @@
       "default": "ask",
       "prefill": "snapshot",
       "sectionCaption": "Question",
-      "sectionDescription": "A one-off run executes one tool and exits with a dataset row per term (one row per Trending Now item for \"now\"). The public Actor's Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses geo, anchor, and proxyConfiguration at startup."
+      "sectionDescription": "A one-off run executes one tool and exits with a dataset row per term (one row per Trending Now item for \"now\")."
     },
     "terms": {
       "title": "Terms",
       "type": "array",
-      "description": "One or more search terms. Example: [\"Sora\"]. Ask and snapshot use one call per term; compare uses one call with 1–5 distinct terms. Ignored by \"now\".",
+      "description": "One or more search terms. Example: [\"Sora\"]. Ask and snapshot use one call per term; compare uses one call with 1\u20135 distinct terms. Ignored by \"now\".",
       "editor": "stringList",
       "default": [],
       "prefill": [
@@ -38,7 +38,7 @@
     "geo": {
       "title": "Country",
       "type": "string",
-      "description": "Google Trends country. Example: \"US\". Worldwide is supported for ask/snapshot/compare; \"now\" needs a country. The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled uses it as the default geo.",
+      "description": "Google Trends country. Example: \"US\". Worldwide is supported for ask/snapshot/compare; \"now\" needs a country.",
       "editor": "select",
       "enum": [
         "WORLDWIDE",
@@ -189,7 +189,7 @@
         "Chile (CL)",
         "Colombia (CO)",
         "Costa Rica (CR)",
-        "Côte d’Ivoire (CI)",
+        "C\u00f4te d\u2019Ivoire (CI)",
         "Croatia (HR)",
         "Cuba (CU)",
         "Cyprus (CY)",
@@ -272,7 +272,7 @@
         "Tanzania (TZ)",
         "Thailand (TH)",
         "Tunisia (TN)",
-        "Türkiye (TR)",
+        "T\u00fcrkiye (TR)",
         "Uganda (UG)",
         "Ukraine (UA)",
         "United Arab Emirates (AE)",
@@ -322,7 +322,7 @@
     "anchor": {
       "title": "Calibration anchor",
       "type": "string",
-      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic (sudoku for ≤1 day, gpts for 7 days and longer). The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled applies it server-wide.",
+      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic (sudoku for \u22641 day, gpts for 7 days and longer). The public Standby endpoint ignores this input; a self-deployed Standby Actor with input passing enabled applies it server-wide.",
       "editor": "select",
       "enum": [
         "",
@@ -330,7 +330,7 @@
         "sudoku"
       ],
       "enumTitles": [
-        "Automatic (sudoku ≤1 day, gpts 7 days+)",
+        "Automatic (sudoku \u22641 day, gpts 7 days+)",
         "gpts",
         "sudoku"
       ],
@@ -342,7 +342,7 @@
     "timeoutMs": {
       "title": "Request timeout (ms)",
       "type": "integer",
-      "description": "Per-request Google Trends timeout in milliseconds (1000–60000). Example: 20000. Leave blank for the tool default (30000 ms for Explore tools, 15000 ms for Trending Now). Applies to this one-off run; the public Standby endpoint ignores this input (pass timeoutMs on the tool call instead).",
+      "description": "Per-request Google Trends timeout in milliseconds (1000\u201360000). Example: 20000. Leave blank for the tool default (30000 ms for Explore tools, 15000 ms for Trending Now). Applies to this one-off run; the public Standby endpoint ignores this input (pass timeoutMs on the tool call instead).",
       "minimum": 1000,
       "maximum": 60000,
       "sectionCaption": "Advanced: timeout",
@@ -369,6 +369,13 @@
       },
       "sectionCaption": "Advanced: proxy",
       "sectionDescription": "Keep the default residential egress unless you have a reason to change it."
+    },
+    "toolRequest": {
+      "title": "Native tool request (optional)",
+      "type": "object",
+      "editor": "json",
+      "description": "Programmatic clients can submit protocol 1 with name, input and optional settings/history. Leave empty when using the ordinary tool/terms input. Returns the complete envelope in TOOL_RESPONSE.",
+      "sectionCaption": "Advanced"
     }
   },
   "required": []

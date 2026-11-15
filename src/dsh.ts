@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { createTools } from './tools.js';
-import { createActorRelayTransport, type CreateActorRelayTransportOptions } from './apify-actor.js';
+import { createTools, invalidInputEnvelope, zodRejectionEnvelope, findDuplicateKeyword } from './tools.js';
+import { OnDemandActorClient, callActorTool, type OnDemandOptions } from './actor-on-demand.js';
+import type { CreateActorRelayTransportOptions } from './apify-actor.js';
 import {
   createApifyOAuthManager,
   type ApifyOAuthManager,
@@ -27,11 +28,11 @@ export const inject = ['tools'];
 
 /** Editable settings shape shown by dsh's Plugins → Configure page. */
 export interface GtfaConfig {
-  /** `local` sends Google requests from this machine; the two Actor routes relay them through Apify. */
+  /** `local` sends Google requests from this machine; the two Actor routes execute one bounded cloud run per query. */
   egress?: EgressMode;
   /** Advanced fallback Apify API token; OAuth takes priority and saved values stay hidden from reads. */
   apifyToken?: string;
-  /** Actor id of your google-trends-for-agent Actor (Standby); used by the actor-own route. */
+  /** Actor id of your google-trends-for-agent Actor (one-off runs); used by the actor-own route. */
   apifyActor?: string;
   /** Snapshot directory, resolved against the dsh process working directory. */
   snapshotDir?: string;
@@ -87,7 +88,7 @@ function createConfig(Schema: SchemaFactory) {
   /** Host Config schema. Volatile fields apply live; dsh-settings redacts token reads. */
   return Schema.object({
     egress: Schema.string().default('local')
-      .description('local sends Google requests from the dsh machine. actor-public relays through the meka.im Actor; actor-own relays through your own deployment (both work on the Free plan).').volatile(),
+      .description('local sends Google requests from the dsh machine. actor-public runs the meka.im Actor on demand; actor-own runs your own deployment (both work on the Free plan).').volatile(),
     apifyToken: Schema.string().role('secret')
       .description('Advanced fallback Apify API token; Apify OAuth takes priority. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
     apifyActor: Schema.string()
@@ -128,6 +129,8 @@ export interface RegisterOverrides {
   transport?: Transport;
   /** Test seam: override Actor relay construction (fetch and standby resolver). */
   relay?: Omit<CreateActorRelayTransportOptions, 'token' | 'actorId'>;
+  /** Test seam for the bounded one-off Actor API. */
+  onDemand?: OnDemandOptions;
   /** Test seam: provide baselines instead of reading GTFA_BASELINES. */
   baselines?: Baselines;
   /** Test seam: request spacing; production uses 1500 ms like MCP. */
@@ -210,40 +213,6 @@ function credentialsFromContext(ctx: DshContext): OAuthCredentialsService | unde
   }
 }
 
-function tokenError(message: string | undefined, code: 'INVALID_INPUT' | 'NETWORK_ERROR'): GTrendsError {
-  return new GTrendsError(code, message ?? 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.');
-}
-
-/** Rebuild the egress transport only when its connection-relevant settings change. */
-function createLiveTransport(
-  get: () => GtfaRuntimeSettings,
-  oauth: ApifyOAuthManager,
-  overrides?: RegisterOverrides['relay'],
-): Transport {
-  let current: Transport | undefined;
-  let key = '';
-  return async request => {
-    const settings = get();
-    if (settings.egress === 'local') {
-      if (!current || key !== 'local') {
-        current = createDefaultTransport();
-        key = 'local';
-      }
-      return current(request);
-    }
-    const resolved = await oauth.resolveToken(settings.apifyToken);
-    if (!resolved.token) {
-      throw tokenError(resolved.message, resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT');
-    }
-    const actorId = settings.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : settings.apifyActor ?? '';
-    const next = JSON.stringify([settings.egress, resolved.token, resolved.source ?? null, actorId]);
-    if (!current || next !== key) {
-      current = createActorRelayTransport({ ...overrides, token: resolved.token, actorId });
-      key = next;
-    }
-    return current(request);
-  };
-}
 
 const SKILL_FILE = new URL('../dsh/skill.md', import.meta.url);
 const SKILL_BASE = new URL('../dsh/', import.meta.url);
@@ -330,7 +299,8 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     ...(overrides.oauthFetch ? { fetch: overrides.oauthFetch } : {}),
   });
   if (typeof ctx.effect === 'function') ctx.effect(() => () => oauth.dispose());
-  const transport = overrides.transport ?? createLiveTransport(settings, oauth, overrides.relay);
+  const transport = overrides.transport ?? createDefaultTransport();
+  const onDemand = new OnDemandActorClient(overrides.onDemand);
   const tools = createTools({
     transport,
     settings: () => {
@@ -357,6 +327,32 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
       },
       async execute(args: unknown, exec: { signal?: AbortSignal }) {
         throwIfAborted(exec.signal);
+        const current = settings();
+        if (current.egress !== 'local' && !overrides.transport) {
+          const parsed = tool.inputSchema.safeParse(args ?? {});
+          if (!parsed.success) return zodRejectionEnvelope(parsed.error);
+          const input = parsed.data as Record<string, unknown>;
+          if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
+          const resolved = await oauth.resolveToken(current.apifyToken);
+          if (!resolved.token) {
+            const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
+            return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
+          }
+          if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
+          try {
+            const result = await callActorTool(onDemand, {
+              token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
+              name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
+                cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal: exec.signal,
+            });
+            throwIfAborted(exec.signal);
+            return result;
+          } catch (error) {
+            throwIfAborted(exec.signal);
+            return { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
+              error: { code: error instanceof GTrendsError ? error.code : 'NETWORK_ERROR', message: error instanceof GTrendsError ? error.message : 'On-demand Actor request failed.' } };
+          }
+        }
         const result = await tool.execute(args, { signal: exec.signal });
         throwIfAborted(exec.signal);
         return result;

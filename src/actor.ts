@@ -1,17 +1,17 @@
 import { Actor } from 'apify';
-import { createServer } from './mcp.js';
-import { isStandbyRun, startHttpMcpServer, resolveStandbyPort, type HttpMcpServer } from './http.js';
+import { isStandbyRun } from './http.js';
+import { ACTOR_RESPONSE_KEY, runToolRequest } from './actor-request.js';
 import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
 import { createDefaultTransport, errorLabel, type Transport } from './transport.js';
 import { createTools, type GtfaTool } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
 import { actorFailMessage, runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
-import { VERSION } from './version.js';
 
 interface ActorInput extends ActorRunInput {
   proxyConfiguration?: Record<string, unknown>;
   anchor?: string;
   geo?: string;
+  toolRequest?: unknown;
 }
 
 const text = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
@@ -21,8 +21,9 @@ const standby = isStandbyRun();
 await Actor.init();
 
 try {
+  if (standby) throw new Error('Standby serving is disabled. Use an on-demand Actor run or the official Apify MCP gateway.');
   const input = (await Actor.getInput<ActorInput>()) ?? {};
-  if (!standby && validateActorRunInput(input)) {
+  if (input.toolRequest === undefined && validateActorRunInput(input)) {
     // Fail fast without building a proxy or tools for an input we cannot run.
     const result = await runOnce(input, {
       pushData: item => Actor.pushData(item),
@@ -78,8 +79,14 @@ try {
     minIntervalMs: 1500,
   });
 
-  if (!standby) {
-    // One-off run: one tool, one dataset row per term, then exit.
+  if (input.toolRequest !== undefined) {
+    const response = await runToolRequest(input.toolRequest, {
+      snapshotDir, chartDir,
+      create: settings => createTools({ ...settings, settings: () => settings, transport: relayTransport, minIntervalMs: 1500 }),
+    });
+    await Actor.setValue(ACTOR_RESPONSE_KEY, response);
+    await Actor.exit();
+  } else {
     const result = await runOnce(input, {
       tools,
       pushData: item => Actor.pushData(item),
@@ -88,54 +95,6 @@ try {
     });
     if (result.failed) await Actor.fail(actorFailMessage(result.output));
     else await Actor.exit();
-  } else {
-    const port = resolveStandbyPort();
-    const idleEnv = process.env.GTFA_IDLE_EXIT_SECS?.trim();
-    const idleSecsRaw = idleEnv ? Number(idleEnv) : 60;
-    const idleSecs = Number.isFinite(idleSecsRaw) && idleSecsRaw >= 0 ? idleSecsRaw : 60;
-    let http: HttpMcpServer | undefined;
-
-    http = await startHttpMcpServer({
-      port,
-      host: '0.0.0.0',
-      mode: 'standby',
-      path: '/mcp',
-      version: VERSION,
-      tools,
-      transport: relayTransport,
-      idleExit: {
-        enabled: true,
-        timeoutMs: idleSecs * 1000,
-        log: message => console.log(message),
-        exit: async () => {
-          await http?.close();
-          await Actor.exit();
-        },
-      },
-      log: message => console.log(message),
-      createMcpServer: () => createServer({
-        defaultGeo: geo,
-        ...(anchor ? { anchor } : {}),
-        ...(baselines ? { baselines } : {}),
-        snapshotDir,
-        chartDir,
-        transport: relayTransport,
-      }),
-    });
-
-    // Never charge: this Actor only proxies MCP/HTTP requests and has no PPE events.
-    console.log(`Standby MCP + HTTP ready on port ${http.port}: /mcp, /egress/fetch, /tools/{name}, /health (geo=${geo}, anchor=${anchor || 'auto'}).`);
-
-    let shuttingDown = false;
-    const shutdown = async (signal: string) => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      console.log(`Received ${signal}; shutting down.`);
-      await http!.close();
-      await Actor.exit();
-    };
-    process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
-    process.once('SIGINT', () => { void shutdown('SIGINT'); });
   }
 } catch (error) {
   console.error(`Actor failed to start (${errorLabel(error)}).`);
