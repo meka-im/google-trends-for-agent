@@ -150,9 +150,11 @@ pnpm 的提示框可能把 key 折成多行，请从本模板复制，只需改 
 
 pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使用带 `: true` 的 `allowBuilds:` map（在 `allowBuilds` 下写列表会失败）。main 更新后 key 会变化，需要重新添加。
 
-插件安装后默认启用，仍提供相同的四个原生工具和 `gtfa` skill。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接）** 区块选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**，再点 **Save（保存）** 应用 egress；登录本身不需要 Save。Host 提供 credentials service 时，两条 Actor 路线都提供 **Sign in with Apify（登录 Apify）**：页面显示 Apify 官方授权链接和 user code；pending 时每 2 秒查询一次状态并遵守 Apify 的 polling interval（包括 `slow_down`），关闭页面暂停、重新打开继续，过期后重新发起。Apify 当前的 device OAuth scope 只有 `full_api_access`——这是完整 Apify API 访问权限，不是仅限本 Actor 或本工具的权限。
+插件安装后默认启用，仍提供相同的四个原生工具和 `gtfa` skill。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接方式）** 区块选择 **本机直连**、**公共 Actor** 或 **我自己的 Actor**，再点 **Save（保存）** 应用 egress；登录本身不需要 Save。Host 提供 credentials service 时，两条 Actor 路线都提供 **Sign in with Apify（登录 Apify）**：页面显示 Apify 官方授权链接和 user code；pending 时每 2 秒查询一次状态并遵守 Apify 的 polling interval（包括 `slow_down`），关闭页面暂停、重新打开继续，过期后重新发起。Apify 当前的 device OAuth scope 只有 `full_api_access`——这是完整 Apify API 访问权限，不是仅限本 Actor 或本工具的权限。
 
 每次操作都会重新解析凭据：优先使用已存储的 OAuth session；只有在没有存储 session 时才使用已保存 config token，再回退到 `APIFY_TOKEN`。已存储的 session 若过期或损坏且无法 refresh，必须重新登录，不能静默回退或当作成功。OAuth 凭据不会进入浏览器可见状态，也不会进入模型可见的 tool input/output；Host 内部代码通过 credentials service 解析后调用 Apify。Host 没有该服务时，OAuth 不可用，但本机 egress、手动 token 和 `APIFY_TOKEN` 仍可使用。对 dsh device flow，当前 access token 是长效 token，不签发 refresh token；若 Apify 未来返回标准过期/刷新响应，插件可兼容处理。
+
+设置页采用三张出口卡片，下方集中显示 OAuth 状态和用量；展开**用量详情**可查看计费周期及代理用量。**高级**内分为**校准基线**、**手动 Token**（仅 Actor 出口）和**文件与图表**。滚动页面时底部保留**保存更改**与**还原**；保存后才能**测试连接**。退出登录位于连接检查旁的账号菜单内。界面跟随 Host 的深浅主题，并适配窄屏。
 
 持久化交给 dsh credentials service/provider-managed store，与 profile 分离；后端位置、记录键和 schema 可以不同。当前本地 file-backed provider 在适用时使用 owner-only `0700` 目录与 `0600` 文件权限；它不是 OS Keychain，也不是加密存储，不能阻止同一 OS 用户下的其他进程读取。手动 token 位于**高级 / 备用**区域，仍会明文写入 `cordis.patch.yml`（mode `0600`），UI 中隐藏，不会记录，也不会进入浏览器可见状态或模型可见的 tool input/output。**Cancel（取消）** 只取消 pending flow。**Sign out（注销）** 删除已存储的 OAuth session，但按 provider 后端保留可复用的 client registration；它**不会撤销 Apify 云端授权**，如需撤销请到 Apify Console。路由和生命周期细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 

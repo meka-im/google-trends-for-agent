@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 — 2026-11-15
+
+- Refresh the dsh settings page with three egress cards, a compact OAuth and usage panel, two-column query defaults, and a sticky save bar. The layout follows the Host's light/dark theme and stacks on narrow screens. Account sign-out is in the account menu; baseline, manual-token, and file controls are grouped under Advanced with keyboard-accessible tabs.
+- Disable Test connection while settings have unsaved changes so a test cannot be mistaken for a check of the draft. Existing configuration, OAuth storage, native tool contracts, and Actor behavior are unchanged.
+- Adopt the approved blue Signal logo across the dsh plugin, repository wordmarks, and Actor source assets. Updating this package does not deploy the public Actor.
+
 ## 0.2.5 — 2026-11-15
 
 - Make the dsh plugin's Apify authentication OAuth-first for both the public and self-deployed Actor routes. Login uses Apify's official RFC 8628 device flow and official client registration, displays the official authorization link and user code, polls Host status every 2 seconds while respecting Apify's polling interval (including `slow_down`), pauses when the page closes, resumes when reopened, and restarts an expired attempt. Login does not require Save; egress changes still do. The current dsh device-flow access token is long-lived with no refresh token; future standard expiry/refresh responses are handled compatibly.
