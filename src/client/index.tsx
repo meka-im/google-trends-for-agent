@@ -15,12 +15,14 @@
  * or switch. Only the token, a new anchor term, dailySearches, and directories
  * are typed inputs.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
+import { Icon } from './icons.js';
+import { SETTINGS_CSS } from './theme.js';
 import {
-  APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
+  APIFY_EST_COST_PER_CALL_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
-  GTFA_STORE_URL, apifyEstimatedCalls, regionLabel, resolveEgress, type EgressMode, type EgressNotice,
+  GTFA_STORE_URL, regionLabel, resolveEgress, type EgressMode, type EgressNotice,
 } from '../options.js';
 
 /** Cordis service name used by the client bundle. */
@@ -246,12 +248,32 @@ export interface DeployBuildResolution {
 }
 
 export const EN: Record<string, string> = {
-  summary: 'Configure Apify sign-in, egress, the Actor, usage, default geo, anchors, and snapshot cache.',
+  recommended: 'Recommended',
+  routeLocalDescription: 'Use this machine · No account needed',
+  routePublicDescription: 'Apify network · Nothing to deploy',
+  routeOwnDescription: 'Use an Actor you deploy',
+  localNetwork: 'Local network',
+  localNetworkHint: 'Connect to Google Trends from this dsh host.',
+  connectionUntested: 'Not tested',
+  connectionReady: 'Reachable',
+  actorAccountHint: 'Calls run and are billed in your Apify account; credentials stay on the dsh host.',
+  oauthActivePublic: 'OAuth authorized · Public Actor ready',
+  oauthActiveOwn: 'OAuth authorized · Your own Actor',
+  accountActions: 'Account actions',
+  advancedAnchors: 'Calibration baselines',
+  advancedToken: 'Manual Token',
+  advancedFiles: 'Files and charts',
+  allSaved: 'All changes saved',
+  usageDetails: 'Usage details',
+  signupCompact: 'No Apify account?',
+  advancedFix: 'Review advanced settings before saving.',
+  testSaveFirst: 'Save before testing',
+  summary: 'Search trends, compare keywords, and create calibrated snapshots for your agent.',
   intro: 'OAuth is the preferred credential for Actor egress; a manual API Token remains under Advanced. Click Save to apply settings changes; no restart is needed. OAuth status, usage, Actor listing, deploy, and Test connection run on the dsh host, so credentials never reach the browser.',
   oauthTitle: 'Apify sign-in',
-  oauthSignedOut: 'Sign in once to use your own Apify account with the Actor egress.',
+  oauthSignedOut: 'Authorize once to query trends through your Actor.',
   oauthSignIn: 'Sign in with Apify',
-  oauthScope: 'This asks Apify for full_api_access. That is currently the only scope this provider offers, so it is not limited to this Actor. Calls and billing still use your own Apify account.',
+  oauthScope: 'Apify grants full_api_access to your account, beyond this Actor. Calls are billed to your Apify account.',
   oauthStarting: 'Starting Apify sign-in…',
   oauthPendingTitle: 'Finish signing in at Apify',
   oauthPending: 'Open the official Apify page, then enter this code:',
@@ -277,13 +299,13 @@ export const EN: Record<string, string> = {
   oauthStorage: 'Could not save or clear the Apify sign-in credentials. Check dsh credential storage and try again.',
   oauthReauthRequired: 'The saved Apify sign-in expired or was revoked. Sign in again.',
   oauthBusy: 'Another Apify sign-in operation is in progress. Try again in a moment.',
-  oauthManualFallback: 'Legacy fallback: expand “Advanced: manual API Token” below.',
+  oauthManualFallback: 'Legacy fallback: open Advanced → Manual Token.',
   connection: 'Connection',
-  connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
+  connectionDescription: 'Choose where Google Trends requests leave from.',
   egress: 'Egress',
   egressHint: 'Local: requests leave from the machine running dsh. Public Actor: relay through the meka.im Actor; runs and billing stay in your Apify account, nothing to deploy. My own Actor: deploy the same open-source code into your account and pick it below.',
   egressLocal: 'Local (this machine)',
-  egressPublic: 'Public Actor (meka.im)',
+  egressPublic: 'Public Actor',
   egressOwn: 'My own Actor',
   egressRenamed: 'Your saved egress "apify" was renamed; it now uses My own Actor. Save to update the profile.',
   egressUnknown: 'Your saved egress value is not recognized; it now uses Local (this machine). Save to update the profile.',
@@ -327,7 +349,7 @@ export const EN: Record<string, string> = {
   signupAction: 'Sign up →',
   pricingAction: 'Pricing',
   token: 'Apify token',
-  tokenHint: 'Legacy fallback only; OAuth takes priority while connected. Leave blank to keep the current token or use APIFY_TOKEN. A saved token is stored in plaintext in the profile\'s cordis.patch.yml (mode 0600) — not encrypted and not an OS vault.',
+  tokenHint: 'OAuth takes priority. Leave blank to keep the current token or use APIFY_TOKEN. Manual tokens are stored in plaintext in the profile cordis.patch.yml (0600).',
   tokenPrefixWarning: 'Apify API tokens usually start with apify_api_. Double-check this one.',
   tokenStored: 'A token is stored. Type a new one to replace it.',
   tokenEmpty: 'No token stored.',
@@ -356,16 +378,16 @@ export const EN: Record<string, string> = {
   deployExists: 'That Actor already exists. Refresh the list and select it.',
   deployFailed: 'Deploy failed. Try again or deploy manually.',
   deployBuildFailed: 'The build for the deployed Actor failed. Rebuild it in Apify Console (Actor → Builds), then refresh.',
-  defaults: 'Defaults',
+  defaults: 'Query defaults',
   defaultsDescription: 'Defaults applied when a tool call omits them.',
   geo: 'Default geo',
-  geoHint: 'Used when a tool call omits geo. Worldwide has no built-in calibration, so traffic is null.',
+  geoHint: 'Used for trends and comparisons. Worldwide has no built-in traffic calibration.',
   geoWorldwide: 'Worldwide',
-  anchor: 'Fixed anchor',
+  anchor: 'Traffic calibration',
   anchorHint: 'Automatic uses sudoku for ≤1 day and gpts for 7 days and longer.',
-  anchorAutomatic: 'Automatic (sudoku for ≤1 day, gpts for 7 days+)',
+  anchorAutomatic: 'Automatically select an anchor',
   cache: 'Reuse saved snapshots',
-  cacheHint: 'On reuses snapshots up to 360 minutes old. Off always fetches fresh data.',
+  cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
   baselines: 'Anchors & baselines',
   baselinesDescription: 'Override the built-in calibration anchors or add your own.',
   baselinesHint: 'Same format and validation as a version 2 baselines.json. Empty keeps the built-in US anchors.',
@@ -390,7 +412,7 @@ export const EN: Record<string, string> = {
   windowDefault: 'Default',
   windowHint: 'Optional. Short covers now 1-H, now 4-H, and now 1-d; long covers now 7-d and longer. Each term must be in the anchors list or the built-in anchors.',
   advanced: 'Advanced',
-  advancedDescription: 'File locations and chart output.',
+  advancedDescription: 'Calibration baselines, manual token, and file locations.',
   snapshotDir: 'Snapshot directory',
   snapshotDirHint: 'Where snapshots are stored, resolved against the dsh process working directory.',
   chartDir: 'Chart directory',
@@ -420,12 +442,32 @@ export const EN: Record<string, string> = {
 };
 
 export const ZH: Record<string, string> = {
-  summary: '配置 Apify 登录、出口、Actor、用量、默认地区、基线和快照缓存。',
+  recommended: '推荐',
+  routeLocalDescription: '使用本机网络 · 无需账号',
+  routePublicDescription: '使用 Apify 网络 · 无需部署',
+  routeOwnDescription: '使用你部署的 Apify Actor',
+  localNetwork: '本机网络',
+  localNetworkHint: '从当前 dsh 主机连接 Google Trends。',
+  connectionUntested: '未测试',
+  connectionReady: '可连接',
+  actorAccountHint: '调用在你的 Apify 账号内运行并计费，凭据保留在 dsh 主机。',
+  oauthActivePublic: 'OAuth 授权 · 公共 Actor 已就绪',
+  oauthActiveOwn: 'OAuth 授权 · 使用自己的 Actor',
+  accountActions: '账号操作',
+  advancedAnchors: '校准基线',
+  advancedToken: '手动 Token',
+  advancedFiles: '文件与图表',
+  allSaved: '所有更改已保存',
+  usageDetails: '用量详情',
+  signupCompact: '还没有 Apify 账号？',
+  advancedFix: '请检查高级设置后再保存。',
+  testSaveFirst: '保存后测试',
+  summary: '查询搜索趋势，比较关键词，生成带图快照。',
   intro: 'Actor 出口优先使用 OAuth 登录，也可在高级设置中保留手动 API Token。点击保存后应用设置变更，无需重启。OAuth 状态、用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，凭据不会发送到浏览器。',
   oauthTitle: 'Apify 登录',
-  oauthSignedOut: '登录一次即可让 Actor 出口使用你自己的 Apify 账户。',
+  oauthSignedOut: '一次授权，即可通过 Actor 查询趋势。',
   oauthSignIn: '登录 Apify',
-  oauthScope: '此登录会向 Apify 请求 full_api_access。当前提供商只提供这一 scope，因此授权并不只限于本 Actor。调用和账单仍在你的 Apify 账户内。',
+  oauthScope: 'Apify 将授予账号的 full_api_access 权限，并不限于本 Actor；调用费用计入你的 Apify 账号。',
   oauthStarting: '正在开始 Apify 登录…',
   oauthPendingTitle: '请在 Apify 完成登录',
   oauthPending: '打开 Apify 官方页面，然后输入此代码：',
@@ -435,7 +477,7 @@ export const ZH: Record<string, string> = {
   oauthExpiresSoon: '此代码即将过期。',
   oauthCancel: '取消',
   oauthCancelling: '正在取消…',
-  oauthConnected: '已登录 Apify',
+  oauthConnected: 'Apify 已连接',
   oauthConnectedHint: 'OAuth 优先于高级设置中的手动 API Token 和 APIFY_TOKEN。',
   oauthLogout: '退出 Apify 登录',
   oauthLoggingOut: '正在退出…',
@@ -451,13 +493,13 @@ export const ZH: Record<string, string> = {
   oauthStorage: '无法保存或清除 Apify 登录凭据。请检查 dsh 凭据存储后重试。',
   oauthReauthRequired: '已保存的 Apify 登录已过期或被撤销。请重新登录。',
   oauthBusy: '另一个 Apify 登录操作正在进行。请稍后再试。',
-  oauthManualFallback: '旧版备用方案：展开下方的“高级：手动 API Token”。',
-  connection: '连接',
-  connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
+  oauthManualFallback: '旧版备用方案：打开“高级 → 手动 Token”。',
+  connection: '连接方式',
+  connectionDescription: '选择 Google Trends 请求从哪里发出。',
   egress: '出口',
   egressHint: '本机直连：请求从运行 dsh 的机器发出。公共 Actor：经 meka.im 的 Actor 转发，运行和计费都在你的 Apify 账号内，无需部署。我自己的 Actor：把同一份开源代码部署到你的账号，并在下方选择。',
   egressLocal: '本机直连',
-  egressPublic: '公共 Actor（meka.im）',
+  egressPublic: '公共 Actor',
   egressOwn: '我自己的 Actor',
   egressRenamed: '已保存的出口 "apify" 已更名；现在使用我自己的 Actor。保存以更新配置。',
   egressUnknown: '无法识别已保存的出口值；现在使用本机直连。保存以更新配置。',
@@ -501,7 +543,7 @@ export const ZH: Record<string, string> = {
   signupAction: '注册 →',
   pricingAction: '价格',
   token: 'Apify Token',
-  tokenHint: '仅作为旧版备用方案；已登录时 OAuth 优先。留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN。保存的 Token 以明文写入 profile 的 cordis.patch.yml（权限 0600），并未加密，也不是操作系统密钥库。',
+  tokenHint: 'OAuth 登录优先。留空保持当前 Token，或使用 APIFY_TOKEN。手动 Token 以明文保存在 profile 的 cordis.patch.yml 中（权限 0600）。',
   tokenPrefixWarning: 'Apify API Token 通常以 apify_api_ 开头，请再确认。',
   tokenStored: '已保存 Token；输入新值可替换。',
   tokenEmpty: '未保存 Token。',
@@ -530,16 +572,16 @@ export const ZH: Record<string, string> = {
   deployExists: '该 Actor 已存在。请刷新列表并选择它。',
   deployFailed: '部署失败。请重试或手动部署。',
   deployBuildFailed: '刚部署的 Actor 构建失败。请在 Apify Console（Actor → Builds）中重新构建，然后刷新。',
-  defaults: '默认值',
-  defaultsDescription: '工具调用未指定时使用的默认值。',
+  defaults: '查询默认值',
+  defaultsDescription: '工具调用没有指定参数时，使用以下设置。',
   geo: '默认地区',
-  geoHint: '工具调用未传 geo 时使用；全球没有内置校准锚点，流量为 null。',
+  geoHint: '用于趋势查询与对比；全球没有内置流量校准。',
   geoWorldwide: '全球',
-  anchor: '固定锚点',
+  anchor: '流量校准',
   anchorHint: '自动：1 天及更短窗口用 sudoku，7 天及更长用 gpts。',
-  anchorAutomatic: '自动（≤1 天用 sudoku，7 天+ 用 gpts）',
-  cache: '复用已保存快照',
-  cacheHint: '开启时复用 360 分钟内的快照；关闭时每次都重新抓取。',
+  anchorAutomatic: '自动选择锚点',
+  cache: '复用近期快照',
+  cacheHint: '6 小时内优先复用已保存的结果，减少重复请求。',
   baselines: '锚点与基线',
   baselinesDescription: '覆盖内置校准锚点或添加自定义锚点。',
   baselinesHint: '格式和校验与 version 2 的 baselines.json 相同；留空使用内置美国基线。',
@@ -564,7 +606,7 @@ export const ZH: Record<string, string> = {
   windowDefault: '默认',
   windowHint: '可选。短窗口包括 now 1-H、now 4-H、now 1-d；长窗口包括 now 7-d 及更长。词必须在锚点列表或内置锚点中。',
   advanced: '高级',
-  advancedDescription: '文件位置和图表输出。',
+  advancedDescription: '自定义锚点、手动 Token 与文件位置。',
   snapshotDir: '快照目录',
   snapshotDirHint: '快照存放位置，相对于 dsh 进程的工作目录解析。',
   chartDir: '图表目录',
@@ -573,8 +615,8 @@ export const ZH: Record<string, string> = {
   chartsHint: '关闭后不再写 SVG 文件，工具返回的图表路径为 null。',
   requiredDirectory: '目录不能为空。',
   unsaved: '未保存的修改',
-  discard: '放弃修改',
-  save: '保存',
+  discard: '还原',
+  save: '保存更改',
   saving: '保存中…',
   saved: '已保存',
   failed: 'Host 拒绝了修改。请刷新页面后重试。',
@@ -594,116 +636,69 @@ export const ZH: Record<string, string> = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'grid', gap: 28, maxWidth: 760, padding: '4px 0 120px' },
-  intro: { margin: 0, opacity: 0.75, lineHeight: 1.5 },
-  section: { display: 'grid', gap: 20, paddingTop: 0 },
+  page: { display: 'grid', gap: 0, width: '100%', minWidth: 0, maxWidth: 960, padding: '0 0 24px' },
+  section: { display: 'grid', gap: 18, padding: '24px 0', borderTop: '1px solid var(--gtfa-line)' },
   sectionHeader: { display: 'grid', gap: 4 },
-  sectionTitle: { margin: 0, fontSize: 15, fontWeight: 650 },
-  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-label-tertiary, inherit)', opacity: 0.8 },
-  field: { display: 'grid' },
-  label: { marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-secondary, inherit)' },
-  hint: { margin: '4px 0 0', fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-label-tertiary, inherit)', opacity: 0.8 },
-  fieldError: { margin: '4px 0 0', fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-state-error-primary, #d14343)' },
-  warning: { margin: '4px 0 0', fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-state-warning-primary, #b7791f)' },
-  input: {
-    boxSizing: 'border-box', width: '100%', minWidth: 0, padding: '7px 9px', border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.38))',
-    borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, transparent)', color: 'var(--dsw-alias-label-primary, inherit)', font: 'inherit', fontSize: 14,
-  },
-  select: {
-    boxSizing: 'border-box', width: '100%', minWidth: 0, height: 32, padding: '0 28px 0 8px', border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.38))',
-    borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, transparent)', color: 'var(--dsw-alias-label-primary, inherit)', font: 'inherit', fontSize: 14,
-  },
-  segmented: {
-    boxSizing: 'border-box', display: 'grid', gap: 2, width: '100%', maxWidth: 620, padding: 3, borderRadius: 9,
-    background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.12))',
-  },
-  segment: {
-    height: 28, padding: '0 10px', border: 0, borderRadius: 7, background: 'transparent',
-    color: 'var(--dsw-alias-label-secondary, inherit)', font: 'inherit', fontSize: 13, lineHeight: '20px', fontWeight: 500,
-    whiteSpace: 'nowrap', cursor: 'pointer',
-  },
-  segmentActive: {
-    color: 'var(--dsw-alias-label-primary, inherit)', background: 'var(--dsw-alias-bg-layer-1, rgba(127,127,127,.22))',
-    boxShadow: 'var(--dsw-elevation-soft, 0 1px 2px rgba(0,0,0,.12))',
-  },
-  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 32, fontSize: 13 },
-  switch: {
-    boxSizing: 'border-box', flex: '0 0 auto', width: 36, height: 20, padding: 2, border: 0, borderRadius: 10,
-    background: 'var(--dsw-alias-border-l3, rgba(127,127,127,.45))', cursor: 'pointer',
-  },
-  switchOn: { background: 'var(--dsw-alias-brand-primary, #2f6fed)' },
-  switchThumb: {
-    display: 'block', width: 16, height: 16, borderRadius: '50%',
-    background: 'var(--dsw-alias-label-primary-foreground, #fff)', transition: 'transform 120ms ease',
-  },
-  switchThumbOn: { transform: 'translateX(16px)' },
-  anchorHead: { display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) minmax(130px,1fr) 118px 110px auto', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--dsw-alias-label-tertiary, inherit)' },
-  anchorBlock: { display: 'grid' },
+  sectionTitle: { margin: 0, fontSize: 15, lineHeight: 1.5, fontWeight: 650 },
+  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
+  field: { display: 'grid', minWidth: 0 },
+  label: { marginBottom: 8, fontSize: 12, fontWeight: 550 },
+  hint: { margin: '6px 0 0', fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
+  fieldError: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
+  warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-warning-primary, #a87921)' },
+  input: { boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 36, padding: '7px 11px', border: '1px solid var(--gtfa-line)',
+    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
+  select: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 36, padding: '0 28px 0 10px', border: '1px solid var(--gtfa-line)',
+    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
+  segment: { position: 'relative', display: 'grid', gap: 13, padding: '16px 17px', minHeight: 108, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
+    borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13, cursor: 'pointer' },
+  segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)', boxShadow: 'inset 0 0 0 .5px var(--gtfa-accent)' },
+  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, minHeight: 32, fontSize: 13 },
+  switch: { boxSizing: 'border-box', flex: '0 0 auto', width: 34, height: 20, padding: 2, border: 0, borderRadius: 12,
+    background: 'var(--gtfa-hover)', cursor: 'pointer' },
+  switchOn: { background: 'var(--gtfa-accent)' },
+  switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.08)', transition: 'transform 120ms ease' },
+  switchThumbOn: { transform: 'translateX(14px)' },
+  anchorHead: { display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) minmax(130px,1fr) 118px 110px auto', gap: 8, alignItems: 'center',
+    fontSize: 11, color: 'var(--gtfa-muted)', paddingBottom: 9 },
+  anchorBlock: { display: 'grid', marginBottom: 8 },
   anchorRow: { display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) minmax(130px,1fr) 118px 110px auto', gap: 8, alignItems: 'center' },
-  readOnlyTerm: {
-    boxSizing: 'border-box', minWidth: 0, padding: '7px 9px', border: '0.5px solid transparent', borderRadius: 8,
-    fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-  },
-  windowRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  saveBar: {
-    position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 96, padding: '12px 0 4px', borderTop: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
-    background: 'var(--dsw-alias-bg-layer-1, rgba(255,255,255,.96))',
-  },
-  button: {
-    padding: '7px 14px', border: '0.5px solid var(--dsw-alias-border-l3, rgba(127,127,127,.45))', borderRadius: 8,
-    background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer',
-  },
-  buttonSmall: {
-    padding: '3px 9px', border: '0.5px solid var(--dsw-alias-border-l3, rgba(127,127,127,.45))', borderRadius: 7,
-    background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12, cursor: 'pointer',
-  },
-  primary: { background: 'var(--dsw-alias-brand-primary, #2f6fed)', borderColor: 'var(--dsw-alias-brand-primary, #2f6fed)', color: 'var(--dsw-alias-label-primary-foreground, #fff)' },
-  pill: {
-    display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 999, fontSize: 12,
-    color: 'var(--dsw-alias-state-warning-primary, #8a5a00)', background: 'var(--dsw-alias-state-warning-bg, rgba(219,154,43,.16))',
-  },
+  readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '7px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
+    fontSize: 12, overflowWrap: 'anywhere' },
+  windowRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 14 },
+  saveBar: { position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+    marginTop: 0, padding: '16px 0', borderTop: '1px solid var(--gtfa-line)', background: 'var(--gtfa-surface)' },
+  button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '7px 13px', minHeight: 34,
+    border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
+  buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
+    border: '1px solid var(--gtfa-line)', borderRadius: 7, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 11, cursor: 'pointer' },
+  primary: { background: 'var(--gtfa-accent)', borderColor: 'var(--gtfa-accent)', color: '#fff' },
+  pill: { display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 5, fontSize: 10, fontWeight: 500,
+    color: 'var(--gtfa-green)', background: 'var(--gtfa-green-soft)' },
   status: { margin: 0, fontSize: 13 },
-  error: { margin: 0, fontSize: 13, color: 'var(--dsw-alias-state-error-primary, #d14343)' },
-  summary: { display: 'grid', gap: 4, cursor: 'pointer' },
-  usageCard: {
-    display: 'grid', gap: 10, padding: 14, borderRadius: 10,
-    border: '0.5px solid var(--dsw-alias-border-l4, rgba(127,127,127,.28))',
-    background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,.06))',
-  },
-  signupBar: {
-    display: 'grid', gap: 6, padding: '10px 12px', borderRadius: 10,
-    // Translucent info blue reads in both light and dark themes.
-    border: '0.5px solid rgba(47,111,237,.28)',
-    background: 'rgba(47,111,237,.07)',
-  },
-  signupText: { margin: 0, fontSize: 12, lineHeight: 1.5 },
-  signupLinks: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 12 },
-  signupPrimary: { color: '#2f6fed', fontWeight: 600, textDecoration: 'none' },
-  signupSecondary: { color: 'var(--dsw-alias-label-tertiary, inherit)', textDecoration: 'underline' },
-  oauthCard: {
-    display: 'grid', gap: 10, padding: 14, borderRadius: 10,
-    border: '0.5px solid rgba(47,111,237,.35)',
-    background: 'rgba(47,111,237,.06)',
-  },
-  oauthHead: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  oauthActions: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' },
-  oauthCode: {
-    display: 'inline-block', padding: '4px 8px', borderRadius: 7,
-    background: 'var(--dsw-alias-bg-layer-1, rgba(127,127,127,.1))',
-    fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 14, fontWeight: 650,
-    letterSpacing: '0.03em', overflowWrap: 'anywhere',
-  },
-  oauthLink: { color: '#2f6fed', fontWeight: 600, textDecoration: 'underline', overflowWrap: 'anywhere' },
+  error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
+  summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 0', cursor: 'pointer' },
+  connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)' },
+  usageCard: { padding: '12px 18px', borderTop: '1px solid var(--gtfa-line)', borderRadius: '0 0 12px 12px', background: 'var(--gtfa-surface)' },
+  signupBar: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--gtfa-muted)' },
+  signupText: { margin: 0, fontSize: 11, lineHeight: 1.6 },
+  signupLinks: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 11 },
+  signupPrimary: { color: 'var(--gtfa-accent)', fontWeight: 550, textDecoration: 'none' },
+  signupSecondary: { color: 'var(--gtfa-muted)', textDecoration: 'underline' },
+  oauthCard: { display: 'grid', gap: 0 },
+  oauthActions: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  oauthCode: { display: 'inline-block', padding: '7px 11px', borderRadius: 7, border: '1px solid var(--gtfa-line)',
+    background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 17, fontWeight: 600, letterSpacing: '.06em', overflowWrap: 'anywhere' },
+  oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 34, padding: '7px 13px',
+    borderRadius: 8, background: 'var(--gtfa-accent)', color: '#fff', fontSize: 12, fontWeight: 550, textDecoration: 'none' },
   usageBlock: { display: 'grid', gap: 6 },
-  usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  usageTitle: { fontSize: 13, fontWeight: 650 },
-  usageAmount: { fontSize: 24, lineHeight: 1.2, fontWeight: 700, letterSpacing: '-0.02em' },
-  usageMeta: { margin: 0, fontSize: 12, lineHeight: 1.45, color: 'var(--dsw-alias-label-tertiary, inherit)', opacity: 0.85 },
-  progressTrack: { width: '100%', height: 7, borderRadius: 4, overflow: 'hidden', background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.18))' },
-  progressFill: { height: '100%', borderRadius: 4, transition: 'width 180ms ease' },
-  usageFoot: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--dsw-alias-label-tertiary, inherit)' },
-  testLine: { margin: '4px 0 0', fontSize: 13, lineHeight: 1.45 },
+  usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  usageTitle: { fontSize: 11, color: 'var(--gtfa-muted)' },
+  usageAmount: { fontSize: 16, lineHeight: 1.3, fontWeight: 650, letterSpacing: '-.025em', fontVariantNumeric: 'tabular-nums' },
+  usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
+  progressTrack: { height: 4, borderRadius: 4, overflow: 'hidden', background: 'var(--gtfa-hover)' },
+  progressFill: { height: '100%', borderRadius: 4, minWidth: 0, transition: 'width 180ms ease' },
+  testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.6 },
 };
 
 const TOLERANCE_OPTIONS = [
@@ -1296,94 +1291,85 @@ export interface ApifyOAuthCardProps {
   onCancel?: () => void;
   onLogout?: () => void;
   onRetry?: () => void;
+  connectionAction?: ReactNode;
+  connectionDescription?: string;
 }
 
 /** SSR-safe Apify sign-in card. Buttons only call explicit parent actions. */
 export function ApifyOAuthCard({
   state, t, locale, busy = null, onStart, onCancel, onLogout, onRetry,
+  connectionAction, connectionDescription,
 }: ApifyOAuthCardProps) {
   const data = state.status === 'ready' ? state.data : undefined;
   const issue = oauthIssueCode(state);
   const verificationUri = normalizeApifyOAuthVerificationUri(data?.verificationUri) ?? APIFY_OAUTH_VERIFICATION_URL;
-  const cancelLabel = busy === 'cancel' ? t('oauthCancelling') : t('oauthCancel');
-  const signIn = <button type="button" style={dim({ ...styles.button, ...styles.primary }, busy !== null)}
+  const signIn = <button type="button" className="gtfa-button" style={dim({ ...styles.button, ...styles.primary }, busy !== null)}
     disabled={busy !== null} onClick={onStart}>
+    <Icon name="external" size={13} />
     {busy === 'start' ? t('oauthStarting') : issue ? t('oauthSignInAgain') : t('oauthSignIn')}
   </button>;
-
-  const issueAlert = (code: ApifyOAuthCode) =>
-    <p style={styles.fieldError} role="alert">{oauthErrorText(code, t)}</p>;
-
-  const issueDetails = (code: ApifyOAuthCode) => {
-    const restart = code === 'access-denied' || code === 'expired' || code === 'reauth-required';
-    return <>
-      {issueAlert(code)}
-      {code === 'unavailable' || code === 'read-only'
-        ? <p style={styles.hint}>{t('oauthManualFallback')}</p>
-        : null}
-      <div style={styles.oauthActions}>
-        {restart
-          ? signIn
-          : <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onRetry}>
-            {t('oauthRetry')}
-          </button>}
-      </div>
-    </>;
-  };
+  const alert = issue ? <p style={styles.fieldError} role="alert">{oauthErrorText(issue, t)}</p> : null;
+  const loading = state.status === 'loading';
+  const restart = issue === 'access-denied' || issue === 'expired' || issue === 'reauth-required';
+  const title = loading
+    ? t(busy === 'logout' ? 'oauthLoggingOut' : busy === 'start' ? 'oauthStarting' : 'oauthLoading')
+    : data?.connected ? t('oauthConnected') : data?.pending ? t('oauthPendingTitle') : t('oauthTitle');
 
   return <div style={styles.oauthCard} aria-label={t('oauthTitle')}>
-    <div style={styles.oauthHead}>
-      <span style={styles.usageTitle}>{t('oauthTitle')}</span>
-      {data?.connected ? <span style={styles.pill}>{t('oauthConnected')}</span> : null}
+    <div className="gtfa-connection-top">
+      <span className={`gtfa-status-icon${data?.connected ? '' : ' login'}`}>
+        <Icon name={data?.connected ? 'check' : data?.pending ? 'external' : issue ? 'alert' : 'plug'} size={18} />
+      </span>
+      <div className="gtfa-connection-copy">
+        <div className="gtfa-connection-title" role="status">{title}</div>
+        {!loading ? <p className="gtfa-connection-subtitle">{data?.connected
+          ? connectionDescription ?? t('oauthConnectedHint')
+          : data?.pending ? t('oauthPending') : t('oauthSignedOut')}</p> : null}
+      </div>
+      <div className="gtfa-connection-actions">
+        {data?.connected ? <>
+          {connectionAction}
+          <details className="gtfa-account-menu" onKeyDown={event => {
+            if (event.key !== 'Escape') return;
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector<HTMLElement>('summary')?.focus();
+          }}>
+            <summary aria-label={t('accountActions')}><Icon name="more" size={16} /></summary>
+            <div><button type="button" disabled={busy !== null} onClick={event => {
+              const menu = event.currentTarget.closest('details');
+              if (menu) menu.open = false;
+              onLogout?.();
+            }}>{busy === 'logout' ? t('oauthLoggingOut') : t('oauthLogout')}</button></div>
+          </details>
+        </> : loading ? null : data?.pending ? <>
+          <a style={styles.oauthLink} href={verificationUri} target="_blank" rel="noopener noreferrer">
+            <Icon name="external" size={13} />{t('oauthOpen')}
+          </a>
+          <button type="button" className="gtfa-button" style={dim(styles.button, busy !== null)}
+            disabled={busy !== null} onClick={onCancel}>
+            {busy === 'cancel' ? t('oauthCancelling') : t('oauthCancel')}
+          </button>
+        </> : issue && !restart ? <button type="button" className="gtfa-button" style={dim(styles.button, busy !== null)}
+          disabled={busy !== null} onClick={onRetry}><Icon name="refresh" size={13} />{t('oauthRetry')}</button> : signIn}
+      </div>
     </div>
-    <p style={styles.usageMeta}>{t('oauthScope')}</p>
-    {state.status === 'loading'
-      ? <p style={styles.usageMeta} role="status">{t('oauthLoading')}</p>
-      : state.status === 'error'
-        ? issueDetails(issue ?? 'invalid-response')
-        : data?.connected
-          ? <>
-            <p style={styles.status}><strong>{t('oauthConnected')}</strong></p>
-            {issue ? issueAlert(issue) : null}
-            <p style={styles.hint}>{t('oauthConnectedHint')}</p>
-            <div style={styles.oauthActions}>
-              <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onLogout}>
-                {busy === 'logout' ? t('oauthLoggingOut') : t('oauthLogout')}
-              </button>
-            </div>
-          </>
-          : data?.pending
-            ? <>
-              <p style={styles.status}><strong>{t('oauthPendingTitle')}</strong></p>
-              <p style={styles.usageMeta}>{t('oauthPending')}</p>
-              <div>
-                <a style={styles.oauthLink} href={verificationUri} target="_blank" rel="noopener noreferrer">{t('oauthOpen')}</a>
-              </div>
-              {data.userCode ? <div><span style={styles.oauthCode}>{template(t('oauthUserCode'), { code: data.userCode })}</span></div> : null}
-              <p style={styles.hint}>{oauthExpiryText(data.expiresAt, t, locale)}</p>
-              {issue ? issueAlert(issue) : null}
-              <div style={styles.oauthActions}>
-                <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onCancel}>
-                  {cancelLabel}
-                </button>
-              </div>
-            </>
-            : issue
-              ? issueDetails(issue)
-              : <>
-                <p style={styles.status}>{t('oauthSignedOut')}</p>
-                <div style={styles.oauthActions}>{signIn}</div>
-              </>}
+    {data?.pending ? <div className="gtfa-oauth-foot">
+      <div className="gtfa-oauth-code-row">
+        {data.userCode ? <span style={styles.oauthCode}>{template(t('oauthUserCode'), { code: data.userCode })}</span> : null}
+        <span style={styles.usageMeta}>{oauthExpiryText(data.expiresAt, t, locale)}</span>
+      </div>
+      {alert}
+    </div> : alert || (!loading && !data?.connected) ? <div className="gtfa-oauth-foot">
+      {alert}
+      {issue === 'unavailable' || issue === 'read-only' ? <p style={styles.hint}>{t('oauthManualFallback')}</p> : null}
+      {!data?.connected ? <p style={styles.usageMeta}>{t('oauthScope')}</p> : null}
+    </div> : null}
   </div>;
 }
 
-function ApifySignupBar({ t, locale }: { t: Translate; locale: string }) {
-  const calls = new Intl.NumberFormat(locale).format(apifyEstimatedCalls());
-  const cost = new Intl.NumberFormat(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-    .format(APIFY_EST_COST_PER_CALL_USD);
-  const amounts = { free: `$${APIFY_FREE_MONTHLY_CREDIT_USD}`, calls, cost };
+function ApifySignupBar({ t }: { t: Translate; locale: string }) {
   return <div style={styles.signupBar}>
-    <p style={styles.signupText}>{template(t('signupBar'), amounts)}</p>
+    <p style={styles.signupText}>{t('signupCompact')}</p>
     <div style={styles.signupLinks}>
       <a style={styles.signupPrimary} href={APIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('signupAction')}</a>
       <a style={styles.signupSecondary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('pricingAction')}</a>
@@ -1406,29 +1392,24 @@ export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshin
   onRetry: () => void;
   refreshing?: boolean;
 }) {
-  const error = state.status === 'error' ? state : undefined;
+  const refresh = <button type="button" className="gtfa-button" style={styles.buttonSmall}
+    aria-label={t('usageRefresh')} title={t('usageRefresh')} disabled={refreshing || state.status === 'loading'} onClick={onRefresh}>
+    <Icon name="refresh" size={13} /><span className="gtfa-sr-only">{t('usageRefresh')}</span>
+  </button>;
   return <div style={styles.usageCard} aria-label={t('usageTitle')}>
-    <div style={styles.usageHead}>
-      <span style={styles.usageTitle}>{t('usageTitle')}</span>
-      <button type="button" style={styles.buttonSmall} disabled={refreshing || state.status === 'loading'}
-        onClick={onRefresh}>{t('usageRefresh')}</button>
-    </div>
-    {state.status === 'idle' || state.status === 'loading'
-      ? <p style={styles.usageMeta}>{t('usageLoading')}</p>
-      : error
-        ? <>
-          <p style={error.code === 'no-token' || error.code === 'invalid-token' ? styles.usageMeta : styles.fieldError} role="alert">
-            {usageErrorText(error, t)}
-          </p>
-          {error.code === 'network' || error.code === 'http'
-            ? <div><button type="button" style={styles.buttonSmall} onClick={onRetry}>{t('usageRetry')}</button></div>
-            : null}
-        </>
-        : state.status === 'ready' ? <UsageDetails data={state.data} t={t} locale={locale} /> : null}
+    {state.status === 'ready' ? <UsageDetails data={state.data} t={t} locale={locale} actions={refresh} /> : <>
+      <div style={styles.usageHead}><span style={styles.usageTitle}>{t('usageTitle')}</span>{refresh}</div>
+      {state.status === 'error' ? <>
+        <p style={state.code === 'no-token' || state.code === 'invalid-token' ? styles.usageMeta : styles.fieldError} role="alert">
+          {usageErrorText(state, t)}
+        </p>
+        {state.code === 'network' || state.code === 'http' ? <button type="button" style={styles.buttonSmall} onClick={onRetry}>{t('usageRetry')}</button> : null}
+      </> : <p style={styles.usageMeta}>{t('usageLoading')}</p>}
+    </>}
   </div>;
 }
 
-function UsageDetails({ data, t, locale }: { data: ApifyUsageData; t: Translate; locale: string }) {
+function UsageDetails({ data, t, locale, actions }: { data: ApifyUsageData; t: Translate; locale: string; actions: ReactNode }) {
   const hasProgress = data.usageUsd !== null && data.limitUsd !== null && data.limitUsd > 0;
   const percent = hasProgress ? Math.min(100, Math.max(0, (data.usageUsd! / data.limitUsd!) * 100)) : 0;
   const color = !hasProgress
@@ -1467,17 +1448,26 @@ function UsageDetails({ data, t, locale }: { data: ApifyUsageData; t: Translate;
     : null;
 
   return <>
-    <div style={styles.usageAmount}>{usageMoney(data.usageUsd)} / {money(data.limitUsd)}</div>
-    <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} style={styles.progressTrack}>
-      <div style={{ ...styles.progressFill, width: `${percent}%`, background: color }} />
+    <div className="gtfa-usage-row">
+      <span style={styles.usageTitle}>{t('usageTitle')}</span>
+      <strong style={styles.usageAmount}>{usageMoney(data.usageUsd)} / {money(data.limitUsd)}</strong>
+      {data.plan.tier ? <span style={{ ...styles.pill, color: 'var(--gtfa-muted)', background: 'var(--gtfa-hover)' }}>{tierTitle(data.plan.tier)}</span> : null}
+      <div className="gtfa-progress" role="progressbar" aria-label={t('usageTitle')}
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasProgress ? Math.round(percent) : undefined} style={styles.progressTrack}>
+        <div style={{ ...styles.progressFill, width: `${percent}%`, background: color }} />
+      </div>
+      {actions}
     </div>
-    <p style={styles.usageMeta}>{resets}</p>
-    <p style={styles.usageMeta}>{plan}</p>
-    <p style={styles.usageMeta}>{residential}</p>
-    {source ? <p style={styles.usageMeta}>{source}</p> : null}
-    <div style={styles.usageFoot}>
-      <span>{updated === null ? '' : template(t('usageUpdated'), { time: updated })}</span>
-    </div>
+    <details className="gtfa-usage-details">
+      <summary>{t('usageDetails')}</summary>
+      <div className="gtfa-usage-detail-grid">
+        <p style={styles.usageMeta}>{resets}</p>
+        <p style={styles.usageMeta}>{plan}</p>
+        <p style={styles.usageMeta}>{residential}</p>
+        {source ? <p style={styles.usageMeta}>{source}</p> : null}
+        {updated ? <span>{template(t('usageUpdated'), { time: updated })}</span> : null}
+      </div>
+    </details>
   </>;
 }
 
@@ -1515,7 +1505,7 @@ function Select({ label, hint, value, options, onChange, disabled, ariaLabel }: 
 function Segmented<V extends string>({ label, value, options, onChange, disabled }: {
   label: string;
   value: V;
-  options: readonly { value: V; label: string }[];
+  options: readonly { value: V; label: string; description?: string; icon?: string; recommended?: string }[];
   onChange: (value: V) => void;
   disabled: boolean;
 }) {
@@ -1534,13 +1524,23 @@ function Segmented<V extends string>({ label, value, options, onChange, disabled
       requestAnimationFrame(() => list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
     }
   };
-  return <div role="tablist" aria-label={label} style={{ ...styles.segmented, gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+  return <div role="tablist" aria-label={label} className="gtfa-route-grid"
     onKeyDown={disabled ? undefined : walk}>
     {options.map(option => {
       const active = option.value === value;
-      return <button key={option.value} type="button" role="tab" aria-selected={active} tabIndex={active ? 0 : -1}
+      return <button key={option.value} type="button" role="tab" aria-label={option.label}
+        aria-selected={active} tabIndex={active ? 0 : -1} className="gtfa-route-card"
         disabled={disabled} style={{ ...styles.segment, ...(active ? styles.segmentActive : null) }}
-        onClick={() => { if (!active) onChange(option.value); }}>{option.label}</button>;
+        onClick={() => { if (!active) onChange(option.value); }}>
+        <span className="gtfa-route-card-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span className="gtfa-route-icon" style={{ color: active ? 'var(--gtfa-accent)' : 'var(--gtfa-muted)' }}><Icon name={option.icon ?? 'cloud'} size={22} /></span>
+          <span className="gtfa-route-radio" aria-hidden="true" />
+        </span>
+        <span className="gtfa-route-card-body">
+          <span className="gtfa-route-title" style={{ fontWeight: 600 }}>{option.label}{option.recommended ? <span className="gtfa-recommended">{option.recommended}</span> : null}</span>
+          {option.description ? <span style={{ ...styles.hint, display: 'block', marginTop: 4 }}>{option.description}</span> : null}
+        </span>
+      </button>;
     })}
   </div>;
 }
@@ -1592,10 +1592,12 @@ export interface ConfigPageProps {
   initialActors?: ApifyActorsView;
   /** Test seam: start the Apify OAuth card in a specific state for server-render coverage. */
   initialOAuth?: ApifyOAuthView;
+  /** Test seam for the initially selected advanced panel. */
+  initialAdvancedTab?: 'anchors' | 'token' | 'files';
 }
 
 /** Settings page. Exported for server-render tests. */
-export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth }: ConfigPageProps) {
+export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors' }: ConfigPageProps) {
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -1606,6 +1608,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [baseline, setBaseline] = useState<string>(() => draftKey(fromSnapshot(snapshot.value)));
   const [busy, setBusy] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState<'anchors' | 'token' | 'files'>(initialAdvancedTab);
+  const advancedId = useId();
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [usage, setUsage] = useState<ApifyUsageView>(initialUsage ?? { status: 'idle' });
@@ -1971,57 +1975,209 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const ownEgress = draft.egress === 'actor-own';
   const publicCost = APIFY_EST_COST_PER_CALL_USD.toFixed(4);
 
-  return <form style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
-    <p style={styles.intro}>{t('intro')}</p>
+  const oauthConnected = oauth.status === 'ready' && oauth.data.connected;
+  const activeAdvancedTab = advancedTab === 'token' && !actorEgress ? 'anchors' : advancedTab;
+  const advancedTabs = [
+    { id: 'anchors' as const, label: t('advancedAnchors') },
+    ...(actorEgress ? [{ id: 'token' as const, label: t('advancedToken') }] : []),
+    { id: 'files' as const, label: t('advancedFiles') },
+  ];
+  const testButton = <button type="button" className="gtfa-button" style={dim(styles.button, !editable || testing || dirty)}
+    disabled={!editable || testing || dirty} title={dirty ? t('testSavedNote') : t('testNote')} onClick={() => { void test(); }}>
+    <Icon name="play" size={13} />{dirty ? t('testSaveFirst') : testing ? t('testing') : t('testConnection')}
+  </button>;
+  const walkAdvanced = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = advancedTabs.findIndex(tab => tab.id === activeAdvancedTab);
+    const next = event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowLeft' ? index - 1
+      : event.key === 'Home' ? 0 : event.key === 'End' ? advancedTabs.length - 1 : undefined;
+    if (next === undefined) return;
+    event.preventDefault();
+    setAdvancedTab(advancedTabs[(next + advancedTabs.length) % advancedTabs.length]!.id);
+    const list = event.currentTarget;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() =>
+      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+  };
+  const openInvalidPanel = () => {
+    setAdvancedOpen(true);
+    setAdvancedTab(validation.snapshotDir || validation.chartDir ? 'files' : 'anchors');
+  };
 
+  return <form className="gtfa-settings" style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
+    <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
     <section style={styles.section}>
       <SectionHeader title={t('connection')} description={t('connectionDescription')} />
-      <Field label={t('egress')} hint={t('egressHint')}>
-        <Segmented label={t('egress')} value={draft.egress} disabled={!editable}
-          options={[
-            { value: 'local', label: t('egressLocal') },
-            { value: 'actor-public', label: t('egressPublic') },
-            { value: 'actor-own', label: t('egressOwn') },
-          ]}
-          onChange={value => { edit({ egress: value, egressNotice: undefined }); setTestResult(null); }} />
-        {draft.egressNotice ? <p style={styles.warning} role="status">
-          {t(draft.egressNotice === 'renamed' ? 'egressRenamed' : 'egressUnknown')}
-        </p> : null}
-      </Field>
-      <div style={styles.field}>
-        <div style={styles.switchRow}>
-          <button type="button" style={dim(styles.button, !editable || testing)} disabled={!editable || testing} onClick={() => { void test(); }}>
-            {testing ? t('testing') : t('testConnection')}
-          </button>
-          {dirty
-            ? <span style={styles.hint}>{t('testSavedNote')}</span>
-            : actorEgress ? <span style={styles.hint}>{t('testNote')}</span> : null}
-        </div>
-        {line ? <p style={{ ...styles.testLine, color: line.ok ? 'var(--dsw-alias-state-success-primary, #2f9e5f)' : 'var(--dsw-alias-state-error-primary, #d14343)' }} role="status">
-          {line.ok ? '✓ ' : '✗ '}{line.text}
-        </p> : null}
+      <Segmented label={t('egress')} value={draft.egress} disabled={!editable}
+        options={[
+          { value: 'local', label: t('egressLocal'), description: t('routeLocalDescription'), icon: 'laptop' },
+          { value: 'actor-public', label: t('egressPublic'), description: t('routePublicDescription'), icon: 'cloud', recommended: t('recommended') },
+          { value: 'actor-own', label: t('egressOwn'), description: t('routeOwnDescription'), icon: 'server' },
+        ]}
+        onChange={value => { edit({ egress: value, egressNotice: undefined }); setTestResult(null); }} />
+      {draft.egressNotice ? <p style={styles.warning} role="status">
+        {t(draft.egressNotice === 'renamed' ? 'egressRenamed' : 'egressUnknown')}
+      </p> : null}
+      <div style={styles.connectionPanel}>
+        {actorEgress ? <>
+          <ApifyOAuthCard state={oauth} t={t} locale={intlLocale} busy={oauthBusy}
+            connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
+            onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
+            onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
+          {!oauthConnected && (tokenSet || usage.status === 'ready') ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
+          {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
+            <ApifyUsageCard state={usage} t={t} locale={intlLocale}
+              onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
+        </> : <div className="gtfa-connection-top">
+          <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
+          <div className="gtfa-connection-copy"><div className="gtfa-connection-title">{t('localNetwork')}
+            <span style={{ ...styles.pill, color: line?.ok ? 'var(--gtfa-green)' : 'var(--gtfa-muted)', background: line?.ok ? 'var(--gtfa-green-soft)' : 'var(--gtfa-hover)' }}>
+              {line?.ok ? t('connectionReady') : t('connectionUntested')}
+            </span></div><p className="gtfa-connection-subtitle">{t('localNetworkHint')}</p></div>
+          <div className="gtfa-connection-actions">{testButton}</div>
+        </div>}
       </div>
+      {line ? <p style={{ ...styles.testLine, color: line.ok ? 'var(--gtfa-green)' : 'var(--dsw-alias-state-error-primary, #c55151)' }} role="status">
+        {line.ok ? '✓ ' : '✗ '}{line.text}
+      </p> : dirty ? <p style={styles.hint}>{t('testSavedNote')}</p> : null}
+      {actorEgress ? <>
+        <p style={{ ...styles.hint, display: 'flex', alignItems: 'center', gap: 7, margin: 0 }}><Icon name="shield" size={13} />{t('actorAccountHint')}</p>
+        {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
+        {ownEgress ? <>
+          <div style={styles.field}>
+            <div style={styles.switchRow}>
+              <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
+              <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
+                onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
+            </div>
+            <select style={styles.select} aria-label={t('actor')} value={draft.actor}
+              disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
+              onChange={event => edit({ actor: event.target.value })}>
+              <option value="">{t('actorNone')}</option>
+              {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <p style={styles.hint}>{t('actorHint')}</p>
+            {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
+              status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
+            })}</p> : null}
+            {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
+            {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
+          </div>
+          {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
+            <p style={styles.usageMeta}>{t('actorEmpty')}</p>
+            <div>
+              <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
+                disabled={!editable || deploying} onClick={() => { void deploy(); }}>
+                {deploying ? t('deploying') : t('deploy')}
+              </button>
+            </div>
+            <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
+          </div> : null}
+          {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
+          {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
+        </> : <details style={styles.hint}><summary style={{ cursor: 'pointer', width: 'fit-content' }}>{GTFA_PUBLIC_ACTOR_LABEL}</summary>
+          <Field label={t('publicActor')} hint={t('publicActorHint')}>
+            <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
+            <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a> · <a style={styles.signupPrimary} href={GTFA_STORE_URL} target="_blank" rel="noopener noreferrer">{t('storePage')}</a></p>
+            <p style={styles.hint}>{template(t('publicActorCost'), { cost: publicCost })}</p>
+          </Field>
+        </details>}
+      </> : null}
     </section>
 
-    {actorEgress ? <section style={styles.section}>
-      <SectionHeader title={t('actorConnection')} description={t('actorDescription')} />
-      <ApifyOAuthCard state={oauth} t={t} locale={intlLocale} busy={oauthBusy}
-        onStart={() => { void startOAuth(); }}
-        onCancel={() => { void cancelOAuth(); }}
-        onLogout={() => { void logoutOAuth(); }}
-        onRetry={retryOAuth} />
-      {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
-      <div style={styles.usageBlock}>
-        <ApifyUsageCard state={usage} t={t} locale={intlLocale}
-          onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />
+    <section style={styles.section}>
+      <SectionHeader title={t('defaults')} description={t('defaultsDescription')} />
+      <div className="gtfa-defaults-grid">
+        <Select label={t('geo')} hint={t('geoHint')} value={draft.geo} disabled={!editable}
+          options={geoOptions} onChange={value => edit({ geo: value })} />
+        <Select label={t('anchor')} hint={t('anchorHint')} value={draft.anchor} disabled={!editable}
+          options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
-      <details style={styles.section}>
-        <summary style={styles.summary}>
-          <span style={styles.sectionTitle}>{t('manualTokenSummary')}</span>
-          <span style={styles.sectionDescription}>{t('manualTokenDescription')}</span>
-        </summary>
+      <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
+        onChange={checked => edit({ cache: checked })} />
+    </section>
+
+    <details className="gtfa-advanced" open={advancedOpen} style={{ borderTop: '1px solid var(--gtfa-line)' }}
+      onToggle={event => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }}>
+      <summary style={styles.summary}>
+        <Icon name="sliders" size={18} />
+        <span style={{ display: 'grid', gap: 4 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{t('advanced')}</span>
+          <span style={styles.sectionDescription}>{t('advancedDescription')}</span></span>
+        <span className="gtfa-advanced-chevron" style={{ marginLeft: 'auto', color: 'var(--gtfa-quiet)' }}><Icon name="chevron" size={15} /></span>
+      </summary>
+      <div role="tablist" aria-label={t('advanced')} className="gtfa-advanced-tabs" onKeyDown={walkAdvanced}>
+        {advancedTabs.map(tab => <button key={tab.id} type="button" role="tab" id={`${advancedId}-${tab.id}-tab`}
+          aria-selected={activeAdvancedTab === tab.id} aria-controls={`${advancedId}-${tab.id}-panel`}
+          tabIndex={activeAdvancedTab === tab.id ? 0 : -1} onClick={() => setAdvancedTab(tab.id)}>{tab.label}</button>)}
+      </div>
+      <div role="tabpanel" id={`${advancedId}-anchors-panel`} aria-labelledby={`${advancedId}-anchors-tab`}
+        className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'anchors'} style={{ paddingBottom: 24 }}>
+        <SectionHeader title={t('baselines')} description={t('baselinesDescription')} />
+        <Toggle label={t('overrideBaselines')} hint={t('baselinesHint')} checked={draft.baselineOverride} disabled={!editable}
+          onChange={checked => edit(setBaselineOverride(draft, checked))} />
+        {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
+        {draft.baselineOverride ? <div className="gtfa-anchor-scroll"><div>
+          <div style={styles.anchorHead}>
+            <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />
+          </div>
+          {draft.anchors.map((anchor, index) => <div style={styles.anchorBlock} key={`${anchor.term}-${index}`}>
+            <div style={styles.anchorRow}>
+              <span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span>
+              <select style={styles.select} aria-label={`${t('anchorGeo')} ${anchor.term}`} value={anchor.geo} disabled={!editable}
+                onChange={event => editAnchor(index, { geo: event.target.value })}>
+                {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
+              </select>
+              <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
+                aria-invalid={Boolean(validation.anchorRows[index])}
+                value={anchor.dailySearches} disabled={!editable}
+                onChange={event => editAnchor(index, { dailySearches: event.target.value })} />
+              <select style={styles.select} aria-label={`${t('anchorTolerance')} ${anchor.term}`} value={anchor.tolerance} disabled={!editable}
+                onChange={event => editAnchor(index, { tolerance: event.target.value })}>
+                {toleranceChoices(anchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <button type="button" style={styles.button} disabled={!editable}
+                onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}>{t('remove')}</button>
+            </div>
+            {validation.anchorRows[index] ? <p style={styles.fieldError} role="alert">{validation.anchorRows[index]}</p> : null}
+          </div>)}
+          <div style={styles.anchorBlock}>
+            <div style={styles.anchorRow}>
+              <input style={styles.input} type="text" aria-label={t('newAnchorTerm')} placeholder={t('newAnchorTerm')}
+                aria-invalid={Boolean(validation.newAnchorTerm)}
+                value={draft.newAnchor.term} disabled={!editable}
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} />
+              <select style={styles.select} aria-label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} value={draft.newAnchor.geo} disabled={!editable}
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, geo: event.target.value } })}>
+                {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
+              </select>
+              <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
+                aria-invalid={Boolean(validation.newAnchorDaily)}
+                value={draft.newAnchor.dailySearches} disabled={!editable}
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} />
+              <select style={styles.select} aria-label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`} value={draft.newAnchor.tolerance} disabled={!editable}
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
+                {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <button type="button" style={dim(styles.button, !editable || !newAnchorReady)} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
+            </div>
+            {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
+            {validation.newAnchorDaily ? <p style={styles.fieldError} role="alert">{validation.newAnchorDaily}</p> : null}
+          </div>
+          <div style={styles.windowRow}>
+            <Select label={t('windowShort')} value={draft.windowShort} disabled={!editable}
+              options={windowOptions}
+              onChange={value => edit({ windowShort: value })} />
+            <Select label={t('windowLong')} value={draft.windowLong} disabled={!editable}
+              options={windowOptions}
+              onChange={value => edit({ windowLong: value })} />
+          </div>
+          {validation.window ? <p style={styles.fieldError} role="alert">{validation.window}</p> : null}
+          <p style={styles.hint}>{t('windowHint')}</p>
+        </div></div> : null}
+      </div>
+      {actorEgress ? <div role="tabpanel" id={`${advancedId}-token-panel`} aria-labelledby={`${advancedId}-token-tab`}
+        className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'token'} style={{ paddingBottom: 24 }}>
+        <SectionHeader title={t('manualTokenSummary')} description={t('manualTokenDescription')} />
         <Field label={t('token')} hint={t('tokenHint')}>
-          <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
+          <input style={styles.input} type="password" aria-label={t('token')} autoComplete="new-password" value={draft.token} disabled={!editable}
             placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}
             onChange={event => edit({ token: event.target.value })} />
           <p style={styles.hint}>{tokenSet
@@ -2034,152 +2190,38 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
               onChange={checked => edit({ clearToken: checked })} />
           </div> : null}
         </Field>
-      </details>
-      {ownEgress ? <>
-        <div style={styles.field}>
-          <div style={styles.switchRow}>
-            <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
-            <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
-              onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
-          </div>
-          <select style={styles.select} aria-label={t('actor')} value={draft.actor}
-            disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
-            onChange={event => edit({ actor: event.target.value })}>
-            <option value="">{t('actorNone')}</option>
-            {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-          <p style={styles.hint}>{t('actorHint')}</p>
-          {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
-            status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
-          })}</p> : null}
-          {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
-          {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
-        </div>
-        {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
-          <p style={styles.usageMeta}>{t('actorEmpty')}</p>
-          <div>
-            <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
-              disabled={!editable || deploying} onClick={() => { void deploy(); }}>
-              {deploying ? t('deploying') : t('deploy')}
-            </button>
-          </div>
-          <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
-        </div> : null}
-        {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
-        {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
-      </> : <Field label={t('publicActor')} hint={t('publicActorHint')}>
-        <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
-        <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a> · <a style={styles.signupPrimary} href={GTFA_STORE_URL} target="_blank" rel="noopener noreferrer">{t('storePage')}</a></p>
-        <p style={styles.hint}>{template(t('publicActorCost'), { cost: publicCost })}</p>
-      </Field>}
-    </section> : null}
-
-    <section style={styles.section}>
-      <SectionHeader title={t('defaults')} description={t('defaultsDescription')} />
-      <Select label={t('geo')} hint={t('geoHint')} value={draft.geo} disabled={!editable}
-        options={geoOptions}
-        onChange={value => edit({ geo: value })} />
-      <Select label={t('anchor')} hint={t('anchorHint')} value={draft.anchor} disabled={!editable}
-        options={fixedAnchorOptions}
-        onChange={value => edit({ anchor: value })} />
-      <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
-        onChange={checked => edit({ cache: checked })} />
-    </section>
-
-    <section style={styles.section}>
-      <SectionHeader title={t('baselines')} description={t('baselinesDescription')} />
-      <Toggle label={t('overrideBaselines')} hint={t('baselinesHint')} checked={draft.baselineOverride} disabled={!editable}
-        onChange={checked => edit(setBaselineOverride(draft, checked))} />
-      {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
-      {draft.baselineOverride ? <>
-        <div style={styles.anchorHead}>
-          <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />
-        </div>
-        {draft.anchors.map((anchor, index) => <div style={styles.anchorBlock} key={`${anchor.term}-${index}`}>
-          <div style={styles.anchorRow}>
-            <span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span>
-            <select style={styles.select} aria-label={`${t('anchorGeo')} ${anchor.term}`} value={anchor.geo} disabled={!editable}
-              onChange={event => editAnchor(index, { geo: event.target.value })}>
-              {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-            </select>
-            <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
-              aria-invalid={Boolean(validation.anchorRows[index])}
-              value={anchor.dailySearches} disabled={!editable}
-              onChange={event => editAnchor(index, { dailySearches: event.target.value })} />
-            <select style={styles.select} aria-label={`${t('anchorTolerance')} ${anchor.term}`} value={anchor.tolerance} disabled={!editable}
-              onChange={event => editAnchor(index, { tolerance: event.target.value })}>
-              {toleranceChoices(anchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <button type="button" style={styles.button} disabled={!editable}
-              onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}>{t('remove')}</button>
-          </div>
-          {validation.anchorRows[index] ? <p style={styles.fieldError} role="alert">{validation.anchorRows[index]}</p> : null}
-        </div>)}
-        <div style={styles.anchorBlock}>
-          <div style={styles.anchorRow}>
-            <input style={styles.input} type="text" aria-label={t('newAnchorTerm')} placeholder={t('newAnchorTerm')}
-              aria-invalid={Boolean(validation.newAnchorTerm)}
-              value={draft.newAnchor.term} disabled={!editable}
-              onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} />
-            <select style={styles.select} aria-label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} value={draft.newAnchor.geo} disabled={!editable}
-              onChange={event => edit({ newAnchor: { ...draft.newAnchor, geo: event.target.value } })}>
-              {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-            </select>
-            <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
-              aria-invalid={Boolean(validation.newAnchorDaily)}
-              value={draft.newAnchor.dailySearches} disabled={!editable}
-              onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} />
-            <select style={styles.select} aria-label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`} value={draft.newAnchor.tolerance} disabled={!editable}
-              onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
-              {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <button type="button" style={dim(styles.button, !editable || !newAnchorReady)} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
-          </div>
-          {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
-          {validation.newAnchorDaily ? <p style={styles.fieldError} role="alert">{validation.newAnchorDaily}</p> : null}
-        </div>
-        <div style={styles.windowRow}>
-          <Select label={t('windowShort')} value={draft.windowShort} disabled={!editable}
-            options={windowOptions}
-            onChange={value => edit({ windowShort: value })} />
-          <Select label={t('windowLong')} value={draft.windowLong} disabled={!editable}
-            options={windowOptions}
-            onChange={value => edit({ windowLong: value })} />
-        </div>
-        {validation.window ? <p style={styles.fieldError} role="alert">{validation.window}</p> : null}
-        <p style={styles.hint}>{t('windowHint')}</p>
-      </> : null}
-    </section>
-
-    <details style={styles.section} onToggle={event => setAdvancedOpen((event.currentTarget as HTMLDetailsElement).open)}>
-      <summary style={styles.summary}>
-        <span style={styles.sectionTitle}><span aria-hidden="true" style={{ display: 'inline-block', width: 14, opacity: 0.6 }}>{advancedOpen ? '▾' : '▸'}</span>{t('advanced')}</span>
-        <span style={styles.sectionDescription}>{t('advancedDescription')}</span>
-      </summary>
-      <Toggle label={t('charts')} hint={t('chartsHint')} checked={draft.charts} disabled={!editable}
-        onChange={checked => edit({ charts: checked })} />
-      <Field label={t('snapshotDir')} hint={t('snapshotDirHint')}>
-        <input style={styles.input} type="text" value={draft.snapshotDir} disabled={!editable}
-          aria-invalid={Boolean(validation.snapshotDir)}
-          onChange={event => edit({ snapshotDir: event.target.value })} />
-        {validation.snapshotDir ? <p style={styles.fieldError} role="alert">{validation.snapshotDir}</p> : null}
-      </Field>
-      <Field label={t('chartDir')} hint={t('chartDirHint')}>
-        <input style={styles.input} type="text" value={draft.chartDir} disabled={!editable || !draft.charts}
-          aria-invalid={Boolean(validation.chartDir)}
-          onChange={event => edit({ chartDir: event.target.value })} />
-        {validation.chartDir ? <p style={styles.fieldError} role="alert">{validation.chartDir}</p> : null}
-      </Field>
+      </div> : null}
+      <div role="tabpanel" id={`${advancedId}-files-panel`} aria-labelledby={`${advancedId}-files-tab`}
+        className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'files'} style={{ paddingBottom: 24 }}>
+        <Toggle label={t('charts')} hint={t('chartsHint')} checked={draft.charts} disabled={!editable}
+          onChange={checked => edit({ charts: checked })} />
+        <Field label={t('snapshotDir')} hint={t('snapshotDirHint')}>
+          <input style={styles.input} type="text" aria-label={t('snapshotDir')} value={draft.snapshotDir} disabled={!editable}
+            aria-invalid={Boolean(validation.snapshotDir)}
+            onChange={event => edit({ snapshotDir: event.target.value })} />
+          {validation.snapshotDir ? <p style={styles.fieldError} role="alert">{validation.snapshotDir}</p> : null}
+        </Field>
+        <Field label={t('chartDir')} hint={t('chartDirHint')}>
+          <input style={styles.input} type="text" aria-label={t('chartDir')} value={draft.chartDir} disabled={!editable || !draft.charts}
+            aria-invalid={Boolean(validation.chartDir)}
+            onChange={event => edit({ chartDir: event.target.value })} />
+          {validation.chartDir ? <p style={styles.fieldError} role="alert">{validation.chartDir}</p> : null}
+        </Field>
+      </div>
     </details>
 
-    <div style={styles.saveBar}>
-      <button type="submit" style={dim({ ...styles.button, ...styles.primary }, !canSave)} disabled={!canSave}>
+    <div className="gtfa-save-bar" style={styles.saveBar}>
+      <span className={`gtfa-save-state${dirty ? ' dirty' : ''}`} role="status" aria-live="polite">
+        {dirty ? <span aria-hidden="true">●</span> : <Icon name="check" size={12} />}
+        {dirty ? t('unsaved') : notice ?? t('allSaved')}
+      </span>
+      <button type="button" className="gtfa-button" style={dim(styles.button, !editable || !dirty)} disabled={!editable || !dirty} onClick={discard}>{t('discard')}</button>
+      <button type="submit" className="gtfa-button" style={dim({ ...styles.button, ...styles.primary }, !canSave)} disabled={!canSave}>
         {busy ? t('saving') : t('save')}
       </button>
-      <button type="button" style={dim(styles.button, !editable || !dirty)} disabled={!editable || !dirty} onClick={discard}>{t('discard')}</button>
-      {dirty ? <span style={styles.pill}>{t('unsaved')}</span> : null}
-      {!dirty && notice ? <p style={styles.status} role="status">{notice}</p> : null}
-      {failure ? <p style={styles.error} role="alert">{failure}</p> : null}
+      {blocking ? <button type="button" style={{ ...styles.buttonSmall, color: 'var(--dsw-alias-state-error-primary, #c55151)', flexBasis: '100%' }}
+        onClick={openInvalidPanel}>{t('advancedFix')}</button> : null}
+      {failure ? <p style={{ ...styles.error, flexBasis: '100%' }} role="alert">{failure}</p> : null}
       {!snapshot.writable ? <p style={styles.hint}>{t('readOnly')}</p> : null}
     </div>
   </form>;

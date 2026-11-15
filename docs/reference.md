@@ -88,7 +88,7 @@ Known evidence is intentionally narrow: the GrokBot client used native OAuth reg
 
 Bearer authentication remains a compatibility fallback for MCP clients without OAuth and is still the authentication mechanism for the Actor's plain HTTP API. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor itself does not handle OAuth token refresh.
 
-At this documentation revision, the public Apify deployment reports package `0.2.3` and Actor build `0.1.15`. The repository version is `0.2.5`; that is not evidence that the public deployment has been upgraded.
+At this documentation revision, the public Apify deployment reports package `0.2.3` and Actor build `0.1.15`. The repository version is `0.2.6`; that is not evidence that the public deployment has been upgraded.
 
 Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
@@ -124,7 +124,7 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed.
+The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed.
 
 ### Apify OAuth and credential resolution
 
@@ -144,7 +144,11 @@ The manual token is an **Advanced / fallback** setting. `role('secret')` only re
 
 Apify's only current device OAuth scope is `full_api_access`. Authorizing grants full Apify API access, not access limited to this Actor or tool; disclose that before login.
 
-When **Public Actor** is selected without a connected credential, the prompt bar offers **“Sign up free”**: the Free plan's $5 monthly credit covers roughly **2,100 calls a month at about $0.0024 per call** (estimated, consistent with the cost table below). Links: [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). The usage card asks for an Apify credential when none is connected; sign in with Apify, or use the advanced token fallback. Local mode needs no token and does not show this bar.
+The connection section uses three egress cards. OAuth status and usage share a compact panel; **Usage details** expands billing-cycle, plan, proxy, and credential-source information. Sign out is in the account menu. The sticky footer contains **Save** and **Discard**; **Test connection** is disabled while the draft has unsaved changes, because the Host checks the saved configuration. The layout follows the Host's light/dark theme and stacks on narrow screens.
+
+**Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
+
+When an Actor route has no connected credential, compact links offer [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show these links. Cost estimates remain in the cost table below.
 
 | Field | Default | Meaning |
 | --- | --- | --- |

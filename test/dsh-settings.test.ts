@@ -19,6 +19,7 @@ function render(options: {
   draft?: Partial<Draft>;
   usage?: ApifyUsageView;
   actors?: ApifyActorsView;
+  advancedTab?: 'anchors' | 'token' | 'files';
 } = {}) {
   const snapshot = {
     status: 'ready' as const,
@@ -65,6 +66,7 @@ function render(options: {
     initialDraft: options.draft,
     initialUsage: options.usage,
     initialActors: options.actors,
+    initialAdvancedTab: options.advancedTab,
   }));
 }
 
@@ -139,20 +141,21 @@ describe('dsh settings form', () => {
   it('renders choices as selects, a segmented control, and switches', () => {
     const html = render();
     expect(html).toContain('role="tablist"');
-    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    const routes = html.match(/<div role="tablist" aria-label="Egress"[\s\S]*?<\/div>/)?.[0];
+    expect(routes?.match(/role="tab"/g)).toHaveLength(3);
     expect(html).toContain('aria-selected="true"');
     expect(html.match(/role="switch"/g)).toHaveLength(3);
     expect(html).not.toContain('type="checkbox"');
     expect(html).toContain('<select');
     expect(html).toContain('United States (US)');
     expect(html).toContain('Worldwide');
-    expect(html).toContain('Automatic (sudoku for ≤1 day, gpts for 7 days+)');
+    expect(html).toContain(EN.anchorAutomatic);
     expect(html).toContain('±50%');
   });
 
   it('orders sections and hides Apify fields while egress is local', () => {
     const html = render();
-    const order = ['Connection', 'Defaults', 'Anchors &amp; baselines', 'Advanced'];
+    const order = [EN.connection!, EN.defaults!, EN.advanced!, 'Anchors &amp; baselines'];
     const positions = order.map(title => {
       const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const heading = new RegExp(`<h3\\b[^>]*>${escaped}</h3>`).exec(html);
@@ -188,11 +191,11 @@ describe('dsh settings form', () => {
     }
   });
 
-  it('shows the sign-up bar with the measured-cost estimate only when there is no token', () => {
+  it('offers compact sign-up and pricing links when there is no credential', () => {
     const html = render({ draft: { egress: 'actor-own' }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
-    expect(html).toContain('No Apify account? Sign up free');
-    expect(html).toContain('$5 monthly credit');
-    expect(html).toContain(`roughly ${new Intl.NumberFormat('en').format(apifyEstimatedCalls())} calls a month at about $0.0024 per call, estimated`);
+    expect(html).toContain(EN.signupCompact);
+    expect(html).toContain('full_api_access');
+    expect(html).not.toContain('roughly');
     expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
     expect(html).toContain(`href="${APIFY_PRICING_URL}"`);
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
@@ -269,6 +272,35 @@ describe('dsh settings form', () => {
     expect(html).not.toContain('<details open');
     expect(html).toContain('Snapshot directory');
     expect(html).toContain('Chart directory');
+  });
+
+  it('groups the existing advanced editors into accessible panels without discarding their controls', () => {
+    const html = render({ draft: { egress: 'actor-public' }, advancedTab: 'token' });
+    const panels = [...html.matchAll(/<div role="tabpanel"([^>]*)>/g)].map(match => match[1]!);
+    expect(panels).toHaveLength(3);
+    expect(panels.find(panel => panel.includes('-token-panel'))).not.toContain('hidden=');
+    expect(panels.find(panel => panel.includes('-anchors-panel'))).toContain('hidden=""');
+    expect(panels.find(panel => panel.includes('-files-panel'))).toContain('hidden=""');
+    expect(html).toContain('aria-label="Tolerance chacha"');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('Snapshot directory');
+    const local = render({ advancedTab: 'token' });
+    expect(local.match(/<div role="tabpanel"/g)).toHaveLength(2);
+    expect(local).not.toContain('type="password"');
+  });
+
+  it('requires saving a draft before testing its connection while leaving Save available', () => {
+    const dirty = render({ draft: { cache: false } });
+    const dirtyTest = [...dirty.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
+      .find(match => match[2]!.includes(EN.testSaveFirst!));
+    expect(dirtyTest?.[1]).toContain('disabled=""');
+    expect(dirty).not.toMatch(/type="submit"[^>]*disabled/);
+    const clean = render();
+    const cleanTest = [...clean.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
+      .find(match => match[2]!.includes(EN.testConnection!));
+    expect(cleanTest).toBeDefined();
+    expect(cleanTest?.[1]).not.toContain('disabled=');
+    expect(clean).toContain(EN.allSaved);
   });
 
   it('shows the unsaved pill and Discard after an edit, and disables Save', () => {
