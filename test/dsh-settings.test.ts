@@ -226,7 +226,7 @@ describe('dsh settings form', () => {
     expect(html).toContain('View source on GitHub →');
     expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent"');
     expect(html).toContain(`href="${GTFA_STORE_URL}" target="_blank" rel="noopener noreferrer">Apify Store page →</a>`);
-    expect(html).toContain('About $0.0024 of platform usage per isolated call');
+    expect(html).toContain(EN.publicActorCost);
     expect(html).toContain('Apify token');
     expect(html).not.toContain('aria-label="Actor"');
     expect(html).not.toContain('Deploy to my Apify account');

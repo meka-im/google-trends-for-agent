@@ -20,7 +20,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { SETTINGS_CSS } from './theme.js';
 import {
-  APIFY_EST_COST_PER_CALL_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
+  APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
   GTFA_STORE_URL, regionLabel, resolveEgress, type EgressMode, type EgressNotice,
 } from '../options.js';
@@ -256,7 +256,7 @@ export const EN: Record<string, string> = {
   localNetworkHint: 'Connect to Google Trends from this dsh host.',
   connectionUntested: 'Not tested',
   connectionReady: 'Reachable',
-  actorAccountHint: 'Calls run and are billed in your Apify account; credentials stay on the dsh host.',
+  actorAccountHint: 'Runs start only for queries and exit when done. Platform usage is billed in your Apify account; credentials stay on the dsh host.',
   oauthActivePublic: 'OAuth authorized · Public Actor ready',
   oauthActiveOwn: 'OAuth authorized · Your own Actor',
   accountActions: 'Account actions',
@@ -312,16 +312,16 @@ export const EN: Record<string, string> = {
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
-  testNote: 'Two tiny requests: /health (no proxy traffic) and one HEAD relay.',
+  testNote: 'Actor: check API access and the latest build without starting a run. Local: one reachability probe.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
-  testActorOk: 'Apify Actor OK — HTTP {status}, {ms} ms',
+  testActorOk: 'Apify API and Actor build accessible — {ms} ms; no run started',
   testNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to use an Actor egress.',
   testNoActor: 'Select or deploy your google-trends-for-agent Actor first.',
   testVersionMismatch: 'This Actor build speaks a different relay version. Update the plugin or rebuild the Actor.',
   testInvalidToken: 'Apify rejected the token or OAuth session. Sign in again or check the advanced manual token in Apify Console → Settings → API & Integrations.',
   testNetworkLocal: 'Could not reach Google Trends from this machine.',
   testDetail: ' Details: {detail}',
-  testNetworkActor: 'Could not reach your Apify Actor (or it returned no Standby response).',
+  testNetworkActor: 'Could not read your Apify Actor metadata. Check API access and the selected Actor.',
   testHttp: 'Target returned HTTP {status}.',
   testBusy: 'A test is already running. Try again in a moment.',
   actorConnection: 'Apify Actor',
@@ -359,10 +359,10 @@ export const EN: Record<string, string> = {
   actor: 'Actor',
   publicActor: 'Public Actor',
   publicActorHint: 'Fixed public Actor. Runs and billing stay in your Apify account; nothing to deploy.',
-  publicActorCost: 'About ${cost} of platform usage per isolated call (estimate); no Actor fee.',
+  publicActorCost: 'Billed for each run’s compute and proxy usage. No idle server; no Actor fee.',
   viewSource: 'View source on GitHub →',
   storePage: 'Apify Store page →',
-  actorHint: 'Your google-trends-for-agent Actor. It fetches Google Trends with its on-platform residential proxy and exits after 60 s idle.',
+  actorHint: 'One query starts one bounded Actor run using its residential proxy. The run exits when the result is ready.',
   actorNone: 'Select an Actor',
   actorRefresh: 'Refresh',
   actorLoading: 'Loading your Actors…',
@@ -450,7 +450,7 @@ export const ZH: Record<string, string> = {
   localNetworkHint: '从当前 dsh 主机连接 Google Trends。',
   connectionUntested: '未测试',
   connectionReady: '可连接',
-  actorAccountHint: '调用在你的 Apify 账号内运行并计费，凭据保留在 dsh 主机。',
+  actorAccountHint: '有查询才启动，完成即退出；计算和代理用量计入你的 Apify 账号，凭据保留在 dsh 主机。',
   oauthActivePublic: 'OAuth 授权 · 公共 Actor 已就绪',
   oauthActiveOwn: 'OAuth 授权 · 使用自己的 Actor',
   accountActions: '账号操作',
@@ -506,16 +506,16 @@ export const ZH: Record<string, string> = {
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
-  testNote: '两次极小请求：/health（不耗代理流量）和一次 HEAD 转发。',
+  testNote: 'Actor 只检查 API 权限和已有构建，不启动运行；本机直连做一次连通性检查。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
-  testActorOk: 'Apify Actor 正常 — HTTP {status}，{ms} ms',
+  testActorOk: 'Apify API 和 Actor 构建可访问，{ms} ms；未启动运行',
   testNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可使用 Actor 出口。',
   testNoActor: '请先选择或部署你的 google-trends-for-agent Actor。',
   testVersionMismatch: '该 Actor 构建的 relay 版本不匹配。请更新插件或重新构建 Actor。',
   testInvalidToken: 'Apify 拒绝了该 Token 或 OAuth 会话。请重新登录，或在 Apify Console → Settings → API & Integrations 中检查高级设置里的手动 Token。',
   testNetworkLocal: '本机无法连接 Google Trends。',
   testDetail: '详情：{detail}',
-  testNetworkActor: '无法连接你的 Apify Actor（或它没有返回 Standby 响应）。',
+  testNetworkActor: '无法读取 Apify Actor 信息，请检查 API 权限和所选 Actor。',
   testHttp: '目标返回 HTTP {status}。',
   testBusy: '已有测试正在进行，请稍后再试。',
   actorConnection: 'Apify Actor',
@@ -553,10 +553,10 @@ export const ZH: Record<string, string> = {
   actor: 'Actor',
   publicActor: '公共 Actor',
   publicActorHint: '固定的公共 Actor。运行和计费都在你的 Apify 账号内，无需部署。',
-  publicActorCost: '单次独立调用约 ${cost} 平台用量（估算），无 Actor 费用。',
+  publicActorCost: '按每次运行的计算和代理用量计费，无空闲常驻服务，无 Actor 费用。',
   viewSource: '在 GitHub 查看源码 →',
   storePage: 'Apify Store 页面 →',
-  actorHint: '你的 google-trends-for-agent Actor。它使用平台内住宅代理访问 Google Trends，并在空闲 60 秒后退出。',
+  actorHint: '每次查询启动一个有时限的 Actor，使用平台内住宅代理，结果生成后立即退出。',
   actorNone: '选择 Actor',
   actorRefresh: '刷新',
   actorLoading: '正在加载你的 Actor…',
@@ -1973,7 +1973,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const line = testResult ? testLine(testResult, t) : null;
   const actorEgress = draft.egress !== 'local';
   const ownEgress = draft.egress === 'actor-own';
-  const publicCost = APIFY_EST_COST_PER_CALL_USD.toFixed(4);
 
   const oauthConnected = oauth.status === 'ready' && oauth.data.connected;
   const activeAdvancedTab = advancedTab === 'token' && !actorEgress ? 'anchors' : advancedTab;
@@ -2077,7 +2076,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           <Field label={t('publicActor')} hint={t('publicActorHint')}>
             <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
             <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a> · <a style={styles.signupPrimary} href={GTFA_STORE_URL} target="_blank" rel="noopener noreferrer">{t('storePage')}</a></p>
-            <p style={styles.hint}>{template(t('publicActorCost'), { cost: publicCost })}</p>
+            <p style={styles.hint}>{t('publicActorCost')}</p>
           </Field>
         </details>}
       </> : null}

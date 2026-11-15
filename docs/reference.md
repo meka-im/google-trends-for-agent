@@ -70,25 +70,15 @@ The stdio server exposes exactly four tools. HTTP and Actor tool calls share the
 
 ### Remote MCP authentication
 
-Remote Actor MCP is OAuth-first. A client that supports remote MCP OAuth needs only this URL and should complete the Apify sign-in inside the client; there is no user-facing token URL or hand-built authorization URL:
+Remote-only MCP clients connect to Apify's managed gateway:
 
 ```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
-    }
-  }
-}
+{ "mcpServers": { "google-trends": { "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent" } } }
 ```
 
-The client is responsible for completing authorization against Apify's OAuth endpoints; these instructions do not assume a particular OAuth grant type. Apify's [OAuth documentation](https://apify.com/auth.md) currently lists `full_api_access` as the only scope; authorization therefore grants full Apify API access, not access limited to this Actor or tool. Disclose that scope before the user authorizes.
+The gateway handles client OAuth and exposes the Actor's input interface, run state, Dataset, key-value-store, and abort tools. This is a one-off run path, not the former four-tool Actor-owned MCP server. Local MCP and dsh still expose the four native `trends_*` tools. Apify's account-wide `full_api_access` scope must be disclosed before authorization. Use the client's credential storage for Bearer fallback if OAuth is unavailable.
 
-Known evidence is intentionally narrow: the GrokBot client used native OAuth registration with client name `gtfa-apify` and successfully exercised all four tools against the Actor URL above. Compatibility is not universal. The Actor's anonymous `/.well-known/oauth-authorization-server` can return `200`, but protected-resource metadata is incomplete and the anonymous `/mcp` `401` can lack `WWW-Authenticate`, so some strict OAuth clients fail discovery. Do not claim that every platform is verified or supported. [Apify's official gateway](https://mcp.apify.com) supports OAuth and is a compatibility alternative, but it may expose this project's tools as Actor invocations rather than the same four direct tool names.
-
-Bearer authentication remains a compatibility fallback for MCP clients without OAuth and is still the authentication mechanism for the Actor's plain HTTP API. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor itself does not handle OAuth token refresh.
-
-At this documentation revision, the public Apify deployment reports package `0.2.3` and Actor build `0.1.15`. The repository version is `0.2.6`; that is not evidence that the public deployment has been upgraded.
+The former `*.apify.actor/mcp` endpoint and Standby deployment are retired in 0.2.7. Earlier GrokBot/Muse remote-protocol results apply to that older deployment and do not validate the new gateway connection. Reconfigure those clients before their next query.
 
 Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
@@ -154,7 +144,7 @@ When an Actor route has no connected credential, compact links offer [Sign up �
 | --- | --- | --- |
 | `egress` | `local` | `local` sends Google requests from the dsh machine and still honors `HTTPS_PROXY` / `HTTP_PROXY`; `actor-public` relays through `meka.im/google-trends-for-agent`; `actor-own` relays through your own deployment. |
 | `apifyToken` | unset | Advanced fallback token saved in the profile's `cordis.patch.yml` (hidden in the UI, never logged or returned). Used only when no OAuth session is stored; when also empty, `APIFY_TOKEN` is used. |
-| `apifyActor` | unset | Actor id of your `google-trends-for-agent` Actor (Standby); used only by `actor-own`. Pick or deploy one on the settings page. |
+| `apifyActor` | unset | Actor id of your on-demand `google-trends-for-agent` Actor; used only by `actor-own`. Pick or deploy one on the settings page. |
 | `geo` | `US` | Default geo for `trends_ask`, `trends_compare`, and `trends_snapshot`; empty string means Worldwide, which has no built-in calibration and returns null traffic. |
 | `anchor` | automatic | Optional fixed anchor for `validate` / `trends_snapshot`; blank uses sudoku for short windows and gpts otherwise. |
 | `baselines` | built-in | Editable inline anchors `{ term, geo, dailySearches, tolerance? }` plus optional `windowAnchors.short` / `.long`; validated like a version 2 baselines file. The editor starts with the US `gpts` and `sudoku` rows. |
@@ -167,7 +157,7 @@ Relative `snapshotDir` and `chartDir` paths resolve from the directory where `ds
 
 Every setting with a fixed set of values is a select, segmented control, or switch. Anchor rows, the two directories, and the manual fallback token are edited as text inputs; the token sits in the Advanced / fallback area. The default US `gpts` (3,500/day) and `sudoku` (63,000/day) baselines can be edited directly. When adding an anchor row, only an identical normalized term + geo already present in the current list is treated as a duplicate; existing rows still undergo all other validity checks.
 
-Both Actor routes work on the Apify Free plan because the residential proxy runs **inside the Actor**. `actor-public` needs nothing to deploy and uses the credential resolution above. `actor-own` deploys the same open-source code once: use **Deploy to my Apify account →** on the settings page, link `https://github.com/meka-im/google-trends-for-agent` (branch `main`) in Apify Console with **Standby** enabled (Settings → Server), or run `apify push` from a clone. Then pick it in the **Actor** select.
+Both Actor routes work on the Apify Free plan because the residential proxy runs **inside the Actor**. `actor-public` needs nothing to deploy and uses the credential resolution above. `actor-own` deploys the same open-source code once: use **Deploy to my Apify account →** on the settings page, link `https://github.com/meka-im/google-trends-for-agent` (branch `main`) in Apify Console with **Standby disabled** (Settings → Server), or run `apify push` from a clone. Then pick it in the **Actor** select.
 
 The settings page calls the following owner-only Host routes through dsh's Connection service. All require dsh's authenticated browser session; OAuth operations additionally require the Host credentials service, and the status route reports `available: false` when it is absent. The browser never receives an Apify credential.
 
@@ -178,21 +168,21 @@ The settings page calls the following owner-only Host routes through dsh's Conne
 | `/api/gtfa.apify-oauth-cancel` | `POST` | Cancels only the pending device flow. |
 | `/api/gtfa.apify-oauth-logout` | `POST` | Deletes the stored OAuth session but retains reusable client registration as determined by the provider backend (OAuth grant record or legacy ref); it does not revoke the authorization in Apify's cloud. |
 | `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. A stored OAuth session is used first; only when none is stored do credentials fall back to saved config token, then `APIFY_TOKEN`. `source` can be `oauth`, `config`, or `env`. |
-| `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with Standby URL and latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
-| `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby enabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
-| `/api/gtfa.test-connection` | `POST` | For `actor-public`/`actor-own`, calls `GET {standby}/health` once (relay version check, no proxy traffic), then sends one HEAD `GET https://trends.google.com/trends/` through `/egress/fetch`. `local` sends the HEAD directly. A challenge or HTTP 429 stops the check without another probe. Returns `{ ok, egress, status, latencyMs, actorId? }` (`actorId` is present only on Actor routes); codes `no-token` / `no-actor` / `invalid-token` / `version-mismatch` / `network` / `http` / `busy`. |
+| `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with the latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
+| `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby disabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
+| `/api/gtfa.test-connection` | `POST` | Actor routes read the Actor API metadata and latest build only: no run, health endpoint, or Google request. Local mode sends one HEAD probe. |
 
 These routes are absent in headless/TUI profiles. Responses contain usage numbers, plan fields, Actor metadata, OAuth status, and status/latency; account identity, the raw `/users/me` object, and credentials are dropped Host-side.
 
 **Cancel** has no effect beyond a pending device authorization. **Sign out** removes the stored OAuth session while retaining reusable client registration according to the provider backend. The current Apify authorization-server metadata has no `revocation_endpoint`, so sign-out cannot revoke the cloud grant; users must manage or revoke that authorization in Apify Console.
 
-`actor-public` resolves the Actor id to the constant `meka.im~google-trends-for-agent`; `actor-own` needs `apifyActor`. For every operation, both check for a stored OAuth session first; only when none is stored do they use saved `apifyToken`, then `APIFY_TOKEN`. A stored session that cannot be refreshed requires re-authentication. The resulting credential is used for each `TransportRequest` to `${standbyUrl}/egress/fetch` with `Authorization: Bearer <token>`. Before the first relay, the transport calls `GET ${standbyUrl}/health` once and requires `relay === 1`; a mismatch or a missing field returns `INVALID_INPUT` with "This Actor build speaks relay v…; this plugin needs v1. Update the plugin or rebuild the Actor." The Actor runs the request with its on-platform residential proxy and rotates the proxy session on HTTP 429 or a Google challenge. 401/403 map to `INVALID_INPUT` ("Apify rejected the token"), 404 / no Actor to `INVALID_INPUT` ("Select or deploy…"), and 429/5xx/network to retryable `NETWORK_ERROR`; the first request allows about 120 s for a Standby startup. Missing credential or Actor returns a normal `ok: false` / `INVALID_INPUT` tool envelope rather than a boot failure, and no credential is included in errors. `GTFA_BASELINES` and `GTFA_TZ` still apply; configured `baselines` win.
+`actor-public` uses `meka.im~google-trends-for-agent`; `actor-own` uses `apifyActor`. OAuth is resolved on every call, followed by saved token / `APIFY_TOKEN` only when no OAuth session exists. Each native cloud tool call starts exactly one run through `POST /v2/acts/{id}/runs`, with 256 MB and a 300 s platform timeout. The plugin polls that run, reads `TOOL_RESPONSE`, and returns the complete tool envelope. It never calls a Standby URL. Start requests are not automatically retried because an ambiguous response could duplicate paid work.
 
-The local `gtfa-mcp --http` endpoint binds `127.0.0.1`, accepts only loopback `Host` values, rejects a non-loopback `Origin` when one is sent, and does not send wildcard CORS headers. The Actor's Standby endpoint relies on Apify's platform authentication: remote `/mcp` is OAuth-first with Bearer fallback, while the plain HTTP routes use Bearer. `GET /health` returns `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set.
+The programmatic input is `toolRequest: { protocol: 1, name, input, settings?, history? }`. `name` is one of the four native tools. `TOOL_RESPONSE` contains `{ protocol: 1, result, snapshots }`; this is additive and does not change Dataset v1. Query defaults and custom baselines are forwarded, while filesystem paths and credentials are kept on the Host. Snapshot history is validated and exchanged to preserve diff behavior between runs. Successful ask/snapshot envelopes are reusable locally for 360 minutes; failures/partial results are not cached. Cache hits start no Actor. Snapshot SVGs are saved to the Host's configured chart directory and inline SVG follows the caller's `svg` flag.
 
-The Actor's plain HTTP API (`/egress/fetch`, `/tools/{name}`, `/health`) uses `Authorization: Bearer <token>`; `/mcp` accepts Apify remote OAuth and retains Bearer as a fallback. One tool call has a 300 s deadline; a client disconnect or an expired deadline aborts the upstream work, and cancellation is also observed while `/health` waits for and parses the Actor Standby URL. An expired HTTP tool-call deadline returns status `504` with `error.code: "TRENDS_TIMEOUT"`, not `INVALID_INPUT`. Cancelled or timed-out work is not cached as a permanent failure. A single-tenant Standby run bills compute while idle, so the Actor exits after 60 s without in-flight requests (`GTFA_IDLE_EXIT_SECS`). One-off runs execute one tool and exit, and later terms in an `ask`/`snapshot` batch after a block or rate limit are written as `skipped` rows; see [`.actor/README.md`](../.actor/README.md).
+Caller cancellation or an API failure after receiving a run id attempts to abort that owned run using a separate cleanup signal. If start acknowledgement is lost or cleanup cannot reach Apify, the platform's 300 s timeout bounds the run. This is not a promise of immediate cloud cancellation during a network outage.
 
-Actor one-off Dataset `chartUrl` values are key-value store API record URLs, not local files. Private KV charts require an authenticated Apify request; see [Authenticated chart download](../.actor/README.md#authenticated-chart-download). For inline SVG through the remote MCP/HTTP surface, call `trends_snapshot` with `svg=true`; the Actor-side chart path is not a file path on the caller's machine.
+The local `gtfa-mcp --http` interface remains loopback-only with Host/Origin checks and a 300 s tool deadline. It has no paid cloud residency. Cloud Actor startup rejects Standby invocations and never opens an HTTP listener.
 
 ## Output contract
 
@@ -296,23 +286,11 @@ In `now 1-d` windows, trailing points may be 0 or low while Google back-fills. P
 
 ## Actor costs
 
-Both Actor routes run in the caller's Apify account with the same image and Standby settings (single-tenant, 512 MB, 60 s idle), so a call costs the same on the public Actor and on a self-deployed copy. There is no Actor fee. Self-deploy adds a build each time you update (measured $0.0048–0.0058 per build).
+The [Actor input and output reference](../.actor/README.md) covers ordinary Dataset runs and the native TOOL_RESPONSE protocol.
 
-```text
-cost ≈ (runSecs × 0.5 GB ÷ 3600) × $0.2/CU + residentialGB × $8/GB
-runSecs ≈ request time + ~60 s idle tail (an isolated call measured 67–68 s)
-```
+Cloud queries run once and exit. Defaults are 256 MB and a hard 300 s runtime limit; no Actor-owned MCP server or idle tail is used. Charges include actual run compute, proxy traffic, and any platform storage/transfer. Read each finished run's `usageTotalUsd` for its measured cost. A slow or failed request still has real platform costs. API metadata checks and local snapshot-cache hits start no Actor.
 
-Measured on 2026-11-13 against the public Standby URL (US, `now 1-d`, sequential calls; Free-plan rates). Costs are Apify's final per-run `usageTotalUsd`; storage and data-transfer items add under $0.0001 per Standby run.
-
-| Case | Run time | CU | Residential | Cost | Free $5 covers |
-| --- | --- | --- | --- | --- | --- |
-| Isolated `trends_ask` (startup, 10.8 s response) | 67 s | 0.0094 | 61 KB | $0.0024 | ≈ 2,100 calls |
-| Isolated `trends_snapshot` (startup, 31 s response) | 68 s | 0.0094 | 122 KB | $0.0029 | ≈ 1,700 calls |
-| 10 × `trends_ask` in one session (8.0–24.9 s each, median 8.3 s) | 160 s | 0.0222 | 592 KB | $0.0092 | ≈ 540 sessions (5,400 calls) |
-| Each extra warm `trends_ask` | — | — | ~59 KB | ≈ $0.0008 | — |
-
-The warm figure is (session − isolated ask) ÷ 9. Startup overhead (+~3 s) is the first call's response time after idle minus the warm median; a cold Actor can occasionally take up to ~2 minutes. Warm asks take ~8 s because MCP requests are spaced 1500 ms apart. Most of an isolated call's cost is the 60 s idle tail, so batching calls into one session is the cheapest pattern. One-off runs bill the same way without the idle tail (one measured run: two snapshots in 32 s, $0.0031). Isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008. The plugin uses the same figures.
+[Historical 2026-11-13 Standby measurements](standby-costs-2026-11-13.md) are retained as evidence, not as on-demand price claims. The old 60 s idle guarantee was insufficient because long-lived MCP traffic was counted as active work.
 
 ## Rate limits, retries, and timeouts
 

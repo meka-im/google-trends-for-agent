@@ -1,3 +1,4 @@
+import { OnDemandActorClient } from './actor-on-demand.js';
 import { createApifyAccountClient, type ApifyUsageResult, type ApifyUsageSource } from './apify-account.js';
 import {
   APIFY_OAUTH_CANCEL_PATH,
@@ -128,6 +129,7 @@ export async function testConnection(options: {
   relayTransport?: (token: string, actorId: string) => Transport;
   signal?: AbortSignal;
   timeoutMs?: number;
+  fetch?: typeof globalThis.fetch;
   now?: () => number;
   oauth?: ApifyOAuthManager;
 }): Promise<TestConnectionResult> {
@@ -183,6 +185,18 @@ export async function testConnection(options: {
     return failure(options.egress, 'no-actor', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.', 0);
   }
   const startedAt = clock();
+  if (!options.relayTransport) {
+    try {
+      await new OnDemandActorClient(options.fetch ? { fetch: options.fetch } : {}).check(resolved.token, actorId, options.signal);
+      return { ok: true, egress: options.egress, status: 200, latencyMs: elapsed(clock, startedAt), actorId };
+    } catch (error) {
+      if (options.signal?.aborted) throw abortError(options.signal);
+      const message = scrubSecrets(errorText(error), resolved.token);
+      return failure(options.egress, /rejected the token|HTTP 401|HTTP 403/i.test(message) ? 'invalid-token' : /HTTP 404|Select or deploy/i.test(message) ? 'no-actor' : 'network', message, elapsed(clock, startedAt), null, actorId);
+    }
+  }
+  // Explicit legacy transport injection remains for library consumers and old
+  // fixtures. Production checks only the API and never start a paid Actor.
   let transport: Transport;
   try {
     transport = options.relayTransport?.(resolved.token, actorId)
@@ -338,6 +352,7 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           apifyActor: settings.apifyActor,
           localTransport: overrides.localTransport,
           relayTransport: overrides.relayTransport,
+          fetch: overrides.fetch,
           oauth: overrides.oauth,
           signal: request.signal,
           now: overrides.now,

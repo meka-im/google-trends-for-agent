@@ -35,7 +35,7 @@ export const GTFA_SOURCE_URL = 'https://github.com/meka-im/google-trends-for-age
 export const GTFA_STORE_URL = 'https://apify.com/meka.im/google-trends-for-agent';
 /** Git repository the one-click deploy and the manual Git-repo deploy build from. */
 export const GTFA_ACTOR_GIT_URL = 'https://github.com/meka-im/google-trends-for-agent';
-/** Standby idle timeout in the deploy payload, seconds. Keep in sync with GTFA_IDLE_EXIT_SECS. */
+/** @deprecated Historical Standby setting; on-demand deployments disable Standby. */
 export const GTFA_ACTOR_STANDBY_IDLE_SECS = 60;
 
 /**
@@ -52,6 +52,7 @@ export const APIFY_SIGNUP_URL = 'https://console.apify.com/sign-up';
 export const APIFY_PRICING_URL = 'https://apify.com/pricing';
 export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
 /**
+ * @deprecated Historical Standby measurement, not a current on-demand price.
  * Estimated cost of one isolated `trends_ask` through the Actor, measured on
  * 2026-11-13 at Free-plan rates: ~61 KB residential ($8/GB) plus a 512 MB
  * Standby run that exits after 60 s idle ($0.2/CU). Extra warm calls cost less.

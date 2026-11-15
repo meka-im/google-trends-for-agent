@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.7 — 2026-11-15
+
+- Replace dsh Actor egress with one bounded on-demand run per native tool call. Runs use 256 MB with a 300 s platform timeout, return the full envelope through TOOL_RESPONSE, and exit immediately. Local snapshot reuse starts no cloud run; validated history and local SVG files preserve existing native behavior.
+- Abort the owned cloud run on cancellation or API failure after receiving its id; never automatically repeat a run-start POST. Metadata connection checks start no paid work.
+- Disable Standby in Actor metadata and one-click deployments, and reject Standby startup. The former Actor-owned remote MCP endpoint is retired; remote clients use Apify’s managed gateway and Actor input/result tools. Local MCP and dsh keep the four native tools. Dataset v1 is unchanged.
+- Retain historical Standby measurements separately and remove per-call cost claims based on the retired idle behavior.
+
 ## 0.2.6 — 2026-11-15
 
 - Refresh the dsh settings page with three egress cards, a compact OAuth and usage panel, two-column query defaults, and a sticky save bar. The layout follows the Host's light/dark theme and stacks on narrow screens. Account sign-out is in the account menu; baseline, manual-token, and file controls are grouped under Advanced with keyboard-accessible tabs.

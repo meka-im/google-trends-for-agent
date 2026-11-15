@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { GTrendsError } from './core.js';
 import { RELAY_PROTOCOL_VERSION } from './http.js';
 import { abortError, raceAbort, throwIfAborted, type Transport, type TransportRequest, type TransportResponse } from './transport.js';
-import { GTFA_ACTOR_GIT_URL, GTFA_ACTOR_NAME, GTFA_ACTOR_STANDBY_IDLE_SECS } from './options.js';
+import { GTFA_ACTOR_GIT_URL, GTFA_ACTOR_NAME } from './options.js';
 
 const API_BASE = 'https://api.apify.com/v2';
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -196,7 +196,7 @@ export class ApifyActorClient {
     const data = record(record(detail.body).data);
     const url = stringOrNull(data.standbyUrl);
     if (!url) {
-      throw new GTrendsError('INVALID_INPUT', 'This Actor has no Standby URL. Enable Standby in the Actor settings, then try again.');
+      throw new GTrendsError('INVALID_INPUT', 'This Actor has no Standby URL. Use the on-demand Actor client instead of this legacy relay.');
     }
     if (!isApifyStandbyUrl(url)) {
       throw new GTrendsError('INVALID_INPUT', 'Apify returned an unexpected Standby URL for this Actor.');
@@ -219,14 +219,8 @@ export class ApifyActorClient {
         gitRepoUrl: GTFA_ACTOR_GIT_URL,
         buildTag: 'latest',
       }],
-      actorStandby: {
-        isEnabled: true,
-        idleTimeoutSecs: GTFA_ACTOR_STANDBY_IDLE_SECS,
-        memoryMbytes: 512,
-        desiredRequestsPerActorRun: 3,
-        maxRequestsPerActorRun: 4,
-        build: 'latest',
-      },
+      defaultRunOptions: { build: 'latest', timeoutSecs: 300, memoryMbytes: 256 },
+      actorStandby: { isEnabled: false },
     });
     if (!created.ok) {
       // Apify answers 409 `actor-name-not-unique` ("Some other Actor already has this name").
@@ -361,7 +355,8 @@ export interface ActorRelayTransport extends Transport {
 }
 
 /**
- * Relay transport for the Actor egress routes. Each Google request is POSTed to the
+ * @deprecated Legacy relay for older external servers. dsh uses OnDemandActorClient.
+ * Relay transport for explicitly supplied legacy servers. Each Google request is POSTed to the
  * user's Actor at `/egress/fetch`, which performs it with its on-platform
  * residential proxy. The Apify token only travels in the Authorization header
  * and is never included in error messages.

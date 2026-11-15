@@ -1,17 +1,10 @@
-# Google Trends MCP & API for AI Agents
+# Google Trends for AI Agents — On-demand
 
-**Open-source Google Trends for AI agents — search interest, comparisons, calibrated searches/day and trending searches, from MCP, HTTP or a one-off run.**
-
-Use it to check whether demand exists before writing about a term, compare a candidate with an established one, estimate searches/day, or see what is rising in a country today.
-
-> [!WARNING]
-> **Unofficial. Not affiliated with or endorsed by Google.** This Actor calls undocumented Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive research only, not bulk scraping or an SLA. You are responsible for compliance.
+Open-source Google Trends search interest, comparisons, calibrated searches/day estimates and trending searches. Each query starts a bounded run and exits when finished. No Actor-owned MCP server or idle service is used. Platform compute, proxy and storage usage apply; there is no Actor fee.
 
 ## Quick start
 
-### One-off run
-
-Paste this input and press **Start**. The run executes one tool and exits with dataset rows and a chart.
+Use the Input tab, then Start:
 
 ```json
 {
@@ -23,234 +16,67 @@ Paste this input and press **Start**. The run executes one tool and exits with d
 }
 ```
 
-Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 1–5 distinct terms; `now` ignores `terms` and returns trending searches for `geo`. In an `ask`/`snapshot` batch, a block or rate limit stops the batch and later terms are written as `skipped` rows.
+### MCP client
 
-### MCP client (OAuth preferred)
-
-In a client that supports remote MCP OAuth, configure only the Actor URL and complete Apify's sign-in from the client. Do not construct an authorization URL or token URL by hand:
+Use Apify's managed MCP gateway. It handles OAuth without starting this Actor just to keep an MCP connection open:
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
+      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
     }
   }
 }
 ```
 
-Apify's current OAuth scope is `full_api_access`. Authorizing grants full Apify API access, not access limited to this Actor or tool. OAuth discovery and authorization are provided by Apify's endpoint; this project does not add a separate OAuth server or change the Actor edge.
+The gateway exposes the Actor's input interface plus run, Dataset, key-value-store and abort tools. It does not promise four direct `trends_*` tools. Local MCP and the dsh native plugin retain those four tools. Apify's OAuth scope is account-wide `full_api_access`; authorize through the client's official Apify login. Clients without OAuth can supply a Bearer header from credential storage.
 
-### MCP client (Bearer fallback)
+The previous `*.apify.actor/mcp` interface was retired in 0.2.7 after long-lived MCP connections prevented idle shutdown. Keep Server / Standby disabled. This Actor rejects Standby startup before opening any listener.
 
-For a client without remote MCP OAuth, use an Apify token as a compatibility fallback:
+## Inputs
+
+- `tool`: `ask`, `snapshot`, `compare`, or `now`.
+- `terms`: one or more terms for ask/snapshot, 1–5 distinct terms for compare; ignored by now.
+- `geo`: supported country code; `WORLDWIDE` is accepted except for now.
+- `window`: a supported Trends time window, default `now 1-d`.
+- `anchor`: automatic when blank, or built-in `gpts` / `sudoku`.
+- `timeoutMs`: optional 1000–60000 ms per upstream request.
+- `proxyConfiguration`: defaults to the on-platform US residential proxy.
+
+Ordinary input executes one tool, writes Dataset v1 rows and an `OUTPUT` record, then exits. Now writes at most 25 rows. Later ask/snapshot terms are skipped after a block or rate limit. A failed or partial run still has real platform costs.
+
+## Dataset v1
+
+The existing flat row contract is unchanged: `term`, `tool`, `geo`, `window`, `status`, `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak`, `searchesPerDay`, `verdict`, `anchor`, `topRelated`, `topRising`, `chartKey`, `chartUrl`, `error`, `fetchedAt`. Related fields are string arrays, so there is no per-related-query `estDaily` in Dataset v1. Missing values remain null. Charts are stored under `chart-*` in the run's key-value store; read them through the authenticated API.
+
+`OUTPUT` reports completed/partial/failed plus delivered, noData, blocked, skipped, errors and duration. Dataset rows, successful native tool calls and MCP sessions have different denominators: do not divide all Actor costs by Dataset rows to estimate cost per query.
+
+## Native tool request protocol
+
+The dsh plugin submits one complete tool request per run:
 
 ```json
 {
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp",
-      "headers": { "Authorization": "Bearer <YOUR_APIFY_TOKEN>" }
-    }
+  "toolRequest": {
+    "protocol": 1,
+    "name": "trends_snapshot",
+    "input": { "term": "ChatGPT", "geo": "US", "time": "now 1-d", "svg": true },
+    "settings": { "cache": true, "charts": true }
   }
 }
 ```
 
-### HTTP API
+`name` accepts the four `trends_*` names. Read `TOOL_RESPONSE` from the run's key-value store: `{ protocol: 1, result, snapshots }`. `result` preserves the full tool envelope, including related-query null fields, calibration warnings and inline SVG. Validated optional history preserves snapshot diffs across runs. The local plugin handles six-hour result reuse and local chart files. Credentials and local filesystem paths are never part of this input. This additive protocol does not change Dataset v1; native requests may have zero Dataset rows.
 
-```sh
-curl -X POST 'https://meka-im--google-trends-for-agent.apify.actor/tools/trends_ask' \
-  -H 'Authorization: Bearer <YOUR_APIFY_TOKEN>' \
-  -H 'Content-Type: application/json' \
-  -d '{"term":"Sora","geo":"US","time":"now 1-d"}'
-```
+## Runtime and cost bounds
 
-## Three ways to use gtfa
+Default memory is 256 MB and default timeout is 300 seconds. dsh sends these bounds explicitly for every run. The client starts once, polls the run and reads its result. It does not retry an ambiguous start POST. Cancellation attempts to abort the owned run; if the network is unavailable, the platform timeout remains the bound. Local snapshot-cache hits and API metadata checks start no run. Builds have their own platform cost.
 
-| Route | Setup | Cost |
-| --- | --- | --- |
-| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. The command follows the repository's `main` branch. | Free. |
-| This Actor | Use the Standby URL with MCP OAuth when supported (Bearer only as fallback), or run one-off jobs. Nothing to deploy. | Apify platform usage in your account; no Actor fee. |
-| Self-deploy | Put the same open-source code in your own account: dsh plugin one-click, Console → Link Git repository, or `apify push`. | Apify platform usage in your account. |
+Do not reuse the former Standby cost estimate as an on-demand price. Inspect finished runs' `usageTotalUsd`; see [cost details](../docs/reference.md#actor-costs) and [historical measurements](../docs/standby-costs-2026-11-13.md).
 
-The public Standby endpoint does not pass Actor Run input; each MCP or HTTP request supplies its own arguments.
+## Data boundaries
 
-Source: https://github.com/meka-im/google-trends-for-agent
+Searches/day are anchor-calibrated estimates, not measured Google volume. Sparse or unavailable calibration returns null with a warning. Snapshot related-query `estDaily` remains null in native envelopes. Built-in baselines cover the US; other countries require a suitable baseline. On `BLOCKED`, stop. On `RATE_LIMITED`, respect the indicated backoff and keep retries bounded. Use this for light interactive research.
 
-## Pricing
-
-- **No Actor fee.** The Actor has no pay-per-event price.
-- **You pay Apify platform usage in your account** — compute and residential proxy traffic at your plan's rates.
-- **Measured on the public Standby URL:** isolated `trends_ask` ≈ $0.0024 (measured 2026-11-13, Apify Free-plan rates); snapshots ≈ $0.0029; extra warm calls ≈ $0.0008.
-- **Free plan:** the $5 monthly credit is roughly 2,100 isolated asks at that estimate.
-- **What counts:** a Standby run bills until its idle exit; a one-off run bills its few seconds of compute plus proxy traffic. Google calls are small; `trends_now` over many countries uses more traffic than one `trends_ask`.
-
-## What you get
-
-- **`trends_ask`** — interest summary, Popular/Rising related queries, regions, an optional verdict and a diff against the previous saved snapshot.
-- **`trends_snapshot`** — calibrated searches/day, primary and 7-day anchor blocks, traffic series, verdict and charts.
-- **`trends_compare`** — relative 0–100 interest for 1–5 distinct keywords on one shared scale.
-- **`trends_now`** — Trending Now by country with rank, volume bucket, growth, categories and links.
-- **Stable output** — a JSON envelope with `ok`, `status`, `schemaVersion` and explicit error codes; null traffic when calibration fails instead of guessed numbers.
-- **Three transports** — remote MCP, plain HTTP, and dataset/KV output for one-off runs.
-
-## Input
-
-| Field | Behavior |
-| --- | --- |
-| `tool` | `ask`, `snapshot`, `compare` or `now`. Default `ask`. |
-| `terms` | One or more terms for `ask`/`snapshot`; 1–5 for `compare`; ignored by `now`. |
-| `geo` | Country code. `WORLDWIDE` maps to Worldwide for `ask`/`snapshot`/`compare`; `now` needs a country. Default `US`. |
-| `window` | Explore window (`now 1-H` through `all`); default `now 1-d`. For `now`, see the mapping below. |
-| `anchor` | Blank = automatic (`sudoku` for ≤1 day, `gpts` for 7 days+), or `gpts` / `sudoku`. |
-| `proxyConfiguration` | Proxy editor; defaults to Apify Residential, US. |
-
-**Input passing.** The public Actor's Standby endpoint ignores Actor input: Apify does not pass the Run input to the Standby container, so `geo`, `anchor`, and `proxyConfiguration` from a Run input do not affect it. A self-deployed Actor that enables input passing reads those three fields at startup: `geo` becomes the default, `anchor` the server-wide anchor, and `proxyConfiguration` the egress proxy. `tool`, `terms`, and `window` remain per call.
-
-**Window mapping.**
-
-| Tool | Mapping |
-| --- | --- |
-| `ask`, `snapshot`, `compare` | `window` is used unchanged as the Explore time range. |
-| `now` | `now 1-H` / `now 4-H` → 4 h; `now 1-d` → 24 h; `now 7-d` → 168 h; `today 1-m` / `today 3-m` / `today 12-m` / `today 5-y` / `all` → 24 h. `trends_now` also accepts `hours: 48` directly, but no Actor window maps to 48 h. |
-
-## Dataset output
-
-One row per term, or one row per Trending Now item. Flat fields, `null` when the tool did not return a value.
-
-| Field | Meaning |
-| --- | --- |
-| `term` | Term or trending query. |
-| `tool` | `ask`, `snapshot`, `compare` or `now`. |
-| `geo`, `window` | Requested country and window. |
-| `status` | `ok`, `no_data`, `blocked`, `rate_limited`, `skipped` or `error`. |
-| `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak` | Relative 0–100 interest, when available. |
-| `searchesPerDay` | Anchor-calibrated estimate; null without calibration. |
-| `verdict`, `anchor` | Verdict label and anchor term, when the tool returns them. |
-| `topRelated`, `topRising` | Related query names; up to 10 each. |
-| `chartKey`, `chartUrl` | Key-value store key and API record URL for a chart, or null. Anonymous access depends on the store's permissions; private records require an Apify token with access. |
-| `error` | `{ code, message }` or null. |
-| `fetchedAt` | ISO timestamp. |
-
-Representative item (example values, not live data):
-
-```json
-{
-  "term": "Sora",
-  "tool": "snapshot",
-  "geo": "US",
-  "window": "now 1-d",
-  "status": "ok",
-  "interestLatest": 43,
-  "interestSettled": 43,
-  "interestAverage": 38.6,
-  "interestPeak": 100,
-  "searchesPerDay": 1520,
-  "verdict": "steady",
-  "anchor": "sudoku",
-  "topRelated": ["sora 2", "sora video"],
-  "topRising": ["sora 2 api"],
-  "chartKey": "chart-sora",
-  "chartUrl": "https://api.apify.com/v2/key-value-stores/EXAMPLE_STORE_ID/records/chart-sora",
-  "error": null,
-  "fetchedAt": "2026-11-12T09:30:00.000Z"
-}
-```
-
-### Authenticated chart download
-
-`chartUrl` is an Apify key-value store API record URL, not a promise that the record allows anonymous reads. Anonymous access depends on the store's permissions. For a private record, provide an Apify token with access in the `Authorization` header. Missing permissions or missing authentication can produce `401` or `403`; a `403` alone does not mean the SVG is broken.
-
-```sh
-curl --fail --location \
-  -H "Authorization: Bearer $APIFY_TOKEN" \
-  -o chart.svg \
-  "https://api.apify.com/v2/key-value-stores/STORE_ID/records/CHART_KEY"
-```
-
-### Dataset and MCP/HTTP
-
-Dataset `topRelated` and `topRising` are name-only string arrays (up to 10 items each) and do not carry `estDaily`; use `trends_snapshot` over MCP/HTTP to inspect related rows and their `estDaily: null` schema. A one-off `now` Dataset is fixed at up to 25 items; use MCP/HTTP `trends_now` with `limit: 3` for a smaller result. The existing one-off Actor input has no `limit` option.
-
-## Run summary and errors
-
-The `OUTPUT` key-value record summarizes the run:
-
-```json
-{
-  "status": "completed",
-  "tool": "snapshot",
-  "geo": "US",
-  "window": "now 1-d",
-  "terms": ["Sora"],
-  "delivered": 1,
-  "noData": 0,
-  "blocked": 0,
-  "skipped": 0,
-  "errors": 0,
-  "durationMs": 18300,
-  "completed": true,
-  "partial": false,
-  "message": "Completed 1 row."
-}
-```
-
-- `completed` — every row is `ok` or `no_data`.
-- `partial` — at least one row delivered and at least one row blocked, skipped or failed. The run still exits successfully.
-- `failed` — nothing usable; the Actor exits non-zero.
-- `no_data` — Google returned no interest for the term.
-- `blocked` — Google returned a challenge; stop and report instead of looping.
-- `rate_limited` — HTTP 429; wait `retryAfterSec` and retry once at most.
-- `skipped` — a later term in an `ask`/`snapshot` batch after a block or rate limit. `OUTPUT.skipped` counts these rows; they are not delivered, blocked, or errors.
-- `error` — another upstream or protocol failure, with `error.code` and `error.message`.
-
-## MCP and HTTP API
-
-| Endpoint | Authentication | Purpose |
-| --- | --- | --- |
-| `/mcp` | OAuth preferred; Bearer fallback | Streamable HTTP MCP endpoint (`tools/list`, `tools/call`). |
-| `POST /tools/{name}` | Bearer | Run `trends_ask`, `trends_snapshot`, `trends_compare` or `trends_now` directly. |
-| `POST /egress/fetch` | Bearer | Relay one request; only `https://trends.google.com/...` is allowed. |
-| `GET /health` | Bearer | Cheap JSON: `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set. No Google call. |
-
-The remote MCP endpoint is OAuth-first for clients that support Apify's remote OAuth flow. Its known verified case is the GrokBot client using native OAuth registration (client name `gtfa-apify`) and exercising all four tools against this Actor URL. This is not a universal compatibility claim: strict clients may fail discovery because the anonymous protected-resource metadata is incomplete and an anonymous `/mcp` 401 can omit `WWW-Authenticate`. [Apify's official gateway](https://mcp.apify.com) supports OAuth as an alternative, but it may expose this project's tools as Actor calls rather than the same four direct tool names.
-
-Bearer remains supported for MCP clients without OAuth and for the plain HTTP API. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor itself does not handle OAuth token refresh.
-
-The public Apify deployment currently reports package `0.2.3` and Actor build `0.1.15`. The repository version is `0.2.5`; this does not mean the public deployment has been upgraded.
-
-Startup overhead is extra time on the first call after idle; a cold Standby start can occasionally take up to ~2 minutes. Each tool call has a 300 s deadline, and cancellation aborts the in-flight work.
-
-Logging is minimal: for Standby requests the Actor logs the method and path only; one-off runs log row counts and statuses, never terms. Errors are logged by code without upstream URLs; query strings, headers, bodies and tokens are never logged.
-
-## Coverage and limits
-
-Google Trends coverage and calibration vary by country. The built-in anchors are US baselines; other geos return null `searchesPerDay` when no calibration exists. Values are relative interest or anchor-based estimates, not measured Google volume. Explicit `trends_now` country lists are deduped and capped at 30; use `all` for every supported country. Use it for light, interactive research — not bulk scraping or continuous polling. On `BLOCKED`, stop and report; on `RATE_LIMITED`, wait and retry once at most.
-
-## Related tools
-
-- [Similarweb Scraper](https://apify.com/meka.im/similarweb-scraper)
-- [Google Ads Transparency Scraper](https://apify.com/meka.im/google-ads-transparency-scraper)
-- [Google Maps Business Scraper](https://apify.com/meka.im/google-maps-business-scraper)
-
-## FAQ
-
-**Do I need to deploy anything?** No. Use the public Standby URL or a one-off run. Self-deploy only if you want the Actor in your own account.
-
-**Why am I billed if there is no Actor fee?** The Actor runs in your Apify account, so compute and residential proxy traffic are platform usage. There is no separate Actor charge.
-
-**Does it work on the Free plan?** Yes. The residential proxy is used inside the Actor, and the Free plan's monthly credit covers light use.
-
-**Is the source code available?** Yes: https://github.com/meka-im/google-trends-for-agent (MIT).
-
-**How is searches/day estimated?** The term and anchor share one 0–100 scale; traffic is `score ÷ anchor level × anchor daily searches`. The default anchors are `gpts` ≈3,500/day and `sudoku` ≈63,000/day for US, each with a ±50% band. Treat the result as an estimate.
-
-## Open source and license
-
-MIT. Source: https://github.com/meka-im/google-trends-for-agent · Issues: https://github.com/meka-im/google-trends-for-agent/issues
-
-<!-- meka-tool-preview:start -->
-
-**Tool preview:** Browse the [tools directory](https://meka.im/tools) for other sources.
-
-<!-- meka-tool-preview:end -->
+The project is unofficial and is not affiliated with Google. [Source and local usage](../README.md), [MCP field guide](../docs/mcp-api.md), [reference](../docs/reference.md).

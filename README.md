@@ -26,52 +26,33 @@
 
 ## Choose a route
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/routes-en-dark.png">
-  <img src="docs/assets/routes-en.png" alt="Routes compared: cost per call, calls per free $5, startup overhead, rate limits, setup">
-</picture>
-
-<sub>A cold Actor can occasionally take up to ~2 min on its first call. Snapshot, warm-call and build costs: [Actor costs](docs/reference.md#actor-costs).</sub>
-
-- **Local** — [Run one npx command →](#install--quick-start)
-- **Public Actor** — [Try on Apify →](https://apify.com/meka.im/google-trends-for-agent)
-- **Self-deploy** — [Fork and deploy →](#deploy-it-yourself)
+| Route | Where it runs | Execution |
+| --- | --- | --- |
+| Local | This machine | CLI, stdio MCP, or native dsh tools |
+| Public Actor | Your Apify account | One run per query; exits when done, no deployment |
+| My own Actor | Your Apify account | Deploy once, then run on demand |
 
 ### Deploy it yourself
 
-1. [Fork the repository](https://github.com/meka-im/google-trends-for-agent/fork).
-2. In Apify Console, create an Actor with **Link Git repository** (branch `main`) or run `apify push` from a clone.
-3. Build it, then enable **Standby** under Settings → Server.
-4. In a client that supports remote MCP OAuth, add `https://<user>--<actor>.apify.actor/mcp` and complete the Apify sign-in from the client.
+Fork the repository and build it with Link Git repository in Apify Console, or run `apify push`. Keep Server / Standby disabled. In dsh, select My own Actor, sign in with Apify, and select the built Actor.
 
-For OAuth-capable clients, configure only the Standby Actor URL for the deployment you intend to use; the example below uses the public deployment. The client handles Apify's OAuth flow; do not construct a token URL or authorization URL by hand:
+### Remote MCP
 
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
-    }
-  }
-}
-```
-
-Apify's current OAuth scope is `full_api_access`: it grants full Apify API access, not access limited to this Actor or tool. Native OAuth registration and all four tools have been exercised with GrokBot against this URL; compatibility is client-specific, and strict OAuth clients can fail discovery (see the [reference](docs/reference.md#remote-mcp-authentication)). Remote MCP clients manage their own authorization and renewal flow; the Actor does not handle OAuth token refresh. [Apify's official gateway](https://mcp.apify.com) also supports OAuth, but it may expose this project's tools as Actor calls rather than the same four direct tool names.
-
-For a client that does not support MCP OAuth, create a token at [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) and use the Bearer header as a compatibility fallback:
+Remote-only clients use Apify's hosted gateway and complete OAuth in the client:
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
-      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp",
-      "headers": { "Authorization": "Bearer <APIFY_TOKEN>" }
+      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
     }
   }
 }
 ```
 
-The same open-source code serves all three routes; HTTP and one-off details are in [`.actor/README.md`](.actor/README.md).
+The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin retain those four tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
+
+The former `*.apify.actor/mcp` Standby service is retired. Apify's `full_api_access` OAuth scope grants account-wide API access. Clients without MCP OAuth can configure a Bearer header through their credential storage. See the [Actor reference](.actor/README.md) and [Actor costs](docs/reference.md#actor-costs).
 
 ## Install & quick start
 
