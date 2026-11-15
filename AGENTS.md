@@ -7,14 +7,10 @@ Guidance for AI agents using `google-trends-for-agent` (`gtfa`). It queries undo
 The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
 
 ```sh
-# Pinned reviewed commit (recommended; not a release tag)
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa --help
-
-# Latest main
 npx -y -p github:meka-im/google-trends-for-agent gtfa --help
 ```
 
-The full-SHA GitHub `npx` entry was verified with npm 11.19.1. npm 10.9.4 can build the same full-SHA dependency and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → checkout → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
+The GitHub dependency build was verified with npm 11.19.1. npm 10.9.4 can build it and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
 
 The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
 
@@ -23,23 +19,24 @@ Persistent install (clone first because npm global git installs can omit build d
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach 56dc29bff769530f2e59f5565a873a26e50feee2
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
+
+The clone tracks the repository's default `main` branch. Add your own immutable commit pin only when a review process requires one.
 
 The packed tarball bundles the audited `apify` dependency subtree from the root lock. Scoped npm `overrides` are not inherited when this package is installed as a dependency, so the bundle—not the root override alone—protects consumer installs from re-resolving older Apify transitives. The root explicitly overrides `@crawlee/core` → `minimatch` to `^11.0.1` (lock: `11.0.8`), outside Crawlee's declared `^9` range; consumer `npm ls` may therefore show a range warning even though the override is intentional. Audits cover both the root tree and a clean consumer install of the packed artifact. The bundled tree materially increases package size.
 
 ## MCP client config
 
-Use this generic stdio configuration. The full SHA is a reviewed source commit, not a release tag; omit it only to follow `main`:
+Use this generic stdio configuration, which follows the repository's `main` branch:
 
 ```json
 {
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2", "gtfa-mcp"]
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
     }
   }
 }
@@ -52,6 +49,22 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
   "mcpServers": { "google-trends": { "command": "gtfa-mcp", "args": [] } }
 }
 ```
+
+For a remote Actor, OAuth is the preferred MCP authentication path. In a client that supports remote MCP OAuth, configure only the URL and complete Apify's login in the client; do not construct a token URL or authorization URL:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
+    }
+  }
+}
+```
+
+Apify's only current OAuth scope is `full_api_access`, which grants full Apify API access—not access limited to this Actor or tool. Tell the user before they authorize. Native OAuth registration and all four tools have been exercised with GrokBot against this URL (registered client name `gtfa-apify`), but compatibility is client-specific: strict clients may fail discovery because anonymous protected-resource metadata is incomplete and an anonymous `/mcp` 401 may lack `WWW-Authenticate`. Do not claim universal platform support. The official gateway `https://mcp.apify.com` also supports OAuth, but it may expose tools as Actor calls rather than the same four direct tool names.
+
+Bearer remains the compatibility fallback for clients without MCP OAuth: create a token in Apify Console and send `Authorization: Bearer <APIFY_TOKEN>` as before. Actor plain-HTTP endpoints continue to use Bearer. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor does not process OAuth token refresh. The dsh plugin does not use this remote MCP route; it has native OAuth support described below.
 
 Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h; explicit lists are deduped and capped at 30. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
 
@@ -72,7 +85,17 @@ allowBuilds:
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor. Set the Apify token there or leave it empty to use `APIFY_TOKEN`. A token entered in the UI is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI and never logged or returned; leaving it blank with `APIFY_TOKEN` keeps it out of the profile. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
+This adds the same four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) as native in-process tools plus a `gtfa` skill; their names and contracts are unchanged. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes work on the Free plan because the residential proxy runs inside the Actor.
+
+When the dsh Host provides its credentials service, both Actor routes use Apify device OAuth first. Click **Sign in with Apify**; the page displays Apify's official authorization link and user code. The user confirms on Apify's official page, then the plugin stores the token through `ctx.credentials`; login needs no Save. Pending login checks Host status every 2 seconds, and the Host follows Apify's polling interval including `slow_down`. Closing the page pauses polling, reopening resumes, and expiry requires starting again. Apify's current device OAuth scope is only `full_api_access`: tell the user this grants full Apify API access, not access limited to this Actor or tool.
+
+Each operation re-resolves credentials. A stored OAuth session is used first; only when none is stored does resolution use the saved `apifyToken`, then `APIFY_TOKEN`. The resolution source is `oauth`, `config`, or `env`, and the usage API's `source` includes `oauth`. If a stored OAuth session is expired or damaged and no refresh can be handled, prompt the user to sign in again; do not silently fall back to another credential or report success. OAuth credentials do not enter browser-visible state or model-visible tool input/output; Host-internal code must resolve them through the credentials service before calling Apify. For the dsh device flow, the current access token is long-lived with no refresh token; if Apify later returns standard expiry/refresh information, the plugin handles that compatible response.
+
+OAuth session and client registration are persisted through dsh's credentials service/provider-managed store, separate from the profile. Backend location, record keys, and schema are provider-defined; new hosts can use OAuth grant records, while older hosts may use legacy credential refs. When the current local file-backed provider is used, it creates an owner-only `0700` directory and `0600` file. It is not an OS Keychain, not encrypted storage, and does not prevent other processes under the same OS user from reading it. If the Host has no credentials service, OAuth is unavailable; local egress, manual token, and `APIFY_TOKEN` still work.
+
+The manual token is an **Advanced / fallback** option. A token entered there is saved in plaintext in the profile's `cordis.patch.yml` (mode 0600), hidden in the UI, never logged, and absent from browser-visible status and model-visible tool input/output; leaving it blank with `APIFY_TOKEN` keeps it out of the profile.
+
+**Cancel** only cancels a pending device flow. **Sign out** deletes the stored OAuth session but retains reusable client registration according to the provider backend (OAuth grant record or legacy ref) and does not revoke the cloud authorization. The current authorization-server metadata has no `revocation_endpoint`; to invalidate cloud access, direct the user to Apify Console. Keep the tool guidance below unchanged: report `no_data` / `blocked` honestly, never invent volumes, and use it for light interactive research only.
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
@@ -83,8 +106,8 @@ The settings page's **Test connection** check calls Actor `/health` once when ap
 Run the doctor once after install, or whenever a call fails unexpectedly:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa doctor
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa doctor --json
+npx -y -p github:meka-im/google-trends-for-agent gtfa doctor
+npx -y -p github:meka-im/google-trends-for-agent gtfa doctor --json
 ```
 
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
@@ -97,15 +120,15 @@ Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY
 
 Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
 
-1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
+1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
 2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
-3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` with `Authorization: Bearer APIFY_TOKEN` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
+3. **Apify Actor.** Use this for remote-only agents that cannot reach your machine, or when a direct/platform IP is rate-limited. Deploy the Actor and connect to `https://<user>--google-trends-for-agent.apify.actor/mcp` (dots in the username become hyphens, e.g. `https://meka-im--google-trends-for-agent.apify.actor/mcp`). Prefer URL-only OAuth in the client; use `Authorization: Bearer APIFY_TOKEN` only for clients without MCP OAuth. The dsh plugin's `actor-public` and `actor-own` egress routes use the same Actor over `/egress/fetch`. The Actor sets `HTTPS_PROXY` from Apify Proxy on-platform, so the Free plan's RESIDENTIAL group works, and rotates the proxy session on HTTP 429 or a Google challenge. Residential proxy traffic is billed per GB from your Apify credits. A single-tenant Standby run bills compute while idle; the Actor exits after 60 s without requests.
 
 | Agent environment | Egress it uses | Can it reach a local server? | Recommended path |
 | --- | --- | --- | --- |
 | dots cloud computer | OpenAI data-center IP | Yes, it can connect to the user's local computer | Local stdio or local HTTP, or the Apify URL when remote |
 | Muse | Meta cloud VM | User-provided verification shows the CLI and a self-built stdio MCP client ran inside the VM; VM-local HTTP access, access to the user's Mac, and host-native MCP registration remain unverified | Run the CLI/stdio MCP client inside the VM to validate protocol behavior; use the Actor URL only when the host supports remote MCP. Neither path substitutes for validating native registration |
-| Grok Bot | Shared box plus the user's registered computers | Yes, through the registered computers | Local stdio/HTTP on a registered computer, or the Apify URL for the shared box |
+| Grok Bot | Shared box plus the user's registered computers | Yes, through the registered computers | Local stdio/HTTP on a registered computer, or the Apify URL with native OAuth for the shared box |
 
 Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most; on `BLOCKED`, stop and report.
 

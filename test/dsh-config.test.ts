@@ -47,6 +47,8 @@ describe('dsh Config schema', () => {
     const values = Config!({}) as Record<string, { get(): unknown }>;
     expect(schema.dict.egress.meta.default).toBe('local');
     expect(schema.dict.apifyToken.meta.role).toBe('secret');
+    expect(String(schema.dict.apifyToken.meta.description)).toMatch(/^Advanced fallback Apify API token; Apify OAuth takes priority\./);
+    expect(String(schema.dict.apifyToken.meta.description)).toMatch(/cordis\.patch\.yml.*APIFY_TOKEN/);
     expect(schema.dict.apifyToken.meta.default).toBeUndefined();
     expect(schema.dict.apifyActor.meta.default).toBeUndefined();
     expect(schema.dict.geo.meta.default).toBe('US');

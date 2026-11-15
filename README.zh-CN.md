@@ -44,9 +44,23 @@
 1. [Fork 仓库](https://github.com/meka-im/google-trends-for-agent/fork)。
 2. 在 Apify Console 用 **Link Git repository**（分支 `main`）创建 Actor，或在克隆目录运行 `apify push`。
 3. 构建完成后，在 Settings → Server 启用 **Standby**。
-4. 客户端使用 `https://<user>--<actor>.apify.actor/mcp` 并带上 Apify Token。
+4. 在支持远程 MCP OAuth 的客户端中填入 `https://<user>--<actor>.apify.actor/mcp`，并在客户端内完成 Apify 登录。
 
-通过公共 Standby 端点使用远程 MCP。先在 [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) 创建 Token：
+支持 OAuth 的客户端只需配置所选部署的 Standby Actor URL；下方示例使用公共部署，OAuth 流程由客户端完成，不要手工构造 token URL 或 authorization URL：
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
+    }
+  }
+}
+```
+
+Apify 当前的 OAuth scope 只有 `full_api_access`：它授予完整 Apify API 访问权限，而不是仅限本 Actor 或本工具的权限。GrokBot 已用原生 OAuth 注册并对该 URL 的四个工具完成实测；兼容性取决于客户端，严格的 OAuth 客户端可能在发现阶段失败（见[参考文档](docs/reference.md#remote-mcp-authentication)）。远程 MCP 客户端管理自己的 OAuth 授权与续期流程；Actor 不处理 OAuth token refresh。[Apify 官方 gateway](https://mcp.apify.com) 也支持 OAuth，但可能把本项目工具暴露为 Actor 调用，而不是四个直接同名的工具。
+
+对于不支持 MCP OAuth 的客户端，请在 [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) 创建 Token，并将 Bearer header 作为兼容回退：
 
 ```json
 {
@@ -63,13 +77,13 @@
 
 ## 安装与快速开始
 
-CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 git 检出并构建。下方固定的是已审查的完整源码 commit，不是 release tag；只有需要有意跟随当前 `main` 时才省略 ref。
+CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 GitHub 检出并构建。下方命令跟随仓库的 `main` 分支。
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 ```
 
-完整 SHA 的 GitHub `npx` 入口已用 npm 11.19.1 验证。npm 10.9.4 可能先成功构建同一完整 SHA 依赖，随后在 npm 打包阶段因 `GitFetcher` 缺少 Arborist 依赖而报错。遇到该报错时，请使用下方的 clone → checkout → `npm ci` → pack 持久安装流程，或升级 npm。CLI 和安装后的包仍要求 Node.js 20+。
+GitHub 依赖的构建已用 npm 11.19.1 验证。npm 10.9.4 可能先成功构建该依赖，随后在 npm 打包阶段因 `GitFetcher` 缺少 Arborist 依赖而报错。遇到该报错时，请使用下方的 clone → `npm ci` → pack 持久安装流程，或升级 npm。CLI 和安装后的包仍要求 Node.js 20+。
 
 零安装的 `npx` 路径会在首次使用时从 git 构建，耗时取决于网络和机器。频繁使用建议持久安装或运行 MCP 服务器。
 
@@ -78,10 +92,11 @@ npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a2
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach 56dc29bff769530f2e59f5565a873a26e50feee2
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
+
+clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源码版本，请自行加上 commit pin，不要依赖移动的分支。
 
 打包后的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
 
@@ -89,7 +104,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"] } }
 }
 ```
 
@@ -104,7 +119,7 @@ CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置�
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 检查包下载和数据抓取两段连通性：
@@ -135,7 +150,11 @@ pnpm 的提示框可能把 key 折成多行，请从本模板复制，只需改 
 
 pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使用带 `: true` 的 `allowBuilds:` map（在 `allowBuilds` 下写列表会失败）。main 更新后 key 会变化，需要重新添加。
 
-插件安装后默认启用。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接）** 区块用 **Egress（出口）** 三段控件选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**。点击 **Save（保存）** 后生效，无需重启。该 bundle 把四个工具注册为进程内原生工具，并附带 `gtfa` skill；Token 保存、用量卡片和测试连接的细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
+插件安装后默认启用，仍提供相同的四个原生工具和 `gtfa` skill。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接）** 区块选择 **本机直连**、**公共 Actor（meka.im）** 或 **我自己的 Actor**，再点 **Save（保存）** 应用 egress；登录本身不需要 Save。Host 提供 credentials service 时，两条 Actor 路线都提供 **Sign in with Apify（登录 Apify）**：页面显示 Apify 官方授权链接和 user code；pending 时每 2 秒查询一次状态并遵守 Apify 的 polling interval（包括 `slow_down`），关闭页面暂停、重新打开继续，过期后重新发起。Apify 当前的 device OAuth scope 只有 `full_api_access`——这是完整 Apify API 访问权限，不是仅限本 Actor 或本工具的权限。
+
+每次操作都会重新解析凭据：优先使用已存储的 OAuth session；只有在没有存储 session 时才使用已保存 config token，再回退到 `APIFY_TOKEN`。已存储的 session 若过期或损坏且无法 refresh，必须重新登录，不能静默回退或当作成功。OAuth 凭据不会进入浏览器可见状态，也不会进入模型可见的 tool input/output；Host 内部代码通过 credentials service 解析后调用 Apify。Host 没有该服务时，OAuth 不可用，但本机 egress、手动 token 和 `APIFY_TOKEN` 仍可使用。对 dsh device flow，当前 access token 是长效 token，不签发 refresh token；若 Apify 未来返回标准过期/刷新响应，插件可兼容处理。
+
+持久化交给 dsh credentials service/provider-managed store，与 profile 分离；后端位置、记录键和 schema 可以不同。当前本地 file-backed provider 在适用时使用 owner-only `0700` 目录与 `0600` 文件权限；它不是 OS Keychain，也不是加密存储，不能阻止同一 OS 用户下的其他进程读取。手动 token 位于**高级 / 备用**区域，仍会明文写入 `cordis.patch.yml`（mode `0600`），UI 中隐藏，不会记录，也不会进入浏览器可见状态或模型可见的 tool input/output。**Cancel（取消）** 只取消 pending flow。**Sign out（注销）** 删除已存储的 OAuth session，但按 provider 后端保留可复用的 client registration；它**不会撤销 Apify 云端授权**，如需撤销请到 Apify Console。路由和生命周期细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 
 工具从对话里调用，插件页只用于配置。
 

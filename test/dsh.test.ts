@@ -4,11 +4,17 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { apply, register, dshParameters, type GtfaConfig } from '../src/dsh.js';
+import {
+  GTFA_APIFY_OAUTH_SESSION,
+  type OAuthCredentialsService,
+} from '../src/apify-oauth.js';
 import type { Transport } from '../src/transport.js';
 
 const dirs: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -38,7 +44,7 @@ function compareTransport(): Transport {
   };
 }
 
-function fakeCtx() {
+function fakeCtx(initialCredentials?: OAuthCredentialsService) {
   interface Registered {
     name: string;
     description: string;
@@ -51,11 +57,37 @@ function fakeCtx() {
   const skills = {
     registerProvider(create: () => typeof provider) { provider = create(); return () => {}; },
   };
+  let credentials = initialCredentials;
   const ctx = {
     tools: { register: (definition: Registered) => { tools.set(definition.name, definition); } },
-    get: (name: string) => name === 'skills' ? skills : undefined,
+    get: (name: string) => name === 'skills' ? skills : name === 'credentials' ? credentials : undefined,
   };
-  return { ctx, tools, provider: () => provider };
+  return {
+    ctx,
+    tools,
+    provider: () => provider,
+    setCredentials(value: OAuthCredentialsService | undefined) { credentials = value; },
+  };
+}
+
+function credentialsWithToken(token?: string): OAuthCredentialsService {
+  const refs = new Map<string, string>();
+  if (token) refs.set(GTFA_APIFY_OAUTH_SESSION, JSON.stringify({ access_token: token }));
+  return {
+    async resolve(ref) {
+      const value = refs.get(ref);
+      return value === undefined ? undefined : { value, source: 'test' };
+    },
+    async describe(ref) {
+      return { configured: refs.has(ref), writable: true };
+    },
+    async set(ref, value) {
+      refs.set(ref, value);
+    },
+    async unset(ref) {
+      refs.delete(ref);
+    },
+  };
 }
 
 function config(extra: Partial<GtfaConfig> = {}): GtfaConfig {
@@ -114,6 +146,130 @@ describe('dsh plugin registration', () => {
 });
 
 describe('dsh plugin execution', () => {
+  it('keeps local egress independent from credentials and OAuth networking', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const path = new URL(String(input)).pathname;
+      const body = path.endsWith('/explore')
+        ? fixture('explore-multi.txt')
+        : path.endsWith('/multiline')
+          ? fixture('multiline-multi.txt')
+          : '';
+      return new Response(body, { status: 200, headers: { 'set-cookie': 'NID=x; Path=/' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    let credentialReads = 0;
+    const skills = { registerProvider: () => () => {} };
+    const tools = new Map<string, {
+      execute: (args: unknown, exec: { signal?: AbortSignal }) => Promise<Record<string, unknown>>;
+    }>();
+    const ctx = {
+      tools: { register: (definition: { name: string } & typeof tools extends Map<string, infer T> ? T : never) => {
+        tools.set(definition.name, definition);
+      } },
+      get(name: string) {
+        if (name === 'skills') return skills;
+        if (name === 'credentials') {
+          credentialReads++;
+          throw new Error('credentials must not be read for local egress');
+        }
+        return undefined;
+      },
+    };
+    await register(ctx as never, config({ egress: 'local' }), { minIntervalMs: 0 });
+    const result = await tools.get('trends_compare')!.execute(
+      { keywords: ['chatgpt', 'claude'] },
+      { signal: new AbortController().signal },
+    );
+    expect(result).toMatchObject({ ok: true, status: 'ok' });
+    expect(credentialReads).toBe(0);
+  });
+
+  it('resolves OAuth per request and rebuilds the live relay when its token changes', async () => {
+    const credentials = credentialsWithToken('oauth-a');
+    const seenTokens: string[] = [];
+    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/health')) {
+        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
+      }
+      const request = JSON.parse(String(init!.body)) as { url: string };
+      const body = request.url.includes('/explore')
+        ? fixture('explore-multi.txt')
+        : request.url.includes('/multiline')
+          ? fixture('multiline-multi.txt')
+          : '';
+      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
+    });
+    const { ctx, tools } = fakeCtx(credentials);
+    await register(ctx, config({
+      egress: 'actor-own',
+      apifyToken: 'config-token',
+      apifyActor: 'actor-1',
+    }), {
+      relay: {
+        fetch: relayFetch as unknown as typeof fetch,
+        resolveStandbyUrl: async token => {
+          seenTokens.push(token);
+          return 'https://actor.test';
+        },
+      },
+      minIntervalMs: 0,
+    });
+    const compare = tools.get('trends_compare')!;
+    expect(await compare.execute(
+      { keywords: ['chatgpt', 'claude'] },
+      { signal: new AbortController().signal },
+    )).toMatchObject({ ok: true });
+
+    await credentials.set(GTFA_APIFY_OAUTH_SESSION, JSON.stringify({ access_token: 'oauth-b' }));
+    expect(await compare.execute(
+      { keywords: ['chatgpt', 'claude'] },
+      { signal: new AbortController().signal },
+    )).toMatchObject({ ok: true });
+    expect(seenTokens).toEqual(['oauth-a', 'oauth-b']);
+  });
+
+  it('picks up a credentials service that is mounted after plugin registration', async () => {
+    const { ctx, tools, setCredentials } = fakeCtx();
+    const seenTokens: string[] = [];
+    const relayFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/health')) {
+        return new Response(JSON.stringify({ ok: true, version: '0.1.0', relay: 1 }), { status: 200 });
+      }
+      const request = JSON.parse(String(init!.body)) as { url: string };
+      const body = request.url.includes('/explore')
+        ? fixture('explore-multi.txt')
+        : request.url.includes('/multiline')
+          ? fixture('multiline-multi.txt')
+          : '';
+      return new Response(JSON.stringify({ status: 200, headers: {}, body }), { status: 200 });
+    });
+    await register(ctx, config({
+      egress: 'actor-own',
+      apifyActor: 'actor-1',
+    }), {
+      relay: {
+        fetch: relayFetch as unknown as typeof fetch,
+        resolveStandbyUrl: async token => {
+          seenTokens.push(token);
+          return 'https://actor.test';
+        },
+      },
+      minIntervalMs: 0,
+    });
+    const compare = tools.get('trends_compare')!;
+    expect(await compare.execute(
+      { keywords: ['chatgpt', 'claude'] },
+      { signal: new AbortController().signal },
+    )).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
+
+    setCredentials(credentialsWithToken('late-oauth'));
+    expect(await compare.execute(
+      { keywords: ['chatgpt', 'claude'] },
+      { signal: new AbortController().signal },
+    )).toMatchObject({ ok: true });
+    expect(seenTokens).toEqual(['late-oauth']);
+  });
+
   it('executes trends_compare against a fixture transport', async () => {
     const { ctx, tools } = fakeCtx();
     await register(ctx, config(), { transport: compareTransport(), minIntervalMs: 0 });
@@ -136,7 +292,14 @@ describe('dsh plugin execution', () => {
     const { ctx, tools } = fakeCtx();
     await register(ctx, config({ egress: 'actor-own' }));
     const result = await tools.get('trends_compare')!.execute({ keywords: ['a', 'b'] }, { signal: new AbortController().signal });
-    expect(result).toMatchObject({ ok: false, status: 'error', error: { code: 'INVALID_INPUT', message: expect.stringMatching(/APIFY_TOKEN/) } });
+    expect(result).toMatchObject({
+      ok: false,
+      status: 'error',
+      error: {
+        code: 'INVALID_INPUT',
+        message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.',
+      },
+    });
   });
 
   it('returns a clear error when actor-own egress has a token but no Actor', async () => {

@@ -153,7 +153,13 @@ describe('dsh settings form', () => {
   it('orders sections and hides Apify fields while egress is local', () => {
     const html = render();
     const order = ['Connection', 'Defaults', 'Anchors &amp; baselines', 'Advanced'];
-    const positions = order.map(title => html.indexOf(title));
+    const positions = order.map(title => {
+      const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const heading = new RegExp(`<h3\\b[^>]*>${escaped}</h3>`).exec(html);
+      if (heading) return heading.index;
+      const disclosure = new RegExp(`<summary\\b[^>]*>[\\s\\S]*?${escaped}</span>[\\s\\S]*?</summary>`).exec(html);
+      return disclosure?.index ?? -1;
+    });
     expect(positions.every(position => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(html).not.toContain('Apify usage');

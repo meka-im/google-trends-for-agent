@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { describe, it, expect, vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { TrendsClient } from '../src/client.js';
 import { RateLimiter, Session, createDefaultTransport, type Transport, type TransportRequest } from '../src/transport.js';
+import {
+  APIFY_OAUTH_VERIFICATION_URL, ConfigPage, EN, loadApifyOAuth, loadApifyUsage,
+  normalizeApifyOAuthStatus, startApifyOAuth, type ApifyOAuthView, type Draft,
+} from '../src/client/index.js';
 const fx = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const response = (body = '', status = 200, headers: Record<string,string> = {}) => ({ body, status, headers });
 const json = (value: unknown) => ")]}'\n" + JSON.stringify(value);
@@ -241,5 +247,247 @@ describe('transport and request spacing', () => {
       if (lower !== undefined) process.env.https_proxy = lower;
       vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Network is disabled in tests'); }));
     }
+  });
+});
+
+afterEach(() => {
+  vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Network is disabled in tests'); }));
+});
+
+const settingsT = (key: string) => EN[key] ?? key;
+
+function renderSettings(initialOAuth: ApifyOAuthView, draft: Partial<Draft> = {}) {
+  const snapshot = {
+    status: 'ready' as const,
+    revision: 1,
+    writable: true,
+    value: {
+      egress: 'actor-own',
+      geo: 'US',
+      cache: true,
+      charts: true,
+      snapshotDir: '.gtfa/snapshots',
+      chartDir: '.gtfa/charts',
+    },
+  };
+  const mutate = vi.fn(async () => true);
+  const form = {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
+    mutate,
+  };
+  const describeFace = {
+    getSnapshot: () => ({
+      view: { writable: true, namespaces: [{ ns: 'gtfa', secrets: [{ path: ['apifyToken'], set: true }] }] },
+    }),
+    subscribe: () => () => {},
+  };
+  const html = renderToStaticMarkup(createElement(ConfigPage, {
+    ctx: {
+      configForms: {
+        get: () => form,
+        describe: () => describeFace,
+      },
+    } as never,
+    t: settingsT,
+    initialDraft: { egress: 'actor-own', actor: 'actor-1', ...draft },
+    initialUsage: {
+      status: 'ready' as const,
+      data: {
+        plan: { tier: 'FREE', monthlyBasePriceUsd: 0, monthlyUsageCreditsUsd: 5 },
+        usageUsd: 1,
+        limitUsd: 5,
+        cycle: { startAt: '2026-01-01T00:00:00.000Z', endAt: '2099-01-31T23:59:59.999Z' },
+        residentialGb: null,
+        residentialGbLimit: null,
+        fetchedAt: '2026-01-15T12:34:00.000Z',
+        source: 'oauth' as const,
+      },
+    },
+    initialActors: {
+      status: 'ready' as const,
+      actors: [{
+        id: 'actor-1',
+        name: 'google-trends-for-agent',
+        username: 'alice',
+        title: 'Google Trends for AI Agents',
+        standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
+        standbyEnabled: true,
+        lastBuildId: 'build-1',
+        lastBuildStatus: 'SUCCEEDED',
+      }],
+    },
+    initialOAuth,
+  }));
+  return { html, mutate };
+}
+
+describe('dsh Apify OAuth settings', () => {
+  it('offers sign-in for Actor egress and renders neither OAuth nor the manual token in local mode', () => {
+    const actor = renderSettings({ status: 'idle' });
+    expect(actor.html).toContain('Sign in with Apify');
+    expect(actor.html).toContain('full_api_access');
+    expect(actor.html).toContain(EN.manualTokenSummary);
+    expect(actor.html).toContain(EN.usageSourceOAuth);
+    expect(actor.html).toContain('type="password"');
+    expect(actor.mutate).not.toHaveBeenCalled();
+
+    const local = renderSettings({ status: 'idle' }, { egress: 'local' });
+    expect(local.html).not.toContain('Sign in with Apify');
+    expect(local.html).not.toContain(EN.manualTokenSummary);
+    expect(local.html).not.toContain('aria-label="Apify sign-in"');
+  });
+
+  it('renders the official authorization link, code, expiry, and Cancel while pending', () => {
+    const html = renderSettings({
+      status: 'ready',
+      data: {
+        available: true,
+        connected: false,
+        pending: true,
+        verificationUri: 'https://console.apify.com/authorize/device?code=ABCD',
+        userCode: 'ABCD-1234',
+        expiresAt: '2099-01-15T12:34:00.000Z',
+      },
+    }).html;
+    expect(html).toContain('href="https://console.apify.com/authorize/device?code=ABCD"');
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html).toContain('ABCD-1234');
+    expect(html).toContain('This code expires at');
+    expect(html).toContain(EN.oauthCancel);
+  });
+
+  it('shows the signed-in state and logout while retaining the collapsed legacy token controls', () => {
+    const html = renderSettings({
+      status: 'ready',
+      data: { available: true, connected: true, pending: false },
+    }).html;
+    expect(html).toContain('Signed in with Apify');
+    expect(html).toContain(EN.oauthLogout);
+    expect(html).toContain(EN.manualTokenSummary);
+    expect(html).toContain('type="password"');
+    expect(html).toContain(EN.clearToken);
+    expect(html).not.toContain('<details open');
+  });
+
+  it('keeps the signed-in state and logout visible when a storage issue accompanies it', () => {
+    const html = renderSettings({
+      status: 'ready',
+      data: {
+        available: true,
+        connected: true,
+        pending: false,
+        code: 'storage',
+        message: 'DO-NOT-RENDER-CONNECTED',
+      },
+    }).html;
+    expect(html).toContain('Signed in with Apify');
+    expect(html).toContain(EN.oauthStorage);
+    expect(html).toContain(EN.oauthLogout);
+    expect(html).not.toContain('DO-NOT-RENDER-CONNECTED');
+  });
+
+  it('keeps pending authorization controls visible when a network issue accompanies them', () => {
+    const html = renderSettings({
+      status: 'ready',
+      data: {
+        available: true,
+        connected: false,
+        pending: true,
+        verificationUri: 'https://console.apify.com/authorize/device?code=ABCD',
+        userCode: 'ABCD-1234',
+        expiresAt: '2099-01-15T12:34:00.000Z',
+        code: 'network',
+        message: 'DO-NOT-RENDER-PENDING',
+      },
+    }).html;
+    expect(html).toContain('href="https://console.apify.com/authorize/device?code=ABCD"');
+    expect(html).toContain('ABCD-1234');
+    expect(html).toContain('This code expires at');
+    expect(html).toContain(EN.oauthNetwork);
+    expect(html).toContain(EN.oauthCancel);
+    expect(html).not.toContain('DO-NOT-RENDER-PENDING');
+  });
+
+  it('maps unavailable OAuth to a local fallback message and keeps the manual token available', () => {
+    const html = renderSettings({
+      status: 'ready',
+      data: {
+        available: false,
+        connected: false,
+        pending: false,
+        code: 'unavailable',
+        message: 'DO-NOT-RENDER',
+      },
+    }).html;
+    expect(html).toContain(EN.oauthUnavailable);
+    expect(html).toContain(EN.manualTokenSummary);
+    expect(html).toContain(EN.oauthRetry);
+    expect(html).not.toContain('DO-NOT-RENDER');
+  });
+
+  it('drops unsafe verification URLs and only renders the fixed official origin as a fallback', () => {
+    const base = { available: true, connected: false, pending: true };
+    for (const verificationUri of [
+      'javascript:alert(document.domain)',
+      'https://evil.example/authorize/device',
+      'https://console.apify.com/not-a-device-page',
+      'https://console.apify.com:443/authorize/device',
+      'https://console.apify.com/authorize/device#fragment',
+    ]) {
+      const normalized = normalizeApifyOAuthStatus({ ...base, verificationUri });
+      expect(normalized).not.toBeNull();
+      expect(normalized?.verificationUri).toBeUndefined();
+    }
+    expect(normalizeApifyOAuthStatus({
+      ...base,
+      verificationUri: 'https://console.apify.com/authorize/device/?code=ABC',
+    })?.verificationUri).toBe('https://console.apify.com/authorize/device/?code=ABC');
+    expect(normalizeApifyOAuthStatus({ ...base, available: 'true' })).toBeNull();
+    expect(normalizeApifyOAuthStatus({ ...base, code: 'unknown-code' })).toBeNull();
+
+    const html = renderSettings({
+      status: 'ready',
+      data: { ...base, verificationUri: 'javascript:alert(document.domain)' },
+    }).html;
+    expect(html).not.toContain('javascript:alert');
+    expect(html).toContain(`href="${APIFY_OAUTH_VERIFICATION_URL}"`);
+  });
+
+  it('preserves the OAuth usage source returned by the Host', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      source: 'oauth',
+      plan: { tier: 'FREE', monthlyBasePriceUsd: 0, monthlyUsageCreditsUsd: 5 },
+      usageUsd: 1,
+      limitUsd: 5,
+      cycle: { startAt: null, endAt: null },
+      residentialGb: null,
+      residentialGbLimit: null,
+      fetchedAt: '2026-01-15T12:34:00.000Z',
+    }), { status: 200 })));
+    expect(await loadApifyUsage()).toMatchObject({ status: 'ready', data: { source: 'oauth' } });
+  });
+
+  it('uses exact relative OAuth routes and POSTs only when starting sign-in', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      connected: false,
+      pending: true,
+      verificationUri: 'https://console.apify.com/authorize/device?code=ABC',
+      userCode: 'ABCD-1234',
+      expiresAt: '2099-01-15T12:34:00.000Z',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await loadApifyOAuth()).toMatchObject({
+      status: 'ready',
+      data: { pending: true, verificationUri: 'https://console.apify.com/authorize/device?code=ABC' },
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth', expect.objectContaining({ method: 'GET', cache: 'no-store' }));
+
+    fetchMock.mockClear();
+    expect(await startApifyOAuth()).toMatchObject({ status: 'ready', data: { pending: true } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('api/gtfa.apify-oauth-start', expect.objectContaining({ method: 'POST', cache: 'no-store' }));
   });
 });

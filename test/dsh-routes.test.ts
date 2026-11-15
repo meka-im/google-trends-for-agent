@@ -5,6 +5,16 @@ import {
   type RouteSettings,
 } from '../src/dsh-routes.js';
 import { resolveApifyApiToken } from '../src/apify-actor.js';
+import {
+  APIFY_OAUTH_CANCEL_PATH,
+  APIFY_OAUTH_LOGOUT_PATH,
+  APIFY_OAUTH_START_PATH,
+  APIFY_OAUTH_STATUS_PATH,
+  GTFA_APIFY_OAUTH_SESSION,
+  createApifyOAuthManager,
+  type ApifyOAuthManager,
+  type OAuthCredentialsService,
+} from '../src/apify-oauth.js';
 import { GTrendsError } from '../src/core.js';
 import type { Transport } from '../src/transport.js';
 
@@ -13,6 +23,16 @@ const ACTOR = 'actor-1';
 const LIMITS_URL = 'https://api.apify.com/v2/users/me/limits';
 const ME_URL = 'https://api.apify.com/v2/users/me';
 const ACTS_URL = 'https://api.apify.com/v2/acts?my=1&limit=1000';
+const ALL_ROUTES = [
+  APIFY_ACTORS_PATH,
+  APIFY_DEPLOY_PATH,
+  APIFY_OAUTH_STATUS_PATH,
+  APIFY_OAUTH_START_PATH,
+  APIFY_OAUTH_CANCEL_PATH,
+  APIFY_OAUTH_LOGOUT_PATH,
+  APIFY_USAGE_PATH,
+  TEST_CONNECTION_PATH,
+].sort();
 
 interface Route {
   path: string;
@@ -99,6 +119,26 @@ function actorFetch() {
   });
 }
 
+function oauthCredentials(token?: string): OAuthCredentialsService {
+  const values = new Map<string, string>();
+  if (token) values.set(GTFA_APIFY_OAUTH_SESSION, JSON.stringify({ access_token: token }));
+  return {
+    async resolve(ref) {
+      const value = values.get(ref);
+      return value === undefined ? undefined : { value, source: 'test' };
+    },
+    async describe(ref) {
+      return { configured: values.has(ref), writable: true };
+    },
+    async set(ref, value) {
+      values.set(ref, value);
+    },
+    async unset(ref) {
+      values.delete(ref);
+    },
+  };
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -135,7 +175,76 @@ describe('dsh host routes', () => {
       get: (name: string) => name === 'connection' ? { fetch: { register: (route: Route) => { harness.routes.set(route.path, route); return async () => {}; } } } : undefined,
       effect: (callback: () => unknown) => callback(),
     });
-    expect([...harness.routes.keys()].sort()).toEqual([APIFY_ACTORS_PATH, APIFY_DEPLOY_PATH, APIFY_USAGE_PATH, TEST_CONNECTION_PATH]);
+    expect([...harness.routes.keys()].sort()).toEqual(ALL_ROUTES);
+  });
+
+  it('registers OAuth status and POST-only lifecycle routes when a manager is mounted', async () => {
+    const oauth = createApifyOAuthManager({
+      credentials: oauthCredentials('route-oauth-token'),
+      fetch: (async () => json({})) as unknown as typeof fetch,
+    });
+    const harness = routeHarness(() => settings(), { oauth });
+    harness.connect();
+    expect([...harness.routes.keys()].sort()).toEqual(ALL_ROUTES);
+    expect(harness.routes.get(APIFY_OAUTH_STATUS_PATH)!.methods).toEqual(['GET']);
+    for (const path of [APIFY_OAUTH_START_PATH, APIFY_OAUTH_CANCEL_PATH, APIFY_OAUTH_LOGOUT_PATH]) {
+      expect(harness.routes.get(path)!.methods).toEqual(['POST']);
+    }
+
+    const status = await harness.routes.get(APIFY_OAUTH_STATUS_PATH)!
+      .fetch(new Request(`https://dsh.test${APIFY_OAUTH_STATUS_PATH}`));
+    expect(await status.json()).toEqual({ available: true, connected: true, pending: false });
+  });
+
+  it('rejects cross-site OAuth lifecycle POSTs without invoking the provider', async () => {
+    const fetchMock = vi.fn(async () => json({}));
+    const oauth = createApifyOAuthManager({
+      credentials: oauthCredentials(),
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const harness = routeHarness(() => settings(), { oauth });
+    harness.connect();
+    const response = await harness.routes.get(APIFY_OAUTH_START_PATH)!.fetch(new Request(
+      `https://dsh.test${APIFY_OAUTH_START_PATH}`,
+      { method: 'POST', headers: { origin: 'https://evil.test', 'sec-fetch-site': 'cross-site' } },
+    ));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'cross-site request rejected' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses one OAuth token for usage and connection routes ahead of config', async () => {
+    const oauthToken = 'oauth-account-token';
+    const oauth = createApifyOAuthManager({
+      credentials: oauthCredentials(oauthToken),
+      fetch: (async () => json({})) as unknown as typeof fetch,
+    });
+    const fetchMock = accountFetch();
+    const harness = routeHarness(() => settings(), {
+      fetch: fetchMock as unknown as typeof fetch,
+      oauth,
+    });
+    harness.connect();
+
+    const usage = await harness.routes.get(APIFY_USAGE_PATH)!
+      .fetch(new Request(`https://dsh.test${APIFY_USAGE_PATH}?refresh=1`));
+    expect(await usage.json()).toMatchObject({ ok: true, source: 'oauth' });
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers)
+      .toMatchObject({ authorization: `Bearer ${oauthToken}` });
+
+    let seenToken: string | undefined;
+    const relay = routeHarness(() => settings(), {
+      oauth,
+      relayTransport: (token, actorId) => {
+        seenToken = token;
+        return (async () => ({ status: 200, headers: {}, body: '<html></html>' })) as Transport;
+      },
+    });
+    relay.connect();
+    const connection = await relay.routes.get(TEST_CONNECTION_PATH)!
+      .fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
+    expect(await connection.json()).toMatchObject({ ok: true, egress: 'actor-own' });
+    expect(seenToken).toBe(oauthToken);
   });
 
   it('serves saved-token usage with no account identity or token in the response', async () => {
@@ -178,7 +287,11 @@ describe('dsh host routes', () => {
     const harness = routeHarness(() => settings({ apifyToken: undefined }), { fetch: fetchMock as unknown as typeof fetch });
     harness.connect();
     const response = await harness.routes.get(APIFY_USAGE_PATH)!.fetch(new Request(`https://dsh.test${APIFY_USAGE_PATH}`));
-    expect(await response.json()).toEqual(expect.objectContaining({ ok: false, code: 'no-token' }));
+    expect(await response.json()).toEqual({
+      ok: false,
+      code: 'no-token',
+      message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to see usage.',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -208,7 +321,11 @@ describe('dsh host routes', () => {
     const noToken = routeHarness(() => settings({ apifyToken: undefined }));
     noToken.connect();
     expect(await (await noToken.routes.get(APIFY_ACTORS_PATH)!.fetch(new Request(`https://dsh.test${APIFY_ACTORS_PATH}`))).json())
-      .toMatchObject({ ok: false, code: 'no-token' });
+      .toMatchObject({
+        ok: false,
+        code: 'no-token',
+        message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to list your Actors.',
+      });
 
     const invalid = routeHarness(() => settings(), { fetch: (async () => json({}, 401)) as unknown as typeof fetch });
     invalid.connect();
@@ -245,6 +362,57 @@ describe('dsh host routes', () => {
     release();
     expect(await (await first).json()).toMatchObject({ ok: true, actorId: 'slow-actor' });
     expect(deploys).toBe(1);
+  });
+
+  it('claims the deploy slot before a deferred OAuth resolve and resets it on no-token', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let calls = 0;
+    const resolveToken = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        await gate;
+        return { token: 'oauth-deploy-token', source: 'oauth' as const };
+      }
+      if (calls === 2) return {};
+      if (calls === 3) throw new Error('OAuth resolver unavailable');
+      return { token: 'oauth-deploy-token', source: 'oauth' as const };
+    });
+    const fetchMock = actorFetch();
+    const harness = routeHarness(() => settings(), {
+      fetch: fetchMock as unknown as typeof fetch,
+      oauth: { resolveToken } as unknown as ApifyOAuthManager,
+    });
+    harness.connect();
+    const route = harness.routes.get(APIFY_DEPLOY_PATH)!;
+
+    const first = route.fetch(new Request(`https://dsh.test${APIFY_DEPLOY_PATH}`, { method: 'POST' }));
+    const second = await route.fetch(new Request(`https://dsh.test${APIFY_DEPLOY_PATH}`, { method: 'POST' }));
+    expect(second.status).toBe(429);
+    expect(await second.json()).toMatchObject({ ok: false, code: 'busy' });
+    expect(resolveToken).toHaveBeenCalledTimes(1);
+
+    release();
+    expect(await (await first).json()).toEqual({ ok: true, actorId: 'new-actor', buildId: 'new-build' });
+
+    const noToken = await route.fetch(new Request(`https://dsh.test${APIFY_DEPLOY_PATH}`, { method: 'POST' }));
+    expect(await noToken.json()).toMatchObject({
+      ok: false,
+      code: 'no-token',
+      message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to deploy the Actor.',
+    });
+    expect(resolveToken).toHaveBeenCalledTimes(2);
+
+    await expect(route.fetch(new Request(`https://dsh.test${APIFY_DEPLOY_PATH}`, { method: 'POST' })))
+      .rejects.toThrow('OAuth resolver unavailable');
+    expect(resolveToken).toHaveBeenCalledTimes(3);
+
+    const recovered = await route.fetch(new Request(`https://dsh.test${APIFY_DEPLOY_PATH}`, { method: 'POST' }));
+    expect(await recovered.json()).toEqual({ ok: true, actorId: 'new-actor', buildId: 'new-build' });
+    expect(resolveToken).toHaveBeenCalledTimes(4);
+    const deployments = fetchMock.mock.calls.filter(([url, init]) =>
+      String(url) === 'https://api.apify.com/v2/acts' && (init as RequestInit | undefined)?.method === 'POST');
+    expect(deployments).toHaveLength(2);
   });
 
   it('tests local egress with exactly one request', async () => {
@@ -316,7 +484,11 @@ describe('dsh host routes', () => {
 
   it('maps Actor test-connection codes: no-token, no-actor, invalid-token, network, http', async () => {
     vi.stubEnv('APIFY_TOKEN', '');
-    expect(await testConnection({ egress: 'actor-own', apifyToken: '' })).toMatchObject({ ok: false, code: 'no-token' });
+    expect(await testConnection({ egress: 'actor-own', apifyToken: '' })).toMatchObject({
+      ok: false,
+      code: 'no-token',
+      message: 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.',
+    });
 
     expect(await testConnection({ egress: 'actor-own', apifyToken: TOKEN })).toMatchObject({ ok: false, code: 'no-actor' });
 
