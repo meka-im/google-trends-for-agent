@@ -109,8 +109,8 @@ One row per term, or one row per Trending Now item. Flat fields, `null` when the
 | `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak` | Relative 0–100 interest, when available. |
 | `searchesPerDay` | Anchor-calibrated estimate; null without calibration. |
 | `verdict`, `anchor` | Verdict label and anchor term, when the tool returns them. |
-| `topRelated`, `topRising` | Up to 10 related queries each. |
-| `chartKey`, `chartUrl` | Key-value store key and public URL for a chart, or null. |
+| `topRelated`, `topRising` | Related query names; up to 10 each. |
+| `chartKey`, `chartUrl` | Key-value store key and API record URL for a chart, or null. Anonymous access depends on the store's permissions; private records require an Apify token with access. |
 | `error` | `{ code, message }` or null. |
 | `fetchedAt` | ISO timestamp. |
 
@@ -138,6 +138,21 @@ Representative item (example values, not live data):
   "fetchedAt": "2026-11-12T09:30:00.000Z"
 }
 ```
+
+### Authenticated chart download
+
+`chartUrl` is an Apify key-value store API record URL, not a promise that the record allows anonymous reads. Anonymous access depends on the store's permissions. For a private record, provide an Apify token with access in the `Authorization` header. Missing permissions or missing authentication can produce `401` or `403`; a `403` alone does not mean the SVG is broken.
+
+```sh
+curl --fail --location \
+  -H "Authorization: Bearer $APIFY_TOKEN" \
+  -o chart.svg \
+  "https://api.apify.com/v2/key-value-stores/STORE_ID/records/CHART_KEY"
+```
+
+### Dataset and MCP/HTTP
+
+Dataset `topRelated` and `topRising` are name-only string arrays (up to 10 items each) and do not carry `estDaily`; use `trends_snapshot` over MCP/HTTP to inspect related rows and their `estDaily: null` schema. A one-off `now` Dataset is fixed at up to 25 items; use MCP/HTTP `trends_now` with `limit: 3` for a smaller result. The existing one-off Actor input has no `limit` option.
 
 ## Run summary and errors
 
