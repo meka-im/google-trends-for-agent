@@ -2,11 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { createTools } from './tools.js';
-import { createActorRelayTransport, resolveApifyApiToken, type CreateActorRelayTransportOptions } from './apify-actor.js';
+import { createActorRelayTransport, type CreateActorRelayTransportOptions } from './apify-actor.js';
+import {
+  createApifyOAuthManager,
+  type ApifyOAuthManager,
+  type OAuthCredentialsService,
+} from './apify-oauth.js';
 import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
 import { DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, resolveEgress, type EgressMode, type EgressNotice } from './options.js';
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
+import { GTrendsError } from './core.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
 // The library and CLI must work without the optional dsh peer dependency.
@@ -23,7 +29,7 @@ export const inject = ['tools'];
 export interface GtfaConfig {
   /** `local` sends Google requests from this machine; the two Actor routes relay them through Apify. */
   egress?: EgressMode;
-  /** Apify API token; saved in the profile's cordis.patch.yml and hidden from reads. */
+  /** Advanced fallback Apify API token; OAuth takes priority and saved values stay hidden from reads. */
   apifyToken?: string;
   /** Actor id of your google-trends-for-agent Actor (Standby); used by the actor-own route. */
   apifyActor?: string;
@@ -83,7 +89,7 @@ function createConfig(Schema: SchemaFactory) {
     egress: Schema.string().default('local')
       .description('local sends Google requests from the dsh machine. actor-public relays through the meka.im Actor; actor-own relays through your own deployment (both work on the Free plan).').volatile(),
     apifyToken: Schema.string().role('secret')
-      .description('Apify API token. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
+      .description('Advanced fallback Apify API token; Apify OAuth takes priority. Saved in the profile cordis.patch.yml (hidden in the UI, never logged or returned); leave blank and set APIFY_TOKEN to keep it out of the profile.').volatile(),
     apifyActor: Schema.string()
       .description('Actor id of your google-trends-for-agent Actor. Pick or deploy one in the Apify section of this page.').volatile(),
     geo: Schema.union([...GEO_CODES]).default(DEFAULT_GEO)
@@ -113,6 +119,8 @@ interface DshContext {
   tools: { register(definition: unknown): unknown };
   get?(name: string): unknown;
   inject?(names: string[], callback: (ctx: DshContext) => void): unknown;
+  effect?(callback: () => void | (() => void)): unknown;
+  credentials?: unknown;
 }
 
 export interface RegisterOverrides {
@@ -126,6 +134,10 @@ export interface RegisterOverrides {
   minIntervalMs?: number;
   /** Test seam: usage and test-connection route clients. */
   routes?: RouteOverrides;
+  /** Test seam: replace the OAuth manager. */
+  oauth?: ApifyOAuthManager;
+  /** Test seam: OAuth HTTP fetch; production uses global fetch. */
+  oauthFetch?: typeof globalThis.fetch;
 }
 
 /** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
@@ -188,22 +200,45 @@ export function resolveGtfaSettings(config: GtfaConfig, envBaselines?: Baselines
   };
 }
 
+/** Resolve the credentials seam without making it a required plugin injection. */
+function credentialsFromContext(ctx: DshContext): OAuthCredentialsService | undefined {
+  try {
+    const fromGet = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined;
+    return (fromGet ?? (ctx as { credentials?: unknown }).credentials) as OAuthCredentialsService | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tokenError(message: string | undefined, code: 'INVALID_INPUT' | 'NETWORK_ERROR'): GTrendsError {
+  return new GTrendsError(code, message ?? 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.');
+}
+
 /** Rebuild the egress transport only when its connection-relevant settings change. */
 function createLiveTransport(
   get: () => GtfaRuntimeSettings,
+  oauth: ApifyOAuthManager,
   overrides?: RegisterOverrides['relay'],
 ): Transport {
   let current: Transport | undefined;
   let key = '';
   return async request => {
     const settings = get();
-    const resolved = resolveApifyApiToken(settings.apifyToken);
+    if (settings.egress === 'local') {
+      if (!current || key !== 'local') {
+        current = createDefaultTransport();
+        key = 'local';
+      }
+      return current(request);
+    }
+    const resolved = await oauth.resolveToken(settings.apifyToken);
+    if (!resolved.token) {
+      throw tokenError(resolved.message, resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT');
+    }
     const actorId = settings.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : settings.apifyActor ?? '';
-    const next = JSON.stringify([settings.egress, resolved.token ?? null, actorId]);
+    const next = JSON.stringify([settings.egress, resolved.token, resolved.source ?? null, actorId]);
     if (!current || next !== key) {
-      current = settings.egress === 'local'
-        ? createDefaultTransport()
-        : createActorRelayTransport({ ...overrides, token: resolved.token ?? '', actorId });
+      current = createActorRelayTransport({ ...overrides, token: resolved.token, actorId });
       key = next;
     }
     return current(request);
@@ -290,7 +325,12 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   // dsh's volatile settings take effect without remounting the plugin.
   resolveGtfaSettings(config, envBaselines);
   const settings = () => resolveGtfaSettings(config, envBaselines);
-  const transport = overrides.transport ?? createLiveTransport(settings, overrides.relay);
+  const oauth = overrides.oauth ?? createApifyOAuthManager({
+    credentials: () => credentialsFromContext(ctx),
+    ...(overrides.oauthFetch ? { fetch: overrides.oauthFetch } : {}),
+  });
+  if (typeof ctx.effect === 'function') ctx.effect(() => () => oauth.dispose());
+  const transport = overrides.transport ?? createLiveTransport(settings, oauth, overrides.relay);
   const tools = createTools({
     transport,
     settings: () => {
@@ -326,6 +366,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   registerSkill(ctx);
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
+    oauth,
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
     ...(localTransport ? { localTransport } : {}),
     ...(overrides.routes?.relayTransport ? { relayTransport: overrides.routes.relayTransport } : {}),

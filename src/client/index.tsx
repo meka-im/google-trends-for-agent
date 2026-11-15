@@ -33,6 +33,12 @@ const USAGE_URL = 'api/gtfa.apify-usage';
 const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const TEST_URL = 'api/gtfa.test-connection';
+export const APIFY_OAUTH_STATUS_URL = 'api/gtfa.apify-oauth';
+export const APIFY_OAUTH_START_URL = 'api/gtfa.apify-oauth-start';
+export const APIFY_OAUTH_CANCEL_URL = 'api/gtfa.apify-oauth-cancel';
+export const APIFY_OAUTH_LOGOUT_URL = 'api/gtfa.apify-oauth-logout';
+/** Fixed official fallback when the Host status has no safe verification URL. */
+export const APIFY_OAUTH_VERIFICATION_URL = 'https://console.apify.com/authorize/device';
 const DEPLOY_MANUAL_URL = `${GTFA_SOURCE_URL}#deploy-it-yourself`;
 /** Profile keys removed with the old egress; Save unsets them. */
 const LEGACY_EGRESS_KEYS = ['apifyProxyGroup', 'apifyProxyCountry'] as const;
@@ -154,8 +160,8 @@ export interface ApifyUsageData {
   residentialGb: number | null;
   residentialGbLimit: number | null;
   fetchedAt: string;
-  /** Where the Host found the token: saved settings or the APIFY_TOKEN environment variable. */
-  source: 'config' | 'env' | null;
+  /** Where the Host found the token: OAuth, saved settings, or the APIFY_TOKEN environment variable. */
+  source: 'oauth' | 'config' | 'env' | null;
 }
 
 export type ApifyUsageView =
@@ -163,6 +169,38 @@ export type ApifyUsageView =
   | { status: 'loading' }
   | { status: 'error'; code: 'no-token' | 'invalid-token' | 'network' | 'http'; httpStatus?: number }
   | { status: 'ready'; data: ApifyUsageData };
+
+export type ApifyOAuthCode =
+  | 'unavailable'
+  | 'read-only'
+  | 'network'
+  | 'invalid-response'
+  | 'access-denied'
+  | 'expired'
+  | 'storage'
+  | 'reauth-required'
+  | 'busy';
+
+/** Safe fields returned by the Host OAuth status route. */
+export interface ApifyOAuthStatus {
+  available: boolean;
+  connected: boolean;
+  pending: boolean;
+  verificationUri?: string;
+  userCode?: string;
+  expiresAt?: string;
+  code?: ApifyOAuthCode;
+  /** Retained only for contract compatibility; never rendered. */
+  message?: string;
+}
+
+export type ApifyOAuthView =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; code: ApifyOAuthCode }
+  | { status: 'ready'; data: ApifyOAuthStatus };
+
+export type ApifyOAuthAction = 'start' | 'cancel' | 'logout';
 
 export interface TestConnectionView {
   ok: boolean;
@@ -208,8 +246,38 @@ export interface DeployBuildResolution {
 }
 
 export const EN: Record<string, string> = {
-  summary: 'Configure egress, the Apify token and Actor, usage, default geo, anchors, and snapshot cache.',
-  intro: 'Click Save to apply changes; no restart needed. Usage, Actor listing, deploy, and Test connection run on the dsh host, so the token never reaches the browser.',
+  summary: 'Configure Apify sign-in, egress, the Actor, usage, default geo, anchors, and snapshot cache.',
+  intro: 'OAuth is the preferred credential for Actor egress; a manual API Token remains under Advanced. Click Save to apply settings changes; no restart is needed. OAuth status, usage, Actor listing, deploy, and Test connection run on the dsh host, so credentials never reach the browser.',
+  oauthTitle: 'Apify sign-in',
+  oauthSignedOut: 'Sign in once to use your own Apify account with the Actor egress.',
+  oauthSignIn: 'Sign in with Apify',
+  oauthScope: 'This asks Apify for full_api_access. That is currently the only scope this provider offers, so it is not limited to this Actor. Calls and billing still use your own Apify account.',
+  oauthStarting: 'Starting Apify sign-in…',
+  oauthPendingTitle: 'Finish signing in at Apify',
+  oauthPending: 'Open the official Apify page, then enter this code:',
+  oauthOpen: 'Open Apify authorization',
+  oauthUserCode: 'Code: {code}',
+  oauthExpiresAt: 'This code expires at {time}.',
+  oauthExpiresSoon: 'This code expires soon.',
+  oauthCancel: 'Cancel',
+  oauthCancelling: 'Cancelling…',
+  oauthConnected: 'Signed in with Apify',
+  oauthConnectedHint: 'OAuth takes priority over the advanced manual API Token and APIFY_TOKEN.',
+  oauthLogout: 'Sign out of Apify',
+  oauthLoggingOut: 'Signing out…',
+  oauthLoading: 'Checking Apify sign-in status…',
+  oauthRetry: 'Retry',
+  oauthSignInAgain: 'Sign in again',
+  oauthUnavailable: 'Apify sign-in is unavailable in this deployment. The advanced manual API Token remains available below.',
+  oauthReadOnly: 'Apify sign-in cannot be saved because credentials are read-only here. The advanced manual API Token remains available below.',
+  oauthNetwork: 'Could not reach the Apify sign-in service. Check connectivity and try again.',
+  oauthInvalidResponse: 'Apify sign-in returned a response this page could not validate. Try again.',
+  oauthAccessDenied: 'Apify authorization was denied. Sign in again when ready.',
+  oauthExpired: 'The Apify authorization code expired. Sign in again.',
+  oauthStorage: 'Could not save or clear the Apify sign-in credentials. Check dsh credential storage and try again.',
+  oauthReauthRequired: 'The saved Apify sign-in expired or was revoked. Sign in again.',
+  oauthBusy: 'Another Apify sign-in operation is in progress. Try again in a moment.',
+  oauthManualFallback: 'Legacy fallback: expand “Advanced: manual API Token” below.',
   connection: 'Connection',
   connectionDescription: 'Where Google Trends requests leave from, plus a one-click reachability check.',
   egress: 'Egress',
@@ -225,21 +293,21 @@ export const EN: Record<string, string> = {
   testNote: 'Two tiny requests: /health (no proxy traffic) and one HEAD relay.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
   testActorOk: 'Apify Actor OK — HTTP {status}, {ms} ms',
-  testNoToken: 'Add an Apify token (or set APIFY_TOKEN) to use an Actor egress.',
+  testNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to use an Actor egress.',
   testNoActor: 'Select or deploy your google-trends-for-agent Actor first.',
   testVersionMismatch: 'This Actor build speaks a different relay version. Update the plugin or rebuild the Actor.',
-  testInvalidToken: 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.',
+  testInvalidToken: 'Apify rejected the token or OAuth session. Sign in again or check the advanced manual token in Apify Console → Settings → API & Integrations.',
   testNetworkLocal: 'Could not reach Google Trends from this machine.',
   testDetail: ' Details: {detail}',
   testNetworkActor: 'Could not reach your Apify Actor (or it returned no Standby response).',
   testHttp: 'Target returned HTTP {status}.',
   testBusy: 'A test is already running. Try again in a moment.',
   actorConnection: 'Apify Actor',
-  actorDescription: 'Token, the Actor, and this cycle\'s Apify usage.',
+  actorDescription: 'Apify sign-in, the Actor, and this cycle\'s Apify usage.',
   usageTitle: 'Apify usage',
   usageLoading: 'Loading Apify usage…',
-  usageNoToken: 'Add an Apify token (or set APIFY_TOKEN) to see usage.',
-  usageInvalidToken: 'Apify rejected the token (401). Check it in Apify Console → Settings → API & Integrations.',
+  usageNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to see usage.',
+  usageInvalidToken: 'Apify rejected the token or OAuth session (401). Sign in again or check the advanced manual token in Apify Console → Settings → API & Integrations.',
   usageNetwork: 'Could not load Apify usage. Check connectivity and try again.',
   usageHttp: 'Apify API returned HTTP {status}.',
   usageRetry: 'Retry',
@@ -254,15 +322,18 @@ export const EN: Record<string, string> = {
   usageResidential: 'Residential proxy: {gb} GB this cycle',
   usageResidentialLimit: 'Residential proxy: {gb} GB this cycle of {limit} GB',
   usageResidentialUnknown: 'Residential proxy: —',
-  signupBar: 'No Apify account? Sign up free — the Free plan\'s {free} monthly credit is enough for this plugin (roughly {calls} calls a month at about ${cost} per call, estimated).',
+  usageSourceOAuth: 'Usage source: signed-in Apify OAuth session.',
+  signupBar: 'Sign in with Apify above to use the Actor. No Apify account? Sign up free — the Free plan\'s {free} monthly credit is enough for this plugin (roughly {calls} calls a month at about ${cost} per call, estimated).',
   signupAction: 'Sign up →',
   pricingAction: 'Pricing',
   token: 'Apify token',
-  tokenHint: 'Leave blank to keep the current token or use APIFY_TOKEN. A saved token is written to the profile\'s cordis.patch.yml (mode 0600).',
+  tokenHint: 'Legacy fallback only; OAuth takes priority while connected. Leave blank to keep the current token or use APIFY_TOKEN. A saved token is stored in plaintext in the profile\'s cordis.patch.yml (mode 0600) — not encrypted and not an OS vault.',
   tokenPrefixWarning: 'Apify API tokens usually start with apify_api_. Double-check this one.',
   tokenStored: 'A token is stored. Type a new one to replace it.',
   tokenEmpty: 'No token stored.',
   clearToken: 'Clear the stored token',
+  manualTokenSummary: 'Advanced: manual API Token',
+  manualTokenDescription: 'Legacy fallback only. OAuth takes priority while connected.',
   actor: 'Actor',
   publicActor: 'Public Actor',
   publicActorHint: 'Fixed public Actor. Runs and billing stay in your Apify account; nothing to deploy.',
@@ -349,8 +420,38 @@ export const EN: Record<string, string> = {
 };
 
 export const ZH: Record<string, string> = {
-  summary: '配置出口、Apify Token 与 Actor、用量、默认地区、基线和快照缓存。',
-  intro: '点击保存后生效，无需重启。用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，Apify Token 不会发送到浏览器。',
+  summary: '配置 Apify 登录、出口、Actor、用量、默认地区、基线和快照缓存。',
+  intro: 'Actor 出口优先使用 OAuth 登录，也可在高级设置中保留手动 API Token。点击保存后应用设置变更，无需重启。OAuth 状态、用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，凭据不会发送到浏览器。',
+  oauthTitle: 'Apify 登录',
+  oauthSignedOut: '登录一次即可让 Actor 出口使用你自己的 Apify 账户。',
+  oauthSignIn: '登录 Apify',
+  oauthScope: '此登录会向 Apify 请求 full_api_access。当前提供商只提供这一 scope，因此授权并不只限于本 Actor。调用和账单仍在你的 Apify 账户内。',
+  oauthStarting: '正在开始 Apify 登录…',
+  oauthPendingTitle: '请在 Apify 完成登录',
+  oauthPending: '打开 Apify 官方页面，然后输入此代码：',
+  oauthOpen: '打开 Apify 授权页面',
+  oauthUserCode: '代码：{code}',
+  oauthExpiresAt: '此代码将于 {time} 过期。',
+  oauthExpiresSoon: '此代码即将过期。',
+  oauthCancel: '取消',
+  oauthCancelling: '正在取消…',
+  oauthConnected: '已登录 Apify',
+  oauthConnectedHint: 'OAuth 优先于高级设置中的手动 API Token 和 APIFY_TOKEN。',
+  oauthLogout: '退出 Apify 登录',
+  oauthLoggingOut: '正在退出…',
+  oauthLoading: '正在检查 Apify 登录状态…',
+  oauthRetry: '重试',
+  oauthSignInAgain: '重新登录',
+  oauthUnavailable: '当前部署无法使用 Apify 登录。下方仍可使用高级设置中的手动 API Token。',
+  oauthReadOnly: '此处的凭据为只读，无法保存 Apify 登录。下方仍可使用高级设置中的手动 API Token。',
+  oauthNetwork: '无法连接 Apify 登录服务。请检查网络后重试。',
+  oauthInvalidResponse: 'Apify 登录返回了此页面无法校验的响应。请重试。',
+  oauthAccessDenied: 'Apify 授权被拒绝。准备好后请重新登录。',
+  oauthExpired: 'Apify 授权代码已过期。请重新登录。',
+  oauthStorage: '无法保存或清除 Apify 登录凭据。请检查 dsh 凭据存储后重试。',
+  oauthReauthRequired: '已保存的 Apify 登录已过期或被撤销。请重新登录。',
+  oauthBusy: '另一个 Apify 登录操作正在进行。请稍后再试。',
+  oauthManualFallback: '旧版备用方案：展开下方的“高级：手动 API Token”。',
   connection: '连接',
   connectionDescription: 'Google Trends 请求的出口，以及一键连通性检查。',
   egress: '出口',
@@ -366,21 +467,21 @@ export const ZH: Record<string, string> = {
   testNote: '两次极小请求：/health（不耗代理流量）和一次 HEAD 转发。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
   testActorOk: 'Apify Actor 正常 — HTTP {status}，{ms} ms',
-  testNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可使用 Actor 出口。',
+  testNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可使用 Actor 出口。',
   testNoActor: '请先选择或部署你的 google-trends-for-agent Actor。',
   testVersionMismatch: '该 Actor 构建的 relay 版本不匹配。请更新插件或重新构建 Actor。',
-  testInvalidToken: 'Apify 拒绝了该 Token。请在 Apify Console → Settings → API & Integrations 中检查。',
+  testInvalidToken: 'Apify 拒绝了该 Token 或 OAuth 会话。请重新登录，或在 Apify Console → Settings → API & Integrations 中检查高级设置里的手动 Token。',
   testNetworkLocal: '本机无法连接 Google Trends。',
   testDetail: '详情：{detail}',
   testNetworkActor: '无法连接你的 Apify Actor（或它没有返回 Standby 响应）。',
   testHttp: '目标返回 HTTP {status}。',
   testBusy: '已有测试正在进行，请稍后再试。',
   actorConnection: 'Apify Actor',
-  actorDescription: 'Token、Actor 和本计费周期的 Apify 用量。',
+  actorDescription: 'Apify 登录、Actor 和本计费周期的 Apify 用量。',
   usageTitle: 'Apify 用量',
   usageLoading: '正在加载 Apify 用量…',
-  usageNoToken: '添加 Apify Token（或设置 APIFY_TOKEN）后可查看用量。',
-  usageInvalidToken: 'Apify 拒绝了该 Token（401）。请在 Apify Console → Settings → API & Integrations 中检查。',
+  usageNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可查看用量。',
+  usageInvalidToken: 'Apify 拒绝了该 Token 或 OAuth 会话（401）。请重新登录，或在 Apify Console → Settings → API & Integrations 中检查高级设置里的手动 Token。',
   usageNetwork: '无法加载 Apify 用量。请检查网络后重试。',
   usageHttp: 'Apify API 返回 HTTP {status}。',
   usageRetry: '重试',
@@ -395,15 +496,18 @@ export const ZH: Record<string, string> = {
   usageResidential: '住宅代理：本周期 {gb} GB',
   usageResidentialLimit: '住宅代理：本周期 {gb} GB，上限 {limit} GB',
   usageResidentialUnknown: '住宅代理：—',
-  signupBar: '还没有 Apify 账号？免费注册 — 免费版每月 {free} 额度足够本插件使用（估算约每月 {calls} 次调用，每次约 ${cost}）。',
+  usageSourceOAuth: '用量来源：已登录的 Apify OAuth 会话。',
+  signupBar: '请先在上方登录 Apify 以使用 Actor。还没有 Apify 账号？免费注册 — 免费版每月 {free} 额度足够本插件使用（估算约每月 {calls} 次调用，每次约 ${cost}）。',
   signupAction: '注册 →',
   pricingAction: '价格',
   token: 'Apify Token',
-  tokenHint: '留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN。保存的 Token 会写入 profile 的 cordis.patch.yml（权限 0600）。',
+  tokenHint: '仅作为旧版备用方案；已登录时 OAuth 优先。留空表示保持当前 Token，或使用环境变量 APIFY_TOKEN。保存的 Token 以明文写入 profile 的 cordis.patch.yml（权限 0600），并未加密，也不是操作系统密钥库。',
   tokenPrefixWarning: 'Apify API Token 通常以 apify_api_ 开头，请再确认。',
   tokenStored: '已保存 Token；输入新值可替换。',
   tokenEmpty: '未保存 Token。',
   clearToken: '清除已保存的 Token',
+  manualTokenSummary: '高级：手动 API Token',
+  manualTokenDescription: '仅作为旧版备用方案；已登录时 OAuth 优先。',
   actor: 'Actor',
   publicActor: '公共 Actor',
   publicActorHint: '固定的公共 Actor。运行和计费都在你的 Apify 账号内，无需部署。',
@@ -577,6 +681,20 @@ const styles: Record<string, CSSProperties> = {
   signupLinks: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 12 },
   signupPrimary: { color: '#2f6fed', fontWeight: 600, textDecoration: 'none' },
   signupSecondary: { color: 'var(--dsw-alias-label-tertiary, inherit)', textDecoration: 'underline' },
+  oauthCard: {
+    display: 'grid', gap: 10, padding: 14, borderRadius: 10,
+    border: '0.5px solid rgba(47,111,237,.35)',
+    background: 'rgba(47,111,237,.06)',
+  },
+  oauthHead: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  oauthActions: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' },
+  oauthCode: {
+    display: 'inline-block', padding: '4px 8px', borderRadius: 7,
+    background: 'var(--dsw-alias-bg-layer-1, rgba(127,127,127,.1))',
+    fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 14, fontWeight: 650,
+    letterSpacing: '0.03em', overflowWrap: 'anywhere',
+  },
+  oauthLink: { color: '#2f6fed', fontWeight: 600, textDecoration: 'underline', overflowWrap: 'anywhere' },
   usageBlock: { display: 'grid', gap: 6 },
   usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   usageTitle: { fontSize: 13, fontWeight: 650 },
@@ -617,6 +735,112 @@ function numberOrNull(value: unknown): number | null {
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+const OAUTH_CODES = new Set<string>([
+  'unavailable', 'read-only', 'network', 'invalid-response', 'access-denied',
+  'expired', 'storage', 'reauth-required', 'busy',
+]);
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+function boundedOAuthText(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= max ? trimmed : undefined;
+}
+
+/** Accept only the exact Apify Console device-authorization URL. */
+export function normalizeApifyOAuthVerificationUri(value: unknown): string | undefined {
+  const raw = boundedOAuthText(value, 2048);
+  if (!raw) return undefined;
+  let parsed: URL;
+  try { parsed = new URL(raw); }
+  catch { return undefined; }
+  if (parsed.protocol !== 'https:') return undefined;
+  if (parsed.hostname !== 'console.apify.com') return undefined;
+  if (parsed.pathname !== '/authorize/device' && parsed.pathname !== '/authorize/device/') return undefined;
+  if (parsed.username || parsed.password || parsed.port || parsed.hash) return undefined;
+  const authority = /^https:\/\/([^/?#]*)/i.exec(raw)?.[1];
+  if (!authority || authority.includes('@') || authority.includes(':')) return undefined;
+  return parsed.toString();
+}
+
+/** Validate the Host's safe OAuth view and discard malformed or unsafe optional fields. */
+export function normalizeApifyOAuthStatus(value: unknown): ApifyOAuthStatus | null {
+  const row = record(value);
+  if (typeof row.available !== 'boolean' || typeof row.connected !== 'boolean' || typeof row.pending !== 'boolean') return null;
+  let code: ApifyOAuthCode | undefined;
+  if (row.code !== undefined) {
+    if (typeof row.code !== 'string' || !OAUTH_CODES.has(row.code)) return null;
+    code = row.code as ApifyOAuthCode;
+  }
+  const verificationUri = normalizeApifyOAuthVerificationUri(row.verificationUri);
+  const userCode = (() => {
+    const text = boundedOAuthText(row.userCode, 64);
+    return text && /^[A-Za-z0-9-]{4,64}$/.test(text) ? text : undefined;
+  })();
+  const expiresAt = (() => {
+    const text = boundedOAuthText(row.expiresAt, 64);
+    if (!text || !ISO_INSTANT.test(text)) return undefined;
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  })();
+  const message = (() => {
+    const text = boundedOAuthText(row.message, 512);
+    return text?.replace(/[\u0000-\u001f\u007f]/g, '');
+  })();
+  return {
+    available: row.available,
+    connected: row.connected,
+    pending: row.pending,
+    ...(verificationUri ? { verificationUri } : {}),
+    ...(userCode ? { userCode } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(code ? { code } : {}),
+    ...(message ? { message } : {}),
+  };
+}
+
+async function requestApifyOAuth(
+  url: string,
+  method: 'GET' | 'POST',
+  signal?: AbortSignal,
+): Promise<ApifyOAuthView> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    });
+  } catch (error) {
+    if (signal?.aborted || (error as { name?: unknown })?.name === 'AbortError') throw error;
+    return { status: 'error', code: 'network' };
+  }
+  let body: unknown;
+  try { body = await response.json(); } catch { body = undefined; }
+  const data = normalizeApifyOAuthStatus(body);
+  if (!data) return { status: 'error', code: 'invalid-response' };
+  return { status: 'ready', data };
+}
+
+/** Read OAuth status only; this GET never starts a device login. */
+export function loadApifyOAuth(signal?: AbortSignal): Promise<ApifyOAuthView> {
+  return requestApifyOAuth(APIFY_OAUTH_STATUS_URL, 'GET', signal);
+}
+
+/** Start an Apify device login. Only an explicit user action should call this. */
+export function startApifyOAuth(signal?: AbortSignal): Promise<ApifyOAuthView> {
+  return requestApifyOAuth(APIFY_OAUTH_START_URL, 'POST', signal);
+}
+
+export function cancelApifyOAuth(signal?: AbortSignal): Promise<ApifyOAuthView> {
+  return requestApifyOAuth(APIFY_OAUTH_CANCEL_URL, 'POST', signal);
+}
+
+export function logoutApifyOAuth(signal?: AbortSignal): Promise<ApifyOAuthView> {
+  return requestApifyOAuth(APIFY_OAUTH_LOGOUT_URL, 'POST', signal);
 }
 
 /** Keep the stored tolerance exactly; '' means omitted (the built-in ±50% default). */
@@ -912,7 +1136,7 @@ function normalizeUsage(value: Record<string, unknown>): ApifyUsageData {
     residentialGb: numberOrNull(value.residentialGb),
     residentialGbLimit: numberOrNull(value.residentialGbLimit),
     fetchedAt: text(value.fetchedAt),
-    source: value.source === 'config' || value.source === 'env' ? value.source : null,
+    source: value.source === 'oauth' || value.source === 'config' || value.source === 'env' ? value.source : null,
   };
 }
 
@@ -1032,6 +1256,127 @@ export async function runConnectionTest(egress: EgressMode = 'local'): Promise<T
   }
 }
 
+const OAUTH_ERROR_KEYS: Record<ApifyOAuthCode, string> = {
+  unavailable: 'oauthUnavailable',
+  'read-only': 'oauthReadOnly',
+  network: 'oauthNetwork',
+  'invalid-response': 'oauthInvalidResponse',
+  'access-denied': 'oauthAccessDenied',
+  expired: 'oauthExpired',
+  storage: 'oauthStorage',
+  'reauth-required': 'oauthReauthRequired',
+  busy: 'oauthBusy',
+};
+
+function oauthErrorText(code: ApifyOAuthCode, t: Translate): string {
+  return t(OAUTH_ERROR_KEYS[code]);
+}
+
+function oauthIssueCode(state: ApifyOAuthView): ApifyOAuthCode | undefined {
+  if (state.status === 'error') return state.code;
+  if (state.status !== 'ready') return undefined;
+  if (state.data.code) return state.data.code;
+  return state.data.available ? undefined : 'unavailable';
+}
+
+function oauthExpiryText(value: string | undefined, t: Translate, locale: string): string {
+  if (!value) return t('oauthExpiresSoon');
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return t('oauthExpiresSoon');
+  const time = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return template(t('oauthExpiresAt'), { time });
+}
+
+export interface ApifyOAuthCardProps {
+  state: ApifyOAuthView;
+  t: Translate;
+  locale: string;
+  busy?: ApifyOAuthAction | null;
+  onStart?: () => void;
+  onCancel?: () => void;
+  onLogout?: () => void;
+  onRetry?: () => void;
+}
+
+/** SSR-safe Apify sign-in card. Buttons only call explicit parent actions. */
+export function ApifyOAuthCard({
+  state, t, locale, busy = null, onStart, onCancel, onLogout, onRetry,
+}: ApifyOAuthCardProps) {
+  const data = state.status === 'ready' ? state.data : undefined;
+  const issue = oauthIssueCode(state);
+  const verificationUri = normalizeApifyOAuthVerificationUri(data?.verificationUri) ?? APIFY_OAUTH_VERIFICATION_URL;
+  const cancelLabel = busy === 'cancel' ? t('oauthCancelling') : t('oauthCancel');
+  const signIn = <button type="button" style={dim({ ...styles.button, ...styles.primary }, busy !== null)}
+    disabled={busy !== null} onClick={onStart}>
+    {busy === 'start' ? t('oauthStarting') : issue ? t('oauthSignInAgain') : t('oauthSignIn')}
+  </button>;
+
+  const issueAlert = (code: ApifyOAuthCode) =>
+    <p style={styles.fieldError} role="alert">{oauthErrorText(code, t)}</p>;
+
+  const issueDetails = (code: ApifyOAuthCode) => {
+    const restart = code === 'access-denied' || code === 'expired' || code === 'reauth-required';
+    return <>
+      {issueAlert(code)}
+      {code === 'unavailable' || code === 'read-only'
+        ? <p style={styles.hint}>{t('oauthManualFallback')}</p>
+        : null}
+      <div style={styles.oauthActions}>
+        {restart
+          ? signIn
+          : <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onRetry}>
+            {t('oauthRetry')}
+          </button>}
+      </div>
+    </>;
+  };
+
+  return <div style={styles.oauthCard} aria-label={t('oauthTitle')}>
+    <div style={styles.oauthHead}>
+      <span style={styles.usageTitle}>{t('oauthTitle')}</span>
+      {data?.connected ? <span style={styles.pill}>{t('oauthConnected')}</span> : null}
+    </div>
+    <p style={styles.usageMeta}>{t('oauthScope')}</p>
+    {state.status === 'loading'
+      ? <p style={styles.usageMeta} role="status">{t('oauthLoading')}</p>
+      : state.status === 'error'
+        ? issueDetails(issue ?? 'invalid-response')
+        : data?.connected
+          ? <>
+            <p style={styles.status}><strong>{t('oauthConnected')}</strong></p>
+            {issue ? issueAlert(issue) : null}
+            <p style={styles.hint}>{t('oauthConnectedHint')}</p>
+            <div style={styles.oauthActions}>
+              <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onLogout}>
+                {busy === 'logout' ? t('oauthLoggingOut') : t('oauthLogout')}
+              </button>
+            </div>
+          </>
+          : data?.pending
+            ? <>
+              <p style={styles.status}><strong>{t('oauthPendingTitle')}</strong></p>
+              <p style={styles.usageMeta}>{t('oauthPending')}</p>
+              <div>
+                <a style={styles.oauthLink} href={verificationUri} target="_blank" rel="noopener noreferrer">{t('oauthOpen')}</a>
+              </div>
+              {data.userCode ? <div><span style={styles.oauthCode}>{template(t('oauthUserCode'), { code: data.userCode })}</span></div> : null}
+              <p style={styles.hint}>{oauthExpiryText(data.expiresAt, t, locale)}</p>
+              {issue ? issueAlert(issue) : null}
+              <div style={styles.oauthActions}>
+                <button type="button" style={dim(styles.button, busy !== null)} disabled={busy !== null} onClick={onCancel}>
+                  {cancelLabel}
+                </button>
+              </div>
+            </>
+            : issue
+              ? issueDetails(issue)
+              : <>
+                <p style={styles.status}>{t('oauthSignedOut')}</p>
+                <div style={styles.oauthActions}>{signIn}</div>
+              </>}
+  </div>;
+}
+
 function ApifySignupBar({ t, locale }: { t: Translate; locale: string }) {
   const calls = new Intl.NumberFormat(locale).format(apifyEstimatedCalls());
   const cost = new Intl.NumberFormat(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
@@ -1103,6 +1448,7 @@ function UsageDetails({ data, t, locale }: { data: ApifyUsageData; t: Translate;
     : data.residentialGbLimit !== null && data.residentialGbLimit < 1000
       ? template(t('usageResidentialLimit'), { gb: data.residentialGb.toFixed(3), limit: data.residentialGbLimit.toFixed(3) })
       : template(t('usageResidential'), { gb: data.residentialGb.toFixed(3) });
+  const source = data.source === 'oauth' ? t('usageSourceOAuth') : null;
 
   const end = data.cycle.endAt ? new Date(new Date(data.cycle.endAt).getTime() + 1) : null;
   const validEnd = end !== null && !Number.isNaN(end.getTime());
@@ -1128,6 +1474,7 @@ function UsageDetails({ data, t, locale }: { data: ApifyUsageData; t: Translate;
     <p style={styles.usageMeta}>{resets}</p>
     <p style={styles.usageMeta}>{plan}</p>
     <p style={styles.usageMeta}>{residential}</p>
+    {source ? <p style={styles.usageMeta}>{source}</p> : null}
     <div style={styles.usageFoot}>
       <span>{updated === null ? '' : template(t('usageUpdated'), { time: updated })}</span>
     </div>
@@ -1243,10 +1590,12 @@ export interface ConfigPageProps {
   initialUsage?: ApifyUsageView;
   /** Test seam: start the Actor list in a specific state for server-render coverage. */
   initialActors?: ApifyActorsView;
+  /** Test seam: start the Apify OAuth card in a specific state for server-render coverage. */
+  initialOAuth?: ApifyOAuthView;
 }
 
 /** Settings page. Exported for server-render tests. */
-export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }: ConfigPageProps) {
+export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth }: ConfigPageProps) {
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -1269,7 +1618,15 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
+  const [oauth, setOauth] = useState<ApifyOAuthView>(initialOAuth ?? { status: 'idle' });
+  const [oauthBusy, setOauthBusy] = useState<ApifyOAuthAction | null>(null);
+  const [oauthPoll, setOauthPoll] = useState({ id: 0, delay: 0, egress: draft.egress });
   const lastRevision = useRef<number | undefined>(snapshot.revision);
+  const oauthBusyRef = useRef(false);
+  const oauthConnectedRef = useRef(initialOAuth?.status === 'ready' ? initialOAuth.data.connected : false);
+  const oauthPollGeneration = useRef(0);
+  const oauthPollAbort = useRef<AbortController | null>(null);
+  const oauthPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intlLocale = useMemo(() => {
     const raw = typeof document !== 'undefined' ? document.documentElement.lang : '';
     const fallback = typeof navigator !== 'undefined' ? navigator.language : 'en';
@@ -1278,6 +1635,28 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   const validation = useMemo(() => validateDraft(draft, t), [draft, t]);
   const dirty = draftKey(draft) !== baseline || Boolean(draft.egressNotice || draft.legacyKeys?.length);
   const blocking = hasBlockingValidation(validation);
+
+  const stopOAuthPolling = useCallback(() => {
+    oauthPollGeneration.current++;
+    if (oauthPollTimer.current !== null) {
+      clearTimeout(oauthPollTimer.current);
+      oauthPollTimer.current = null;
+    }
+    oauthPollAbort.current?.abort();
+    oauthPollAbort.current = null;
+  }, []);
+
+  const applyOAuthView = useCallback((next: ApifyOAuthView) => {
+    const wasConnected = oauthConnectedRef.current;
+    if (next.status === 'ready') oauthConnectedRef.current = next.data.connected;
+    setOauth(next);
+    if (next.status === 'ready' && next.data.connected !== wasConnected) {
+      setUsageRequest(current => ({ id: current.id + 1, refresh: false }));
+      if (draft.egress === 'actor-own') {
+        setActorsRequest(current => ({ id: current.id + 1, refresh: true }));
+      }
+    }
+  }, [draft.egress]);
 
   useEffect(() => {
     if (snapshot.status !== 'ready') return;
@@ -1294,6 +1673,52 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
     const timer = setTimeout(() => setNotice(null), 2500);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (draft.egress === 'local') {
+      stopOAuthPolling();
+      setOauth(current => current.status === 'idle' ? current : { status: 'idle' });
+      setOauthPoll(current => current.egress === 'local'
+        ? current
+        : { id: current.id + 1, delay: 0, egress: 'local' });
+      return;
+    }
+    const generation = ++oauthPollGeneration.current;
+    const controller = new AbortController();
+    oauthPollAbort.current = controller;
+    let cancelled = false;
+
+    const run = async () => {
+      oauthPollTimer.current = null;
+      if (cancelled || generation !== oauthPollGeneration.current) return;
+      let next: ApifyOAuthView;
+      try {
+        next = await loadApifyOAuth(controller.signal);
+      } catch {
+        return;
+      }
+      if (cancelled || generation !== oauthPollGeneration.current) return;
+      applyOAuthView(next);
+      if (next.status === 'ready' && next.data.pending) {
+        oauthPollTimer.current = setTimeout(() => { void run(); }, 2000);
+      } else if (oauthPollAbort.current === controller) {
+        oauthPollAbort.current = null;
+      }
+    };
+
+    const initialDelay = oauthPoll.egress === draft.egress ? oauthPoll.delay : 0;
+    if (initialDelay === 0) setOauth({ status: 'loading' });
+    oauthPollTimer.current = setTimeout(() => { void run(); }, initialDelay);
+    return () => {
+      cancelled = true;
+      if (oauthPollTimer.current !== null) {
+        clearTimeout(oauthPollTimer.current);
+        oauthPollTimer.current = null;
+      }
+      controller.abort();
+      if (oauthPollAbort.current === controller) oauthPollAbort.current = null;
+    };
+  }, [draft.egress, oauthPoll, applyOAuthView, stopOAuthPolling]);
 
   useEffect(() => {
     if (draft.egress === 'local') {
@@ -1357,6 +1782,36 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
   }));
   const requestUsage = (refresh: boolean) => setUsageRequest(current => ({ id: current.id + 1, refresh }));
   const requestActors = (refresh: boolean) => setActorsRequest(current => ({ id: current.id + 1, refresh }));
+
+  const runOAuthAction = async (action: ApifyOAuthAction, request: () => Promise<ApifyOAuthView>) => {
+    if (oauthBusyRef.current) return;
+    oauthBusyRef.current = true;
+    setOauthBusy(action);
+    stopOAuthPolling();
+    setOauth({ status: 'loading' });
+    try {
+      const next = await request();
+      applyOAuthView(next);
+      if (action === 'start' && next.status === 'ready' && next.data.pending) {
+        setOauthPoll(current => ({ id: current.id + 1, delay: 2000, egress: draft.egress }));
+      }
+    } catch {
+      applyOAuthView({ status: 'error', code: 'network' });
+    } finally {
+      oauthBusyRef.current = false;
+      setOauthBusy(null);
+    }
+  };
+
+  const startOAuth = () => runOAuthAction('start', () => startApifyOAuth());
+  const cancelOAuth = () => runOAuthAction('cancel', () => cancelApifyOAuth());
+  const logoutOAuth = () => runOAuthAction('logout', () => logoutApifyOAuth());
+  const retryOAuth = () => {
+    if (oauthBusyRef.current) return;
+    stopOAuthPolling();
+    setOauth({ status: 'loading' });
+    setOauthPoll(current => ({ id: current.id + 1, delay: 0, egress: draft.egress }));
+  };
 
   const addAnchor = () => {
     if (validation.newAnchorTerm || validation.newAnchorDaily) return;
@@ -1550,25 +2005,36 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors }
 
     {actorEgress ? <section style={styles.section}>
       <SectionHeader title={t('actorConnection')} description={t('actorDescription')} />
+      <ApifyOAuthCard state={oauth} t={t} locale={intlLocale} busy={oauthBusy}
+        onStart={() => { void startOAuth(); }}
+        onCancel={() => { void cancelOAuth(); }}
+        onLogout={() => { void logoutOAuth(); }}
+        onRetry={retryOAuth} />
       {usage.status === 'error' && usage.code === 'no-token' ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
       <div style={styles.usageBlock}>
         <ApifyUsageCard state={usage} t={t} locale={intlLocale}
           onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />
       </div>
-      <Field label={t('token')} hint={t('tokenHint')}>
-        <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
-          placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}
-          onChange={event => edit({ token: event.target.value })} />
-        <p style={styles.hint}>{tokenSet
-          ? t('tokenStateSet')
-          : usage.status === 'ready' && usage.data.source === 'env' ? t('tokenStateEnv') : t('tokenStateUnset')}</p>
-        {validation.tokenWarning ? <p style={styles.warning}>{validation.tokenWarning}</p> : null}
-        {tokenSet ? <div style={styles.switchRow}>
-          <span>{t('clearToken')}</span>
-          <Switch label={t('clearToken')} checked={draft.clearToken} disabled={!editable}
-            onChange={checked => edit({ clearToken: checked })} />
-        </div> : null}
-      </Field>
+      <details style={styles.section}>
+        <summary style={styles.summary}>
+          <span style={styles.sectionTitle}>{t('manualTokenSummary')}</span>
+          <span style={styles.sectionDescription}>{t('manualTokenDescription')}</span>
+        </summary>
+        <Field label={t('token')} hint={t('tokenHint')}>
+          <input style={styles.input} type="password" autoComplete="new-password" value={draft.token} disabled={!editable}
+            placeholder={tokenSet ? t('tokenStored') : t('tokenEmpty')}
+            onChange={event => edit({ token: event.target.value })} />
+          <p style={styles.hint}>{tokenSet
+            ? t('tokenStateSet')
+            : usage.status === 'ready' && usage.data.source === 'env' ? t('tokenStateEnv') : t('tokenStateUnset')}</p>
+          {validation.tokenWarning ? <p style={styles.warning}>{validation.tokenWarning}</p> : null}
+          {tokenSet ? <div style={styles.switchRow}>
+            <span>{t('clearToken')}</span>
+            <Switch label={t('clearToken')} checked={draft.clearToken} disabled={!editable}
+              onChange={checked => edit({ clearToken: checked })} />
+          </div> : null}
+        </Field>
+      </details>
       {ownEgress ? <>
         <div style={styles.field}>
           <div style={styles.switchRow}>

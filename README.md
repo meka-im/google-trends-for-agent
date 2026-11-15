@@ -42,9 +42,23 @@
 1. [Fork the repository](https://github.com/meka-im/google-trends-for-agent/fork).
 2. In Apify Console, create an Actor with **Link Git repository** (branch `main`) or run `apify push` from a clone.
 3. Build it, then enable **Standby** under Settings → Server.
-4. Point clients at `https://<user>--<actor>.apify.actor/mcp` with an Apify token.
+4. In a client that supports remote MCP OAuth, add `https://<user>--<actor>.apify.actor/mcp` and complete the Apify sign-in from the client.
 
-Remote MCP over the public Standby endpoint. Create a token at [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations):
+For OAuth-capable clients, configure only the Standby Actor URL for the deployment you intend to use; the example below uses the public deployment. The client handles Apify's OAuth flow; do not construct a token URL or authorization URL by hand:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
+    }
+  }
+}
+```
+
+Apify's current OAuth scope is `full_api_access`: it grants full Apify API access, not access limited to this Actor or tool. Native OAuth registration and all four tools have been exercised with GrokBot against this URL; compatibility is client-specific, and strict OAuth clients can fail discovery (see the [reference](docs/reference.md#remote-mcp-authentication)). Remote MCP clients manage their own authorization and renewal flow; the Actor does not handle OAuth token refresh. [Apify's official gateway](https://mcp.apify.com) also supports OAuth, but it may expose this project's tools as Actor calls rather than the same four direct tool names.
+
+For a client that does not support MCP OAuth, create a token at [Apify Console → Settings → Integrations](https://console.apify.com/settings/integrations) and use the Bearer header as a compatibility fallback:
 
 ```json
 {
@@ -61,13 +75,13 @@ The same open-source code serves all three routes; HTTP and one-off details are 
 
 ## Install & quick start
 
-The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run. The pinned ref below is a reviewed source commit, not a release tag. Omit the ref only when intentionally tracking the current `main`.
+The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the GitHub checkout on first run. The commands below follow the repository's `main` branch.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa snapshot Sora --geo US --json --pretty
+npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 ```
 
-The full-SHA GitHub `npx` entry was verified with npm 11.19.1. npm 10.9.4 can build the same full-SHA dependency and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → checkout → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
+Building the GitHub dependency was verified with npm 11.19.1. npm 10.9.4 can build it and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
 
 The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
 
@@ -76,10 +90,11 @@ Persistent install (clone first because npm global git installs can omit build d
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
 cd google-trends-for-agent
-git checkout --detach 56dc29bff769530f2e59f5565a873a26e50feee2
 npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
+
+The clone tracks the repository's default `main` branch. If your review process requires an immutable source revision, add your own commit pin rather than relying on a moving branch.
 
 The packed tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
 
@@ -87,7 +102,7 @@ The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2", "gtfa-mcp"] } }
+  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"] } }
 }
 ```
 
@@ -102,7 +117,7 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 Check both package-download and data-fetch connectivity:
@@ -133,7 +148,11 @@ pnpm's box may wrap the key across lines — copy it from this template, only th
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor**. Click **Save** to apply changes; no restart is needed. The bundle adds the four tools as native in-process tools plus a `gtfa` skill; token storage, the usage card, and Test connection are covered in the [dsh plugin reference](docs/reference.md#dsh-plugin).
+The plugin is enabled by default after install and still exposes the same four native tools plus a `gtfa` skill. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. Choose **Local (this machine)**, **Public Actor (meka.im)**, or **My own Actor** under **Egress**, then click **Save**; login itself needs no Save. When the Host provides its credentials service, both Actor routes offer **Sign in with Apify**: the page shows Apify's official authorization link and user code, checks pending status every 2 seconds while honoring Apify's polling interval (including `slow_down`), pauses when closed, resumes when reopened, and restarts an expired attempt. Apify's only current device OAuth scope is `full_api_access`—full Apify API access, not access limited to this Actor or tool.
+
+Credentials are re-resolved on every operation: a stored OAuth session is used first; only when none is stored does the plugin use the saved config token, then `APIFY_TOKEN`. A stored session that is expired or damaged and cannot be refreshed requires signing in again; it does not silently fall back or report success. OAuth credentials do not enter browser-visible status or model-visible tool input/output; Host-internal code resolves them through the credentials service. Without that service, OAuth is unavailable, while local egress, the manual token, and `APIFY_TOKEN` still work. For the dsh device flow, the current access token is long-lived with no refresh token; future standard expiry/refresh responses can be handled by the plugin.
+
+Persistence is delegated to the dsh credentials service/provider-managed store, separate from the profile; backend location, record keys, and schema can vary. The current local file-backed provider uses owner-only `0700` directory and `0600` file permissions when applicable; it is not an OS Keychain or encrypted storage and cannot stop other processes under the same OS user from reading it. The manual token remains an **Advanced / fallback** option and is still stored in plaintext in `cordis.patch.yml` (mode `0600`), hidden in the UI, never logged, and absent from browser-visible status and model-visible tool input/output. **Cancel** only stops a pending flow. **Sign out** removes the stored OAuth session but retains reusable client registration according to the provider backend; it does **not** revoke the cloud authorization, so use Apify Console for that. See the [dsh plugin reference](docs/reference.md#dsh-plugin) for routes and lifecycle details.
 
 The tools are called from chat; the plugin page is configuration only.
 

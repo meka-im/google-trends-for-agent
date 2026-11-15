@@ -1,5 +1,13 @@
 import { createApifyAccountClient, type ApifyUsageResult, type ApifyUsageSource } from './apify-account.js';
 import {
+  APIFY_OAUTH_CANCEL_PATH,
+  APIFY_OAUTH_LOGOUT_PATH,
+  APIFY_OAUTH_START_PATH,
+  APIFY_OAUTH_STATUS_PATH,
+  type ApifyOAuthManager,
+  type OAuthTokenResolution,
+} from './apify-oauth.js';
+import {
   createActorRelayTransport,
   createApifyActorClient,
   resolveApifyApiToken,
@@ -34,6 +42,8 @@ export interface RouteOverrides {
   actorOptions?: ApifyActorClientOptions;
   /** Clock override for latency assertions. */
   now?: () => number;
+  /** OAuth manager used by account and connection routes. */
+  oauth?: ApifyOAuthManager;
 }
 
 export type TestConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy';
@@ -119,6 +129,7 @@ export async function testConnection(options: {
   signal?: AbortSignal;
   timeoutMs?: number;
   now?: () => number;
+  oauth?: ApifyOAuthManager;
 }): Promise<TestConnectionResult> {
   const clock = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -153,9 +164,19 @@ export async function testConnection(options: {
     return failure(options.egress, 'network', `Unsupported egress "${String(options.egress)}".`, 0);
   }
 
-  const resolved = resolveApifyApiToken(options.apifyToken);
+  const resolved: OAuthTokenResolution = options.oauth
+    ? await options.oauth.resolveToken(options.apifyToken)
+    : (() => {
+      const legacy = resolveApifyApiToken(options.apifyToken);
+      return legacy.token ? { token: legacy.token, source: legacy.source } : {};
+    })();
   if (!resolved.token) {
-    return failure(options.egress, 'no-token', 'Add an Apify token (or set APIFY_TOKEN) to use an Actor egress.', 0);
+    return failure(
+      options.egress,
+      resolved.message ? 'invalid-token' : 'no-token',
+      resolved.message ?? 'Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to use an Actor egress.',
+      0,
+    );
   }
   const actorId = options.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : options.apifyActor?.trim();
   if (!actorId) {
@@ -231,6 +252,20 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
   let deploying = false;
   const disposers: Array<() => Promise<void>> = [];
 
+  const resolveRouteToken = async (legacyToken?: string): Promise<OAuthTokenResolution> => {
+    if (overrides.oauth) return overrides.oauth.resolveToken(legacyToken);
+    const resolved = resolveApifyApiToken(legacyToken);
+    return resolved.token ? { token: resolved.token, source: resolved.source } : {};
+  };
+
+  const tokenFailure = (resolved: OAuthTokenResolution, action: string): ApifyUsageResult => {
+    if (resolved.code === 'network') {
+      return { ok: false, code: 'network', message: resolved.message ?? `Could not reach Apify while trying to ${action}.` };
+    }
+    if (resolved.code) return { ok: false, code: 'invalid-token', message: resolved.message ?? `Apify OAuth could not ${action}.` };
+    return { ok: false, code: 'no-token', message: `Sign in with Apify in Plugins → Google Trends, or use the advanced manual token or APIFY_TOKEN, to ${action}.` };
+  };
+
   disposers.push(service.fetch.register({
     path: APIFY_USAGE_PATH,
     methods: ['GET'],
@@ -238,10 +273,10 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     fetch: async request => {
       const refresh = new URL(request.url).searchParams.get('refresh') === '1';
       const settings = getSettings();
-      const resolved = resolveApifyApiToken(settings.apifyToken);
+      const resolved = await resolveRouteToken(settings.apifyToken);
       let result: ApifyUsageResult;
       if (!resolved.token) {
-        result = { ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to see usage.' };
+        result = tokenFailure(resolved, 'see usage');
       } else {
         result = await account.usage({
           token: resolved.token,
@@ -261,8 +296,8 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     fetch: async request => {
       const refresh = new URL(request.url).searchParams.get('refresh') === '1';
       const settings = getSettings();
-      const resolved = resolveApifyApiToken(settings.apifyToken);
-      if (!resolved.token) return json({ ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to list your Actors.' });
+      const resolved = await resolveRouteToken(settings.apifyToken);
+      if (!resolved.token) return json(tokenFailure(resolved, 'list your Actors'));
       return json(await actors.listMyActors(resolved.token, { refresh, signal: request.signal }));
     },
   }));
@@ -275,10 +310,10 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       if (deploying) {
         return json({ ok: false, code: 'busy', message: 'A deploy is already running. Try again in a moment.' }, 429);
       }
-      const resolved = resolveApifyApiToken(getSettings().apifyToken);
-      if (!resolved.token) return json({ ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to deploy the Actor.' });
       deploying = true;
       try {
+        const resolved = await resolveRouteToken(getSettings().apifyToken);
+        if (!resolved.token) return json(tokenFailure(resolved, 'deploy the Actor'));
         return json(await actors.deployActor(resolved.token));
       } finally {
         deploying = false;
@@ -303,6 +338,7 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           apifyActor: settings.apifyActor,
           localTransport: overrides.localTransport,
           relayTransport: overrides.relayTransport,
+          oauth: overrides.oauth,
           signal: request.signal,
           now: overrides.now,
         });
@@ -312,6 +348,63 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       }
     },
   }));
+
+  const rejectCrossSite = (request: Request): Response | undefined => {
+    const site = request.headers.get('sec-fetch-site')?.toLowerCase();
+    if (site && !['same-origin', 'same-site', 'none'].includes(site)) {
+      return json({ error: 'cross-site request rejected' }, 403);
+    }
+    const origin = request.headers.get('origin');
+    if (origin) {
+      try {
+        if (new URL(origin).origin !== new URL(request.url).origin) {
+          return json({ error: 'cross-site request rejected' }, 403);
+        }
+      } catch {
+        return json({ error: 'cross-site request rejected' }, 403);
+      }
+    }
+    return undefined;
+  };
+
+  const oauthRoute = (path: string, methods: readonly ('POST')[], run: (request: Request) => Promise<unknown>) => {
+    if (!overrides.oauth) return;
+    disposers.push(service.fetch!.register({
+      path,
+      methods,
+      requestBody: 'buffered',
+      fetch: async request => {
+        if (!methods.includes(request.method as 'POST')) {
+          return json({ error: 'method not allowed' }, 405);
+        }
+        const rejected = rejectCrossSite(request);
+        if (rejected) return rejected;
+        try {
+          return json(await run(request));
+        } catch {
+          return json({ available: true, connected: false, pending: false, code: 'network', message: 'Could not complete the OAuth request. Try again.' }, 500);
+        }
+      },
+    }));
+  };
+
+  if (overrides.oauth) {
+    disposers.push(service.fetch.register({
+      path: APIFY_OAUTH_STATUS_PATH,
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async request => {
+        try {
+          return json(await overrides.oauth!.status(request.signal));
+        } catch {
+          return json({ available: true, connected: false, pending: false, code: 'network', message: 'Could not read OAuth status. Try again.' }, 500);
+        }
+      },
+    }));
+    oauthRoute(APIFY_OAUTH_START_PATH, ['POST'], request => overrides.oauth!.start(request.signal));
+    oauthRoute(APIFY_OAUTH_CANCEL_PATH, ['POST'], () => overrides.oauth!.cancel());
+    oauthRoute(APIFY_OAUTH_LOGOUT_PATH, ['POST'], () => overrides.oauth!.logout());
+  }
 
   return () => {
     for (const dispose of disposers) void dispose();

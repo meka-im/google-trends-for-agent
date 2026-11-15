@@ -25,7 +25,25 @@ Paste this input and press **Start**. The run executes one tool and exits with d
 
 Use `ask`, `snapshot`, `compare` or `now` for `tool`. `ask` and `snapshot` run one call per term; `compare` takes 1–5 distinct terms; `now` ignores `terms` and returns trending searches for `geo`. In an `ask`/`snapshot` batch, a block or rate limit stops the batch and later terms are written as `skipped` rows.
 
-### MCP client
+### MCP client (OAuth preferred)
+
+In a client that supports remote MCP OAuth, configure only the Actor URL and complete Apify's sign-in from the client. Do not construct an authorization URL or token URL by hand:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://meka-im--google-trends-for-agent.apify.actor/mcp"
+    }
+  }
+}
+```
+
+Apify's current OAuth scope is `full_api_access`. Authorizing grants full Apify API access, not access limited to this Actor or tool. OAuth discovery and authorization are provided by Apify's endpoint; this project does not add a separate OAuth server or change the Actor edge.
+
+### MCP client (Bearer fallback)
+
+For a client without remote MCP OAuth, use an Apify token as a compatibility fallback:
 
 ```json
 {
@@ -51,8 +69,8 @@ curl -X POST 'https://meka-im--google-trends-for-agent.apify.actor/tools/trends_
 
 | Route | Setup | Cost |
 | --- | --- | --- |
-| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent#56dc29bff769530f2e59f5565a873a26e50feee2 gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. This pins reviewed source commit `56dc29bff769530f2e59f5565a873a26e50feee2`, not a release tag. | Free. |
-| This Actor | Use the Standby URL or one-off runs with your Apify token. Nothing to deploy. | Apify platform usage in your account; no Actor fee. |
+| Local (your IP) | `npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US`, or install the dsh plugin; requests leave your machine. No Apify account. The command follows the repository's `main` branch. | Free. |
+| This Actor | Use the Standby URL with MCP OAuth when supported (Bearer only as fallback), or run one-off jobs. Nothing to deploy. | Apify platform usage in your account; no Actor fee. |
 | Self-deploy | Put the same open-source code in your own account: dsh plugin one-click, Console → Link Git repository, or `apify push`. | Apify platform usage in your account. |
 
 The public Standby endpoint does not pass Actor Run input; each MCP or HTTP request supplies its own arguments.
@@ -188,14 +206,20 @@ The `OUTPUT` key-value record summarizes the run:
 
 ## MCP and HTTP API
 
-| Endpoint | Purpose |
-| --- | --- |
-| `/mcp` | Streamable HTTP MCP endpoint (`tools/list`, `tools/call`). |
-| `POST /tools/{name}` | Run `trends_ask`, `trends_snapshot`, `trends_compare` or `trends_now` directly. |
-| `POST /egress/fetch` | Relay one request; only `https://trends.google.com/...` is allowed. |
-| `GET /health` | Cheap JSON: `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set. No Google call. |
+| Endpoint | Authentication | Purpose |
+| --- | --- | --- |
+| `/mcp` | OAuth preferred; Bearer fallback | Streamable HTTP MCP endpoint (`tools/list`, `tools/call`). |
+| `POST /tools/{name}` | Bearer | Run `trends_ask`, `trends_snapshot`, `trends_compare` or `trends_now` directly. |
+| `POST /egress/fetch` | Bearer | Relay one request; only `https://trends.google.com/...` is allowed. |
+| `GET /health` | Bearer | Cheap JSON: `{ ok, version, relay: 1, build? }`; `build` is present when `ACTOR_BUILD_NUMBER` is set. No Google call. |
 
-All endpoints use `Authorization: Bearer <YOUR_APIFY_TOKEN>`. Startup overhead is extra time on the first call after idle; a cold Standby start can occasionally take up to ~2 minutes. Each tool call has a 300 s deadline, and cancellation aborts the in-flight work.
+The remote MCP endpoint is OAuth-first for clients that support Apify's remote OAuth flow. Its known verified case is the GrokBot client using native OAuth registration (client name `gtfa-apify`) and exercising all four tools against this Actor URL. This is not a universal compatibility claim: strict clients may fail discovery because the anonymous protected-resource metadata is incomplete and an anonymous `/mcp` 401 can omit `WWW-Authenticate`. [Apify's official gateway](https://mcp.apify.com) supports OAuth as an alternative, but it may expose this project's tools as Actor calls rather than the same four direct tool names.
+
+Bearer remains supported for MCP clients without OAuth and for the plain HTTP API. Remote MCP clients manage their own OAuth authorization and renewal flow; the Actor itself does not handle OAuth token refresh.
+
+The public Apify deployment currently reports package `0.2.3` and Actor build `0.1.15`. The repository version is `0.2.5`; this does not mean the public deployment has been upgraded.
+
+Startup overhead is extra time on the first call after idle; a cold Standby start can occasionally take up to ~2 minutes. Each tool call has a 300 s deadline, and cancellation aborts the in-flight work.
 
 Logging is minimal: for Standby requests the Actor logs the method and path only; one-off runs log row counts and statuses, never terms. Errors are logged by code without upstream URLs; query strings, headers, bodies and tokens are never logged.
 

@@ -4,7 +4,7 @@ import { abortError, raceAbort } from './transport.js';
 const LIMITS_URL = 'https://api.apify.com/v2/users/me/limits';
 const ME_URL = 'https://api.apify.com/v2/users/me';
 
-export type ApifyUsageSource = 'config' | 'env';
+export type ApifyUsageSource = 'config' | 'env' | 'oauth';
 export type ApifyUsageErrorCode = 'no-token' | 'invalid-token' | 'network' | 'http';
 
 export interface ApifyPlan {
