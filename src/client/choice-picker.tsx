@@ -12,9 +12,11 @@ export interface ChoiceOption {
 
 const fold = (text: string) => text.normalize('NFKC').toLocaleLowerCase().trim();
 
-/** Searchable, keyboard-accessible select for the two query defaults. */
-export function ChoicePicker({ label, hint, icon, placeholder, emptyText, options, value, disabled, onChange }: {
-  label: string; hint?: string; icon: string; placeholder: string; emptyText: string;
+/** Keyboard-accessible choice control; searching never changes the saved selection. */
+export function ChoicePicker({ label, hint, icon, placeholder, emptyText, options, value, disabled,
+  compact = false, hideLabel = false, searchable = true, onChange }: {
+  label: string; hint?: string; icon?: string; placeholder: string; emptyText: string;
+  compact?: boolean; hideLabel?: boolean; searchable?: boolean;
   options: readonly ChoiceOption[]; value: string; disabled: boolean; onChange: (value: string) => void;
 }) {
   const id = useId();
@@ -69,8 +71,8 @@ export function ChoicePicker({ label, hint, icon, placeholder, emptyText, option
   useEffect(() => { if (disabled) { setOpen(false); setQuery(''); } }, [disabled]);
 
   const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing || event.key === 'Process') { if (!visible) expand(); return; }
-    if (!visible && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (searchable && (event.nativeEvent.isComposing || event.key === 'Process')) { if (!visible) expand(); return; }
+    if (searchable && !visible && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault(); expand(); setQuery(event.key); setActive(0); return;
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -86,18 +88,18 @@ export function ChoicePicker({ label, hint, icon, placeholder, emptyText, option
     } else if (event.key === 'Tab') close();
   };
 
-  return <div className="gtfa-choice-field">
-    <label htmlFor={`${id}-input`}>{label}</label>
+  return <div className={`gtfa-choice-field${compact ? ' compact' : ''}`}>
+    <label className={hideLabel ? 'gtfa-sr-only' : undefined} htmlFor={`${id}-input`}>{label}</label>
     <div ref={root} className={`gtfa-choice${visible ? ' open' : ''}${disabled ? ' disabled' : ''}`}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
       <div className="gtfa-choice-control">
-        <span className="gtfa-choice-icon"><Icon name={icon} size={17} /></span>
+        {icon ? <span className="gtfa-choice-icon"><Icon name={icon} size={17} /></span> : null}
         <input ref={input} id={`${id}-input`} role="combobox" type="text" autoComplete="off" spellCheck={false}
-          aria-expanded={visible} aria-autocomplete="list" aria-haspopup="listbox"
+          aria-expanded={visible} aria-autocomplete={searchable ? 'list' : 'none'} aria-haspopup="listbox"
           aria-controls={visible ? `${id}-list` : undefined} aria-describedby={hint ? `${id}-hint` : undefined}
           aria-activedescendant={visible && filtered.length ? `${id}-option-${activeIndex}` : undefined}
-          value={visible ? query : selected?.label ?? value} placeholder={visible ? placeholder : selected?.label ?? value}
-          disabled={disabled} readOnly={!visible} onFocus={expand} onClick={expand} onKeyDown={keyDown}
+          value={visible && searchable ? query : selected?.label ?? value} placeholder={visible && searchable ? placeholder : selected?.label ?? value}
+          disabled={disabled} readOnly={!visible || !searchable} onFocus={expand} onClick={expand} onKeyDown={keyDown}
           onChange={event => { if (!visible) expand(); setQuery(event.target.value); setActive(0); }} />
         <button type="button" className="gtfa-choice-toggle" aria-label={label} tabIndex={-1} disabled={disabled}
           onMouseDown={event => event.preventDefault()} onClick={() => { if (visible) close(); else expand(); input.current?.focus(); }}>

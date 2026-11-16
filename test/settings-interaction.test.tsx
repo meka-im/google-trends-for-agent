@@ -438,6 +438,110 @@ describe('query-default pickers', () => {
   });
 });
 
+describe('baseline editor', () => {
+  const pick = async (user: ReturnType<typeof userEvent.setup>, label: string, option: string | RegExp) => {
+    await user.click(screen.getByRole('combobox', { name: label }));
+    await user.click(within(screen.getByRole('listbox', { name: label })).getByRole('option', { name: option }));
+  };
+  const sampleBaselines = () => ({ anchors: [
+    { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
+  ], windowAnchors: { short: 'research', long: 'gpts' } });
+
+  it('edits region, daily searches, tolerance and windows without writing until Save', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    const toggle = screen.getByRole('switch', { name: t('overrideBaselines') });
+    await user.click(toggle);
+    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` }) as HTMLInputElement).value).toBe('3500');
+    const geo = screen.getByRole('combobox', { name: `${t('anchorGeo')} gpts` });
+    await user.click(geo);
+    expect(screen.queryByRole('option', { name: t('geoWorldwide') })).toBeNull();
+    await user.type(geo, 'gb');
+    await user.click(screen.getByRole('option', { name: regionLabel('GB', 'en') }));
+    const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` });
+    await user.clear(daily); await user.type(daily, '4200');
+    const tolerance = screen.getByRole('combobox', { name: `${t('anchorTolerance')} gpts` }) as HTMLInputElement;
+    await user.click(tolerance);
+    expect(tolerance.readOnly).toBe(true);
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(tolerance.value).toBe('±25%');
+    await pick(user, t('windowShort'), /^gpts/);
+    await user.click(toggle); await user.click(toggle);
+    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` }) as HTMLInputElement).value).toBe('4200');
+    expect((screen.getByRole('combobox', { name: t('windowLong') }) as HTMLInputElement).value).toBe(`${t('windowDefault')} · gpts`);
+    expect(backend.saved().baselines).toBeUndefined();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
+      { term: 'gpts', geo: 'GB', dailySearches: 4200, tolerance: 0.25 },
+      { term: 'sudoku', geo: 'US', dailySearches: 63000, tolerance: 0.5 },
+    ], windowAnchors: { short: 'gpts' } }));
+  });
+
+  it('adds and removes anchors, preserves custom tolerance and saves a pending new row', async () => {
+    const backend = host({ baselines: sampleBaselines() }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    await user.click(screen.getByRole('combobox', { name: `${t('anchorTolerance')} research` }));
+    expect(screen.getByRole('option', { name: '±20%' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('option', { name: '±10%' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: '±100%' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'chairs');
+    await user.type(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` }), '9000');
+    await pick(user, `${t('anchorGeo')} ${t('newAnchorTerm')}`, regionLabel('GB', 'en'));
+    await pick(user, `${t('anchorTolerance')} ${t('newAnchorTerm')}`, '±10%');
+    await user.click(button('addAnchor'));
+    expect(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} chairs` })).toBeTruthy();
+    await pick(user, t('windowLong'), 'chairs');
+    await user.click(screen.getByRole('button', { name: `${t('remove')} research` }));
+    expect(button('save').disabled).toBe(true); // The short window still references the removed anchor.
+    await pick(user, t('windowShort'), `${t('windowDefault')} · sudoku`);
+    await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'puzzle');
+    await user.type(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` }), '500');
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
+      { term: 'chairs', geo: 'GB', dailySearches: 9000, tolerance: 0.1 },
+      { term: 'puzzle', geo: 'US', dailySearches: 500, tolerance: 0.5 },
+    ], windowAnchors: { long: 'chairs' } }));
+  });
+
+  it('blocks duplicate anchors and invalid daily searches, then saves the original custom tolerance', async () => {
+    const backend = host({ baselines: sampleBaselines() }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    const term = screen.getByRole('textbox', { name: t('newAnchorTerm') });
+    const newDaily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` });
+    await user.type(term, ' RESEARCH '); await user.type(newDaily, '100');
+    expect(screen.getByText(t('duplicateAnchor'))).toBeTruthy();
+    expect(button('addAnchor').disabled).toBe(true); expect(button('save').disabled).toBe(true);
+    await user.clear(term); await user.clear(newDaily);
+    const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} research` });
+    for (const invalid of ['0', '-1']) {
+      await user.clear(daily); await user.type(daily, invalid);
+      expect(daily.getAttribute('aria-invalid')).toBe('true'); expect(button('save').disabled).toBe(true);
+    }
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.clear(daily); await user.type(daily, '1500');
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toEqual({ ...sampleBaselines(), anchors: [
+      { term: 'research', geo: 'US', dailySearches: 1500, tolerance: 0.2 },
+    ] }));
+  });
+
+  it('keeps the editor read-only when Host configuration is not writable', async () => {
+    const backend = host({ baselines: sampleBaselines() }, false); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    for (const name of [`${t('anchorGeo')} research`, `${t('anchorTolerance')} research`, t('windowShort'), t('windowLong')]) {
+      const picker = screen.getByRole('combobox', { name }) as HTMLInputElement;
+      expect(picker.disabled).toBe(true); await user.click(picker);
+    }
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect((screen.getByRole('switch', { name: t('overrideBaselines') }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: `${t('remove')} research` }) as HTMLButtonElement).disabled).toBe(true);
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+});
+
 describe('Actor creation and selection', () => {
   function deployment() {
     const backend = host({ egress: 'actor-own', apifyActor: 'previous-account-actor' });
