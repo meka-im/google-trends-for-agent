@@ -371,6 +371,10 @@ export const EN: Record<string, string> = {
   actorConnection: 'Apify Actor',
   actorDescription: 'Apify sign-in, the Actor, and this cycle\'s Apify usage.',
   usageTitle: 'Apify usage',
+  usageCycle: 'Used this cycle',
+  usageRemaining: '{amount} remaining',
+  usageOverBudget: '{amount} over limit',
+  usagePercent: '{percent}% used',
   usageLoading: 'Loading Apify usage…',
   usageNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to see usage.',
   usageInvalidToken: 'Apify rejected the token or OAuth session (401). Sign in again or check the advanced manual token in Apify Console → Settings → API & Integrations.',
@@ -610,6 +614,10 @@ export const ZH: Record<string, string> = {
   actorConnection: 'Apify Actor',
   actorDescription: 'Apify 登录、Actor 和本计费周期的 Apify 用量。',
   usageTitle: 'Apify 用量',
+  usageCycle: '本周期已用',
+  usageRemaining: '剩余额度 {amount}',
+  usageOverBudget: '超出额度 {amount}',
+  usagePercent: '已用 {percent}%',
   usageLoading: '正在加载 Apify 用量…',
   usageNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可查看用量。',
   usageInvalidToken: 'Apify 拒绝了该 Token 或 OAuth 会话（401）。请重新登录，或在 Apify Console → Settings → API & Integrations 中检查高级设置里的手动 Token。',
@@ -768,7 +776,6 @@ const styles: Record<string, CSSProperties> = {
   error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
   summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px', cursor: 'pointer' },
   connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)' },
-  usageCard: { padding: '12px 18px', borderTop: '1px solid var(--gtfa-line)', borderRadius: '0 0 12px 12px', background: 'var(--gtfa-surface)' },
   signupPrimary: { color: 'var(--gtfa-accent)', fontWeight: 550, textDecoration: 'none' },
   signupSecondary: { color: 'var(--gtfa-muted)', textDecoration: 'underline' },
   oauthCard: { display: 'grid', gap: 0 },
@@ -778,12 +785,7 @@ const styles: Record<string, CSSProperties> = {
   oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 34, padding: '7px 13px',
     borderRadius: 8, background: 'var(--gtfa-accent)', color: '#fff', fontSize: 12, fontWeight: 550, textDecoration: 'none' },
   usageBlock: { display: 'grid', gap: 6 },
-  usageHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  usageTitle: { fontSize: 11, color: 'var(--gtfa-muted)' },
-  usageAmount: { fontSize: 16, lineHeight: 1.3, fontWeight: 650, letterSpacing: '-.025em', fontVariantNumeric: 'tabular-nums' },
   usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
-  progressTrack: { height: 4, borderRadius: 4, overflow: 'hidden', background: 'var(--gtfa-hover)' },
-  progressFill: { height: '100%', borderRadius: 4, minWidth: 0, transition: 'width 180ms ease' },
   testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.6 },
 };
 
@@ -1581,10 +1583,9 @@ export function ApifyOAuthCard({
   </div>;
 }
 
-function ApifySignupBar({ t }: { t: Translate; locale: string }) {
+function ApifyCardArt({ className = 'gtfa-credit-art' }: { className?: string }) {
   const artId = useId().replace(/:/g, '');
-  return <aside className="gtfa-free-credit" aria-label={template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}>
-    <svg className="gtfa-credit-art" viewBox="0 0 340 300" fill="none" aria-hidden="true" focusable="false">
+  return <svg className={className} viewBox="0 0 340 300" fill="none" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={`${artId}-signal`} x1="0" y1="0" x2="210" y2="160" gradientUnits="userSpaceOnUse"><stop stopColor="#a9efdf" /><stop offset="1" stopColor="#4a93f5" /></linearGradient>
         <linearGradient id={`${artId}-blue`} x1="0" y1="0" x2="170" y2="110" gradientUnits="userSpaceOnUse"><stop stopColor="#99d4ff" /><stop offset="1" stopColor="#2e61e9" /></linearGradient>
@@ -1604,7 +1605,12 @@ function ApifySignupBar({ t }: { t: Translate; locale: string }) {
         <circle cx="24" cy="283" r="9" fill="white" fillOpacity=".3" />
         <path d="M44 282h36" stroke="white" strokeOpacity=".4" strokeWidth="5" strokeLinecap="round" />
       </g>
-    </svg>
+    </svg>;
+}
+
+function ApifySignupBar({ t }: { t: Translate; locale: string }) {
+  return <aside className="gtfa-free-credit" aria-label={template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}>
+    <ApifyCardArt />
     <div className="gtfa-free-credit-copy">
       <span className="gtfa-credit-eyebrow">{t('signupPlan')}</span>
       <div className="gtfa-credit-value"><strong>${APIFY_FREE_MONTHLY_CREDIT_USD}</strong><span>{t('signupMonthly')}</span></div>
@@ -1667,33 +1673,37 @@ export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshin
   onRetry: () => void;
   refreshing?: boolean;
 }) {
-  const refresh = <button type="button" className="gtfa-button" style={styles.buttonSmall}
+  const refresh = <button type="button" className="gtfa-button gtfa-usage-refresh" style={styles.buttonSmall}
     aria-label={t('usageRefresh')} title={t('usageRefresh')} disabled={refreshing || state.status === 'loading'} onClick={onRefresh}>
     <Icon name="refresh" size={13} /><span className="gtfa-sr-only">{t('usageRefresh')}</span>
   </button>;
-  return <div style={styles.usageCard} aria-label={t('usageTitle')}>
-    {state.status === 'ready' ? <UsageDetails data={state.data} t={t} locale={locale} actions={refresh} /> : <>
-      <div style={styles.usageHead}><span style={styles.usageTitle}>{t('usageTitle')}</span>{refresh}</div>
-      {state.status === 'error' ? <>
-        <p style={state.code === 'no-token' || state.code === 'invalid-token' ? styles.usageMeta : styles.fieldError} role="alert">
-          {usageErrorText(state, t)}
-        </p>
-        {state.code === 'network' || state.code === 'http' ? <button type="button" style={styles.buttonSmall} onClick={onRetry}>{t('usageRetry')}</button> : null}
-      </> : <p style={styles.usageMeta}>{t('usageLoading')}</p>}
-    </>}
-  </div>;
+  if (state.status === 'ready') return <section className="gtfa-usage-banner" aria-label={t('usageTitle')}>
+    <UsageDetails data={state.data} t={t} locale={locale} actions={refresh} />
+  </section>;
+  return <section className="gtfa-usage-banner" aria-label={t('usageTitle')}>
+    <ApifyCardArt className="gtfa-credit-art gtfa-usage-art" />
+    <div className="gtfa-usage-header"><span className="gtfa-credit-eyebrow">{t('usageTitle')}</span>{refresh}</div>
+    <div className="gtfa-usage-state" role={state.status === 'error' ? 'alert' : 'status'}>
+      <Icon name={state.status === 'error' ? 'alert' : 'refresh'} size={18} />
+      <p>{state.status === 'error' ? usageErrorText(state, t) : t('usageLoading')}</p>
+      {state.status === 'error' && (state.code === 'network' || state.code === 'http')
+        ? <button type="button" className="gtfa-button gtfa-usage-retry" style={styles.buttonSmall} onClick={onRetry}>{t('usageRetry')}</button> : null}
+    </div>
+  </section>;
 }
 
 function UsageDetails({ data, t, locale, actions }: { data: ApifyUsageData; t: Translate; locale: string; actions: ReactNode }) {
   const hasProgress = data.usageUsd !== null && data.limitUsd !== null && data.limitUsd > 0;
   const percent = hasProgress ? Math.min(100, Math.max(0, (data.usageUsd! / data.limitUsd!) * 100)) : 0;
   const color = !hasProgress
-    ? 'var(--dsw-alias-border-l3, rgba(127,127,127,.45))'
+    ? 'rgba(255,255,255,.3)'
     : percent > 90
-      ? 'var(--dsw-alias-state-error-primary, #d14343)'
+      ? '#ffb4ae'
       : percent >= 70
-        ? 'var(--dsw-alias-state-warning-primary, #d99a2b)'
-        : 'var(--dsw-alias-state-success-primary, #2f9e5f)';
+        ? '#ffe0a0'
+        : '#a9efdf';
+  const balance = data.usageUsd !== null && data.limitUsd !== null ? data.limitUsd - data.usageUsd : null;
+  const remaining = template(t(balance !== null && balance < 0 ? 'usageOverBudget' : 'usageRemaining'), { amount: money(balance === null ? null : Math.abs(balance)) });
 
   const planPrice = compactMoney(data.plan.monthlyBasePriceUsd);
   const plan = data.plan.tier === null && data.plan.monthlyBasePriceUsd === null
@@ -1723,15 +1733,27 @@ function UsageDetails({ data, t, locale, actions }: { data: ApifyUsageData; t: T
     : null;
 
   return <>
-    <div className="gtfa-usage-row">
-      <span style={styles.usageTitle}>{t('usageTitle')}</span>
-      <strong style={styles.usageAmount}>{usageMoney(data.usageUsd)} / {money(data.limitUsd)}</strong>
-      {data.plan.tier ? <span style={{ ...styles.pill, color: 'var(--gtfa-muted)', background: 'var(--gtfa-hover)' }}>{tierTitle(data.plan.tier)}</span> : null}
-      <div className="gtfa-progress" role="progressbar" aria-label={t('usageTitle')}
-        aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasProgress ? Math.round(percent) : undefined} style={styles.progressTrack}>
-        <div style={{ ...styles.progressFill, width: `${percent}%`, background: color }} />
-      </div>
+    <ApifyCardArt className="gtfa-credit-art gtfa-usage-art" />
+    <div className="gtfa-usage-header">
+      <span className="gtfa-credit-eyebrow">{t('usageTitle')}</span>
+      {data.plan.tier ? <span className="gtfa-usage-plan">{tierTitle(data.plan.tier)}</span> : null}
       {actions}
+    </div>
+    <div className="gtfa-usage-content">
+      <span className="gtfa-usage-cycle">{t('usageCycle')}</span>
+      <p className="gtfa-usage-total">
+        <span className="gtfa-sr-only">{usageMoney(data.usageUsd)} / {money(data.limitUsd)}</span>
+        <strong aria-hidden="true">{usageMoney(data.usageUsd)}</strong>
+        <span className="gtfa-usage-limit" aria-hidden="true"><span>/</span> {money(data.limitUsd)}</span>
+      </p>
+      <div className="gtfa-usage-meter">
+        <div className="gtfa-usage-progress" role="progressbar" aria-label={t('usageTitle')}
+          aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasProgress ? Math.round(percent) : undefined}>
+          <div style={{ width: `${percent}%`, background: color }} />
+        </div>
+        <div className="gtfa-usage-balance"><span className={balance !== null && balance < 0 ? 'over-limit' : ''}>{remaining}</span>
+          <span>{hasProgress ? template(t('usagePercent'), { percent: Math.round(percent) }) : '—'}</span></div>
+      </div>
     </div>
     <details className="gtfa-usage-details">
       <summary>{t('usageDetails')}</summary>
