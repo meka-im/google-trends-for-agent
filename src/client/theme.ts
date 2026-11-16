@@ -46,19 +46,19 @@ export const SETTINGS_CSS = `
 .gtfa-account-menu button:not(:disabled):hover { background:var(--gtfa-hover); }
 .gtfa-oauth-foot { padding:0 18px 15px; display:grid; gap:10px; }
 .gtfa-oauth-code-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
-.gtfa-free-credit { position:relative; isolation:isolate; overflow:hidden; container:gtfa-credit / inline-size; margin:0 18px 16px; padding:26px 28px 20px; border:1px solid #572292; border-radius:16px; color:#fff; background:radial-gradient(ellipse at 85% 0%,#7929c5 0%,transparent 58%),linear-gradient(115deg,#290b49 0%,#431173 70%,#521186 100%); }
-.gtfa-free-credit::before { content:''; position:absolute; z-index:-1; width:390px; height:390px; top:-290px; left:-120px; border-radius:50%; background:#7525b9; opacity:.22; }
+.gtfa-free-credit { position:relative; isolation:isolate; overflow:hidden; container:gtfa-credit / inline-size; margin:0 18px 16px; padding:26px 28px 20px; border:1px solid #2e61e9; border-radius:16px; color:#fff; background:radial-gradient(ellipse at 85% 0%,#4387ff 0%,transparent 58%),linear-gradient(115deg,#123b9d 0%,#2558d5 70%,#2e61e9 100%); }
+.gtfa-free-credit::before { content:''; position:absolute; z-index:-1; width:390px; height:390px; top:-290px; left:-120px; border-radius:50%; background:#5c91ff; opacity:.22; }
 .gtfa-free-credit-copy { position:relative; z-index:1; width:fit-content; max-width:100%; }
-.gtfa-credit-eyebrow { display:block; color:#ddc8f5; font-size:10px; font-weight:600; letter-spacing:1.4px; }
+.gtfa-credit-eyebrow { display:block; color:#d9e6ff; font-size:10px; font-weight:600; letter-spacing:1.4px; }
 .gtfa-credit-value { display:flex; align-items:baseline; flex-wrap:wrap; gap:12px; margin-top:9px; }
-.gtfa-credit-value strong { color:#ffbf47; font-size:58px; font-weight:750; letter-spacing:-2.5px; line-height:1.1; }
+.gtfa-credit-value strong { color:#a9efdf; font-size:58px; font-weight:750; letter-spacing:-2.5px; line-height:1.1; }
 .gtfa-credit-value>span { color:#fff; font-size:15px; font-weight:550; }
-.gtfa-free-credit-estimate { margin:8px 0 18px; font-size:13px; color:#f1e5ff; }
-.gtfa-free-credit-copy small { display:block; margin-top:13px; font-size:10px; color:#d4bfe9; }
+.gtfa-free-credit-estimate { margin:8px 0 18px; font-size:13px; color:#eef5ff; }
+.gtfa-free-credit-copy small { display:block; margin-top:13px; font-size:10px; color:#c7dbff; }
 .gtfa-free-credit-actions { display:flex; align-items:center; gap:18px; font-size:12px; }
-.gtfa-settings a.gtfa-credit-cta { display:inline-flex; align-items:center; padding:8px 16px; border-radius:7px; background:#ffbf47; color:#301044; font-weight:650; text-decoration:none; }
-.gtfa-settings a.gtfa-credit-cta:hover { background:#ffd27e; }
-.gtfa-settings a.gtfa-credit-pricing { color:#f0e4ff; text-decoration:none; }
+.gtfa-settings a.gtfa-credit-cta { display:inline-flex; align-items:center; padding:8px 16px; border-radius:7px; background:#a9efdf; color:#123377; font-weight:650; text-decoration:none; }
+.gtfa-settings a.gtfa-credit-cta:hover { background:#c7f7ed; }
+.gtfa-settings a.gtfa-credit-pricing { color:#eef5ff; text-decoration:none; }
 .gtfa-settings a.gtfa-credit-pricing:hover { text-decoration:underline; }
 .gtfa-free-credit a:focus-visible { outline-color:#fff; }
 .gtfa-credit-art { position:absolute; z-index:0; pointer-events:none; right:-40px; top:-15px; width:310px; height:300px; opacity:.9; mask-image:linear-gradient(90deg,transparent,#000 30%); }
