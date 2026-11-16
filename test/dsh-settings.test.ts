@@ -137,7 +137,7 @@ afterEach(() => {
 });
 
 describe('dsh settings form', () => {
-  it('renders choices as selects, a segmented control, and switches', () => {
+  it('renders choices as comboboxes, a segmented control, and switches', () => {
     const html = render();
     expect(html).toContain('role="tablist"');
     const routes = html.match(/<div role="tablist" aria-label="Egress"[\s\S]*?<\/div>/)?.[0];
@@ -145,9 +145,8 @@ describe('dsh settings form', () => {
     expect(html).toContain('aria-selected="true"');
     expect(html.match(/role="switch"/g)).toHaveLength(3);
     expect(html).not.toContain('type="checkbox"');
-    expect(html).toContain('<select');
+    expect(html).toContain('role="combobox"');
     expect(html).toContain('United States (US)');
-    expect(html).toContain('Worldwide');
     expect(html).toContain(EN.anchorAutomatic);
     expect(html).toContain('±50%');
   });
@@ -351,9 +350,8 @@ describe('dsh settings form', () => {
 
   it('derives fixed and window anchor options from built-ins and configured anchors', () => {
     const html = render();
-    expect(html).toContain('<option value="gpts">gpts</option>');
-    expect(html).toContain('<option value="sudoku">sudoku</option>');
-    expect(html).toContain('<option value="chacha">chacha</option>');
+    expect(html).toMatch(/role="combobox"[^>]*value="sudoku"/);
+    expect(html).toMatch(/role="combobox"[^>]*value="chacha"/);
     expect(html).toContain('aria-label="Short-window anchor"');
     expect(html).toContain('aria-label="Long-window anchor"');
     expect(html).toContain('aria-label="Geo chacha"');
@@ -363,7 +361,7 @@ describe('dsh settings form', () => {
     const local = render();
     const allInputs = [...local.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
     const pickers = allInputs.filter(input => input.includes('role="combobox"'));
-    expect(pickers).toHaveLength(2);
+    expect(pickers).toHaveLength(8);
     expect(pickers.every(input => input.includes('readonly=""'))).toBe(true);
     const localInputs = allInputs.filter(input => !input.includes('role="combobox"'));
     expect(localInputs.filter(input => input.includes('type="text"'))).toHaveLength(3);
@@ -378,15 +376,15 @@ describe('dsh settings form', () => {
     expect(apifyInputs).toHaveLength(6);
   });
 
-  it('shows Worldwide as the empty geo option and tolerances as selects', () => {
+  it('shows Worldwide only for query geo and uses choice controls for anchor tolerances', () => {
     const html = render({ value: { geo: '' } });
     expect(html).toMatch(/role="combobox"[^>]*value="Worldwide"/);
     expect(html).toContain('>Default geo</label>');
     // Anchors calibrate one country; only the query default can be Worldwide.
     expect(html.match(/value="Worldwide"/g)).toHaveLength(1);
     expect(html.match(/aria-label="Tolerance /g)).toHaveLength(2);
-    expect(html).toContain('<option value="0.1">±10%</option>');
-    expect(html).toContain('<option value="1">±100%</option>');
+    expect(html).toMatch(/role="combobox"[^>]*aria-autocomplete="none"[^>]*value="±50%"/);
+    expect(html).not.toContain('<select');
   });
 
   it('keeps stored tolerances exactly instead of rounding them to a preset', () => {
@@ -394,8 +392,8 @@ describe('dsh settings form', () => {
       { term: 'chacha', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
       { term: 'pizza', geo: 'GB', dailySearches: 9000 },
     ] } } });
-    expect(html).toContain('<option value="0.2" selected="">±20%</option>');
-    expect(html).toMatch(/aria-label="Tolerance pizza"><option value="" selected="">Default \(±50%\)<\/option>/);
+    expect(html).toMatch(/role="combobox"[^>]*value="±20%"/);
+    expect(html).toMatch(/role="combobox"[^>]*value="Default \(±50%\)"/);
   });
 });
 

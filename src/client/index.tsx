@@ -458,10 +458,10 @@ export const EN: Record<string, string> = {
   cache: 'Reuse saved snapshots',
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
   baselines: 'Anchors & baselines',
-  baselinesDescription: 'Override the built-in calibration anchors or add your own.',
-  baselinesHint: 'Keep the built-in US baselines, or customize them below.',
-  overrideBaselines: 'Override or add anchors',
-  anchorTerm: 'Term',
+  baselinesDescription: 'Set daily searches for each anchor to calibrate traffic estimates.',
+  baselinesHint: 'Using built-in US baselines. Turn on to customize.',
+  overrideBaselines: 'Custom baselines',
+  anchorTerm: 'Anchor term',
   newAnchorTerm: 'New anchor term',
   newAnchorTermRequired: 'Enter an anchor term.',
   anchorGeo: 'Geo',
@@ -479,7 +479,8 @@ export const EN: Record<string, string> = {
   windowShort: 'Short-window anchor',
   windowLong: 'Long-window anchor',
   windowDefault: 'Default',
-  windowHint: 'Optional. Short covers now 1-H, now 4-H, and now 1-d; long covers now 7-d and longer. Each term must be in the anchors list or the built-in anchors.',
+  windowShortHint: '24 hours and shorter',
+  windowLongHint: '7 days and longer',
   advanced: 'Advanced',
   advancedDescription: 'Calibration baselines, manual token, and file locations.',
   snapshotDir: 'Snapshot directory',
@@ -721,10 +722,10 @@ export const ZH: Record<string, string> = {
   cache: '复用近期快照',
   cacheHint: '6 小时内复用结果，减少重复请求。',
   baselines: '锚点与基线',
-  baselinesDescription: '覆盖内置校准锚点或添加自定义锚点。',
-  baselinesHint: '默认使用内置美国基线，也可在下方调整。',
-  overrideBaselines: '覆盖或新增锚点',
-  anchorTerm: '词',
+  baselinesDescription: '设置锚点词的每日搜索量，用于估算流量。',
+  baselinesHint: '当前使用内置美国基线，开启后可自定义。',
+  overrideBaselines: '自定义基线',
+  anchorTerm: '锚点词',
   newAnchorTerm: '新锚点词',
   newAnchorTermRequired: '请输入锚点词。',
   anchorGeo: '地区',
@@ -742,7 +743,8 @@ export const ZH: Record<string, string> = {
   windowShort: '短窗口锚点',
   windowLong: '长窗口锚点',
   windowDefault: '默认',
-  windowHint: '可选。短窗口包括 now 1-H、now 4-H、now 1-d；长窗口包括 now 7-d 及更长。词必须在锚点列表或内置锚点中。',
+  windowShortHint: '24 小时及以内',
+  windowLongHint: '7 天及以上',
   advanced: '高级',
   advancedDescription: '自定义锚点、手动 Token 与文件位置。',
   snapshotDir: '快照目录',
@@ -786,8 +788,6 @@ const styles: Record<string, CSSProperties> = {
   warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-warning-primary, #a87921)' },
   input: { boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 36, padding: '7px 11px', border: '1px solid var(--gtfa-line)',
     borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
-  select: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 36, padding: '0 28px 0 10px', border: '1px solid var(--gtfa-line)',
-    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
   segment: { position: 'relative', display: 'grid', gap: 12, padding: '14px 16px', minHeight: 102, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
     borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13, cursor: 'pointer' },
   segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)', boxShadow: 'inset 0 0 0 .5px var(--gtfa-accent)' },
@@ -797,13 +797,8 @@ const styles: Record<string, CSSProperties> = {
   switchOn: { background: 'var(--gtfa-accent)' },
   switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.08)', transition: 'transform 120ms ease' },
   switchThumbOn: { transform: 'translateX(14px)' },
-  anchorHead: { display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) minmax(130px,1fr) 118px 110px auto', gap: 8, alignItems: 'center',
-    fontSize: 11, color: 'var(--gtfa-muted)', paddingBottom: 9 },
-  anchorBlock: { display: 'grid', marginBottom: 8 },
-  anchorRow: { display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) minmax(130px,1fr) 118px 110px auto', gap: 8, alignItems: 'center' },
   readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '7px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
     fontSize: 12, overflowWrap: 'anywhere' },
-  windowRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 14 },
   saveBar: { position: 'sticky', bottom: 12, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
     marginTop: 0, marginBottom: 12, padding: '14px 18px', border: '1px solid var(--gtfa-save-border)', borderRadius: 12,
     background: 'var(--gtfa-save-surface)', boxShadow: 'var(--gtfa-save-shadow)' },
@@ -1879,23 +1874,6 @@ function AnchorCell({ label, children }: { label: string; children: ReactNode })
   return <div className="gtfa-anchor-cell"><span className="gtfa-anchor-cell-label" aria-hidden="true">{label}</span>{children}</div>;
 }
 
-function Select({ label, hint, value, options, onChange, disabled, ariaLabel }: {
-  label: string;
-  hint?: string;
-  value: string;
-  options: readonly { value: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled: boolean;
-  ariaLabel?: string;
-}) {
-  return <Field label={label} hint={hint}>
-    <select style={styles.select} aria-label={ariaLabel ?? label} value={value} disabled={disabled}
-      onChange={event => onChange(event.target.value)}>
-      {options.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-    </select>
-  </Field>;
-}
-
 function Segmented<V extends string>({ label, value, options, onChange, disabled }: {
   label: string;
   value: V;
@@ -1987,10 +1965,12 @@ export interface ConfigPageProps {
   initialOAuth?: ApifyOAuthView;
   /** Test seam for the initially selected advanced panel. */
   initialAdvancedTab?: 'anchors' | 'token' | 'files';
+  /** Preview/test seam; the Host settings page keeps Advanced collapsed by default. */
+  initialAdvancedOpen?: boolean;
 }
 
 /** Settings page. Exported for server-render tests. */
-export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors' }: ConfigPageProps) {
+export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors', initialAdvancedOpen = false }: ConfigPageProps) {
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -2000,7 +1980,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [draft, setDraft] = useState<Draft>(() => ({ ...fromSnapshot(snapshot.value), ...initialDraft }));
   const [baseline, setBaseline] = useState<string>(() => draftKey(fromSnapshot(snapshot.value)));
   const [busy, setBusy] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(initialAdvancedOpen);
   const [advancedTab, setAdvancedTab] = useState<'anchors' | 'token' | 'files'>(initialAdvancedTab);
   const advancedId = useId();
   const [notice, setNotice] = useState<string | null>(null);
@@ -2389,8 +2369,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     })), [anchorTerms, t]);
   const fixedAnchorOptions = useMemo(() =>
     [{ value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') }, ...anchorOptions], [anchorOptions, t]);
-  const windowOptions = useMemo(() =>
-    [{ value: '', label: t('windowDefault') }, ...anchorOptions], [anchorOptions, t]);
+  const shortWindowOptions = useMemo(() =>
+    [{ value: '', label: `${t('windowDefault')} · sudoku` }, ...anchorOptions], [anchorOptions, t]);
+  const longWindowOptions = useMemo(() =>
+    [{ value: '', label: `${t('windowDefault')} · gpts` }, ...anchorOptions], [anchorOptions, t]);
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
@@ -2538,75 +2520,78 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       </div>
       <div role="tabpanel" id={`${advancedId}-anchors-panel`} aria-labelledby={`${advancedId}-anchors-tab`}
         className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'anchors'} style={{ paddingBottom: 24 }}>
-        <SectionHeader title={t('baselines')} description={t('baselinesDescription')} />
-        <Toggle label={t('overrideBaselines')} hint={t('baselinesHint')} checked={draft.baselineOverride} disabled={!editable}
-          onChange={checked => edit(setBaselineOverride(draft, checked))} />
+        <div className="gtfa-baseline-heading">
+          <SectionHeader icon="sliders" title={t('baselines')}
+            description={t(draft.baselineOverride ? 'baselinesDescription' : 'baselinesHint')} />
+          <div className="gtfa-baseline-toggle"><span>{t('overrideBaselines')}</span>
+            <Switch label={t('overrideBaselines')} checked={draft.baselineOverride} disabled={!editable}
+              onChange={checked => edit(setBaselineOverride(draft, checked))} /></div>
+        </div>
         {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
-        {draft.baselineOverride ? <div className="gtfa-anchor-scroll"><div>
-          <div className="gtfa-anchor-head" style={styles.anchorHead}>
-            <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />
-          </div>
-          {draft.anchors.map((anchor, index) => <div className="gtfa-anchor-block" style={styles.anchorBlock} key={`${anchor.term}-${index}`}>
-            <div className="gtfa-anchor-row" style={styles.anchorRow}>
-              <AnchorCell label={t('anchorTerm')}><span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span></AnchorCell>
-              <AnchorCell label={t('anchorGeo')}>
-              <select style={styles.select} aria-label={`${t('anchorGeo')} ${anchor.term}`} value={anchor.geo} disabled={!editable}
-                onChange={event => editAnchor(index, { geo: event.target.value })}>
-                {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-              </select></AnchorCell>
-              <AnchorCell label={t('anchorDaily')}>
-              <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
-                aria-invalid={Boolean(validation.anchorRows[index])}
-                value={anchor.dailySearches} disabled={!editable}
-                onChange={event => editAnchor(index, { dailySearches: event.target.value })} /></AnchorCell>
-              <AnchorCell label={t('anchorTolerance')}>
-              <select style={styles.select} aria-label={`${t('anchorTolerance')} ${anchor.term}`} value={anchor.tolerance} disabled={!editable}
-                onChange={event => editAnchor(index, { tolerance: event.target.value })}>
-                {toleranceChoices(anchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select></AnchorCell>
-              <button type="button" style={styles.button} disabled={!editable}
-                onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}>{t('remove')}</button>
+        {draft.baselineOverride ? <>
+          <div className="gtfa-baseline-editor">
+            <div className="gtfa-anchor-head gtfa-anchor-grid" aria-hidden="true">
+              <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />
             </div>
-            {validation.anchorRows[index] ? <p style={styles.fieldError} role="alert">{validation.anchorRows[index]}</p> : null}
-          </div>)}
-          <div className="gtfa-anchor-block" style={styles.anchorBlock}>
-            <div className="gtfa-anchor-row" style={styles.anchorRow}>
-              <AnchorCell label={t('anchorTerm')}>
-              <input style={styles.input} type="text" aria-label={t('newAnchorTerm')} placeholder={t('newAnchorTerm')}
-                aria-invalid={Boolean(validation.newAnchorTerm)}
-                value={draft.newAnchor.term} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} /></AnchorCell>
-              <AnchorCell label={t('anchorGeo')}>
-              <select style={styles.select} aria-label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} value={draft.newAnchor.geo} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, geo: event.target.value } })}>
-                {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-              </select></AnchorCell>
-              <AnchorCell label={t('anchorDaily')}>
-              <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
-                aria-invalid={Boolean(validation.newAnchorDaily)}
-                value={draft.newAnchor.dailySearches} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} /></AnchorCell>
-              <AnchorCell label={t('anchorTolerance')}>
-              <select style={styles.select} aria-label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`} value={draft.newAnchor.tolerance} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
-                {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select></AnchorCell>
-              <button type="button" style={dim(styles.button, !editable || !newAnchorReady)} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
+            {draft.anchors.map((anchor, index) => <div className="gtfa-anchor-block" key={`${anchor.term}-${index}`}>
+              <div className="gtfa-anchor-row gtfa-anchor-grid">
+                <AnchorCell label={t('anchorTerm')}><span className="gtfa-anchor-term" title={anchor.term}>{anchor.term}</span></AnchorCell>
+                <AnchorCell label={t('anchorGeo')}>
+                  <ChoicePicker compact hideLabel label={`${t('anchorGeo')} ${anchor.term}`} placeholder={t('geoSearch')} emptyText={t('choiceEmpty')}
+                    value={anchor.geo} disabled={!editable} options={anchorGeoOptions}
+                    onChange={value => editAnchor(index, { geo: value })} /></AnchorCell>
+                <AnchorCell label={t('anchorDaily')}>
+                <input className="gtfa-anchor-input number" type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
+                  aria-invalid={Boolean(validation.anchorRows[index])}
+                  value={anchor.dailySearches} disabled={!editable}
+                  onChange={event => editAnchor(index, { dailySearches: event.target.value })} /></AnchorCell>
+                <AnchorCell label={t('anchorTolerance')}>
+                  <ChoicePicker compact hideLabel searchable={false} label={`${t('anchorTolerance')} ${anchor.term}`}
+                    placeholder={t('anchorTolerance')} emptyText={t('choiceEmpty')} value={anchor.tolerance} disabled={!editable}
+                    options={toleranceChoices(anchor.tolerance)} onChange={value => editAnchor(index, { tolerance: value })} /></AnchorCell>
+                <button type="button" className="gtfa-anchor-action remove" disabled={!editable}
+                  aria-label={`${t('remove')} ${anchor.term}`} title={`${t('remove')} ${anchor.term}`}
+                  onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}><Icon name="trash" size={16} /></button>
+              </div>
+              {validation.anchorRows[index] ? <p style={styles.fieldError} role="alert">{validation.anchorRows[index]}</p> : null}
+            </div>)}
+            <div className="gtfa-anchor-block gtfa-anchor-new">
+              <div className="gtfa-anchor-row gtfa-anchor-grid">
+                <AnchorCell label={t('anchorTerm')}>
+                <input className="gtfa-anchor-input" type="text" aria-label={t('newAnchorTerm')} placeholder={t('newAnchorTerm')}
+                  aria-invalid={Boolean(validation.newAnchorTerm)}
+                  value={draft.newAnchor.term} disabled={!editable}
+                  onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} /></AnchorCell>
+                <AnchorCell label={t('anchorGeo')}>
+                  <ChoicePicker compact hideLabel label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} placeholder={t('geoSearch')} emptyText={t('choiceEmpty')}
+                    value={draft.newAnchor.geo} disabled={!editable} options={anchorGeoOptions}
+                    onChange={value => edit({ newAnchor: { ...draft.newAnchor, geo: value } })} /></AnchorCell>
+                <AnchorCell label={t('anchorDaily')}>
+                <input className="gtfa-anchor-input number" type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
+                  aria-invalid={Boolean(validation.newAnchorDaily)}
+                  value={draft.newAnchor.dailySearches} disabled={!editable}
+                  onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} /></AnchorCell>
+                <AnchorCell label={t('anchorTolerance')}>
+                  <ChoicePicker compact hideLabel searchable={false} label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`}
+                    placeholder={t('anchorTolerance')} emptyText={t('choiceEmpty')} value={draft.newAnchor.tolerance} disabled={!editable}
+                    options={toleranceChoices(draft.newAnchor.tolerance)} onChange={value => edit({ newAnchor: { ...draft.newAnchor, tolerance: value } })} /></AnchorCell>
+                <button type="button" className="gtfa-anchor-action add" disabled={!editable || !newAnchorReady}
+                  aria-label={t('addAnchor')} title={t('addAnchor')} onClick={addAnchor}><Icon name="plus" size={17} /></button>
+              </div>
+              {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
+              {validation.newAnchorDaily ? <p style={styles.fieldError} role="alert">{validation.newAnchorDaily}</p> : null}
             </div>
-            {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
-            {validation.newAnchorDaily ? <p style={styles.fieldError} role="alert">{validation.newAnchorDaily}</p> : null}
           </div>
-          <div style={styles.windowRow}>
-            <Select label={t('windowShort')} value={draft.windowShort} disabled={!editable}
-              options={windowOptions}
+          <div className="gtfa-window-grid">
+            <ChoicePicker label={t('windowShort')} hint={t('windowShortHint')} icon="clock" value={draft.windowShort} disabled={!editable}
+              placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} options={shortWindowOptions}
               onChange={value => edit({ windowShort: value })} />
-            <Select label={t('windowLong')} value={draft.windowLong} disabled={!editable}
-              options={windowOptions}
+            <ChoicePicker label={t('windowLong')} hint={t('windowLongHint')} icon="clock" value={draft.windowLong} disabled={!editable}
+              placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} options={longWindowOptions}
               onChange={value => edit({ windowLong: value })} />
           </div>
           {validation.window ? <p style={styles.fieldError} role="alert">{validation.window}</p> : null}
-          <p style={styles.hint}>{t('windowHint')}</p>
-        </div></div> : null}
+        </> : null}
       </div>
       {actorEgress ? <div role="tabpanel" id={`${advancedId}-token-panel`} aria-labelledby={`${advancedId}-token-tab`}
         className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'token'} style={{ paddingBottom: 24 }}>
