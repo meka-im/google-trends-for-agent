@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Google Trends",
-    "description": "查询搜索趋势，比较关键词，生成带图快照。"
+    "description": "查询搜索趋势，比较关键词，生成带图快照。",
+    "detail": "README.zh-CN.md"
   }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8 — 2026-11-16
+
+- Map dsh's localized `meta.detail` to the packaged English and Simplified Chinese READMEs so plugin details follow the Host's display language.
+
 ## 0.2.7 — 2026-11-15
 
 - Replace dsh Actor egress with one bounded on-demand run per native tool call. Runs use 256 MB with a 300 s platform timeout, return the full envelope through TOOL_RESPONSE, and exit immediately. Local snapshot reuse starts no cloud run; validated history and local SVG files preserve existing native behavior.

@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Google Trends",
-    "description": "Search trends, compare keywords, and create calibrated snapshots."
+    "description": "Search trends, compare keywords, and create calibrated snapshots.",
+    "detail": "README.md"
   }
 }
