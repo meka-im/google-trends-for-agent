@@ -141,6 +141,8 @@ The tools are called from chat; the plugin page is configuration only.
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
+**Test connection** verifies connectivity and real data for ChatGPT, Gemini and weather together (US, past 24 hours). It shows each keyword's data-point counts and supports cancellation. Actor mode starts one usage-billed run after preflight, then exits; the check stops on challenges or rate limits without retrying.
+
 ## Term gallery
 
 <table>

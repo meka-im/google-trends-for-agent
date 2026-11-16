@@ -17,6 +17,12 @@ import {
 } from './apify-actor.js';
 import { abortError, createDefaultTransport, isChallengeResponse, raceAbort, type Transport } from './transport.js';
 import { GTFA_PUBLIC_ACTOR_ID, type EgressMode } from './options.js';
+import { GTrendsError } from './core.js';
+import { createTools } from './tools.js';
+import {
+  CONNECTION_FILTER, CONNECTION_KEYWORDS, CONNECTION_PROBE_PROTOCOL, connectionErrorCode,
+  emptyDataCheck, summarizeConnectionProbe, type ConnectionCode, type ConnectionDiagnostics, type ConnectionResult,
+} from './connection-check.js';
 
 export const APIFY_USAGE_PATH = '/api/gtfa.apify-usage';
 export const APIFY_ACTORS_PATH = '/api/gtfa.apify-actors';
@@ -45,19 +51,12 @@ export interface RouteOverrides {
   now?: () => number;
   /** OAuth manager used by account and connection routes. */
   oauth?: ApifyOAuthManager;
+  /** Data-query boundary for deterministic route tests. */
+  connectionProbe?: (signal: AbortSignal) => Promise<unknown>;
 }
 
-export type TestConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy';
-
-export interface TestConnectionResult {
-  ok: boolean;
-  egress: EgressMode;
-  status: number | null;
-  latencyMs: number;
-  code?: TestConnectionCode;
-  message?: string;
-  actorId?: string;
-}
+export type TestConnectionCode = ConnectionCode;
+export type TestConnectionResult = ConnectionResult;
 
 interface ConnectionRoute {
   path: string;
@@ -117,9 +116,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 /**
- * One reachability check for the saved egress. Local sends one HEAD. Actor
- * routes first call GET {standby}/health (relay compatibility, no proxy
- * traffic), then send one HEAD relay, so a test is two tiny requests.
+ * Reachability preflight only. Local sends a HEAD; Actor routes read API metadata.
  */
 export async function testConnection(options: {
   egress: EgressMode;
@@ -149,8 +146,9 @@ export async function testConnection(options: {
       }), options.signal);
       const latencyMs = elapsed(clock, startedAt);
       if (isChallengeResponse(response)) {
-        return failure('local', 'http', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status);
+        return failure('local', 'blocked', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status);
       }
+      if (response.status === 429) return failure('local', 'rate-limited', 'Google Trends returned HTTP 429. Stop and retry later.', latencyMs, response.status);
       if (response.status < 200 || response.status >= 400) {
         return failure('local', 'http', `Google Trends returned HTTP ${response.status}.`, latencyMs, response.status);
       }
@@ -224,8 +222,9 @@ export async function testConnection(options: {
     }), options.signal);
     const latencyMs = elapsed(clock, startedAt);
     if (isChallengeResponse(response)) {
-      return failure(options.egress, 'http', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status, actorId);
+      return failure(options.egress, 'blocked', 'Google Trends returned a challenge (CAPTCHA/unusual traffic). Stop and retry later.', latencyMs, response.status, actorId);
     }
+    if (response.status === 429) return failure(options.egress, 'rate-limited', 'Google Trends returned HTTP 429. Stop and retry later.', latencyMs, response.status, actorId);
     if (response.status === 401 || response.status === 403) {
       return failure(options.egress, 'invalid-token', 'Apify rejected the token. Check it in Apify Console → Settings → API & Integrations.', latencyMs, response.status, actorId);
     }
@@ -248,6 +247,48 @@ export async function testConnection(options: {
           : 'network';
     return failure(options.egress, code, message || 'Could not reach your Apify Actor. Check the Standby URL and connectivity.', elapsed(clock, startedAt), null, actorId);
   }
+}
+
+/** One preflight followed by one fresh comparison; never fan out or retry a data probe. */
+export async function diagnoseConnection(options: Parameters<typeof testConnection>[0] & {
+  connectionProbe?: (signal: AbortSignal) => Promise<unknown>;
+  diagnosticTimeoutMs?: number;
+}): Promise<ConnectionDiagnostics> {
+  const clock = options.now ?? Date.now, startedAt = clock();
+  const deadline = AbortSignal.timeout(options.diagnosticTimeoutMs ?? 120_000);
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+  let network: TestConnectionResult;
+  try { network = await raceAbort(testConnection({ ...options, signal }), signal); }
+  catch {
+    network = failure(options.egress, options.signal?.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'network', 'Connection preflight did not complete.', elapsed(clock, startedAt));
+  }
+  if (!network.ok) return { ...network, network, data: emptyDataCheck(network.code ?? 'network', 0, true), checkedAt: new Date().toISOString() };
+  const dataStarted = clock();
+  let data;
+  try {
+    const input = { keywords: [...CONNECTION_KEYWORDS], ...CONNECTION_FILTER, timeoutMs: 30_000 };
+    let result: unknown;
+    if (options.connectionProbe) result = await raceAbort(options.connectionProbe(signal), signal);
+    else if (options.egress === 'local') {
+      const tool = createTools({ transport: options.localTransport, chartDir: null }).find(tool => tool.name === 'trends_compare')!;
+      result = await tool.execute(input, { signal, maxRetries: 0 });
+    } else {
+      const resolved = options.oauth ? await raceAbort(options.oauth.resolveToken(options.apifyToken), signal) : resolveApifyApiToken(options.apifyToken);
+      if (!resolved.token) return { ...network, ok: false, code: 'invalid-token', network,
+        data: emptyDataCheck('invalid-token'), latencyMs: elapsed(clock, startedAt), checkedAt: new Date().toISOString() };
+      result = (await new OnDemandActorClient(options.fetch ? { fetch: options.fetch } : {}).call(resolved.token, network.actorId!, {
+        protocol: CONNECTION_PROBE_PROTOCOL, name: 'trends_compare', input, settings: { cache: false, charts: false },
+      }, signal)).result;
+    }
+    data = summarizeConnectionProbe(result, elapsed(clock, dataStarted));
+  } catch (error) {
+    const code = options.signal?.aborted ? 'cancelled' : deadline.aborted ? 'timeout'
+      : error instanceof GTrendsError ? /rejected the token/i.test(error.message) ? 'invalid-token'
+        : /HTTP 404|Select or deploy/i.test(error.message) ? 'no-actor' : connectionErrorCode(error.code) : 'network';
+    data = emptyDataCheck(code, elapsed(clock, dataStarted));
+  }
+  return { ...network, ok: data.ok, ...(data.code ? { code: data.code } : {}), latencyMs: elapsed(clock, startedAt),
+    network, data, checkedAt: new Date().toISOString() };
 }
 
 function attachRoutes(connection: unknown, getSettings: () => RouteSettings, overrides: RouteOverrides): (() => void) | undefined {
@@ -340,13 +381,16 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     methods: ['POST'],
     requestBody: 'buffered',
     fetch: async request => {
+      if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+      const rejected = rejectCrossSite(request);
+      if (rejected) return rejected;
       const settings = getSettings();
       if (testing) {
         return json(failure(settings.egress, 'busy', 'A connection test is already running. Try again in a moment.', 0), 429);
       }
       testing = true;
       try {
-        const result = await testConnection({
+        const result = await diagnoseConnection({
           egress: settings.egress,
           apifyToken: settings.apifyToken,
           apifyActor: settings.apifyActor,
@@ -356,6 +400,7 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           oauth: overrides.oauth,
           signal: request.signal,
           now: overrides.now,
+          connectionProbe: overrides.connectionProbe,
         });
         return json(result);
       } finally {

@@ -50,7 +50,7 @@ export function zodRejectionEnvelope(error: z.ZodError) {
 }
 
 /** Context supplied by each transport adapter for one tool invocation. */
-export interface ToolCallContext { signal?: AbortSignal }
+export interface ToolCallContext { signal?: AbortSignal; /** Internal connection probes never retry. */ maxRetries?: 0 }
 
 /** Options read at call time by the dsh plugin so `.volatile()` settings apply without a restart. */
 export interface ToolLiveSettings {
@@ -300,7 +300,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const { client } = scoped(context, timeoutMs);
       const dup = findDuplicateKeyword(keywords);
       if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });
-      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } as never);
+      const r = await compareTrends(keywords, { geo: geoValue, timeRange: range, category: DEFAULTS.category, searchType: 'web', dataTypes: ['interestOverTime'], client, signal: context?.signal, ...(context?.maxRetries === 0 ? { maxRetries: 0 } : {}), ...(timeoutMs !== undefined ? { timeoutMs } : {}) } as never);
       return response(compareEnvelope(keywords, r, { geo: geoValue, time: range }));
     },
   };

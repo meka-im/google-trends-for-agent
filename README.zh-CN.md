@@ -143,6 +143,8 @@ pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使�
 
 相对 `snapshotDir` / `chartDir` 路径以启动 `dsh web` 的目录（cwd）为基准；图表默认写入 `<cwd>/.gtfa/charts/`。
 
+**测试连接**会先检查网络和认证，再合并查询 ChatGPT、Gemini、weather（美国，近 24 小时），逐个显示数据点数量，并支持取消。Actor 模式在基础检查通过后启动一次按量计费的运行，完成即退出；遇到验证码或限流立即停止，不自动重试。
+
 ## 词条图库
 
 <table>
