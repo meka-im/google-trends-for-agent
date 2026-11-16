@@ -173,6 +173,7 @@ describe('dsh settings form', () => {
     const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
     expect(html).toContain('Apify usage');
     expect(html).toContain('$8.06 / $19.00');
+    expect(html).toContain('$10.94 remaining');
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('Plan: Bronze · $19/mo');
     expect(html).toContain('Residential proxy: 0.006 GB this cycle of 5.000 GB');
@@ -181,6 +182,20 @@ describe('dsh settings form', () => {
     expect(html).toContain('alice/google-trends-for-agent — Google Trends for AI Agents');
     expect(html).toContain('Build: succeeded');
     expect(html).toContain('Refresh');
+  });
+
+  it.each([
+    { used: null, limit: 19, balance: '— remaining', percent: null },
+    { used: 23, limit: 19, balance: '$4.00 over limit', percent: 100 },
+    { used: 0, limit: 0, balance: '$0.00 remaining', percent: null },
+  ])('keeps the usage balance accurate for $used / $limit', ({ used, limit, balance, percent }) => {
+    const html = render({ draft: { egress: 'actor-public' }, usage: {
+      status: 'ready', data: { ...paidUsage.data, usageUsd: used, limitUsd: limit },
+    } });
+    expect(html).toContain(balance);
+    if (percent === null) expect(html).not.toContain('aria-valuenow=');
+    else expect(html).toContain(`aria-valuenow="${percent}"`);
+    expect(html).not.toMatch(/NaN|Infinity/);
   });
 
   it('never renders the removed proxy group or country fields', () => {
