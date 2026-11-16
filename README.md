@@ -50,9 +50,9 @@ Remote-only clients use Apify's hosted gateway and complete OAuth in the client:
 }
 ```
 
-The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin retain those four tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
+The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin provide the four `trends_*` tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
 
-The former `*.apify.actor/mcp` Standby service is retired. Apify's `full_api_access` OAuth scope grants account-wide API access. Clients without MCP OAuth can configure a Bearer header through their credential storage. See the [Actor reference](.actor/README.md) and [Actor costs](docs/reference.md#actor-costs).
+Apify's `full_api_access` OAuth scope grants account-wide API access. Clients without MCP OAuth can configure a Bearer header through their credential storage. See the [Actor reference](.actor/README.md) and [Actor costs](docs/reference.md#actor-costs).
 
 ## Install & quick start
 
@@ -129,7 +129,7 @@ pnpm's box may wrap the key across lines — copy it from this template, only th
 
 pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
-The plugin is enabled by default after install and still exposes the same four native tools plus a `gtfa` skill. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. Choose **Local (this machine)**, **Public Actor**, or **My own Actor** under **Egress**, then click **Save**; login itself needs no Save. When the Host provides its credentials service, both Actor routes offer **Sign in with Apify**: the page shows Apify's official authorization link and user code, checks pending status every 2 seconds while honoring Apify's polling interval (including `slow_down`), pauses when closed, resumes when reopened, and restarts an expired attempt. Apify's only current device OAuth scope is `full_api_access`—full Apify API access, not access limited to this Actor or tool.
+The plugin is enabled by default after install and provides four native tools plus a `gtfa` skill. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. Choose **Local (this machine)**, **Public Actor**, or **My own Actor** under **Egress**, then click **Save**; login itself needs no Save. When the Host provides its credentials service, both Actor routes offer **Sign in with Apify**: the page shows Apify's official authorization link and user code, checks pending status every 2 seconds while honoring Apify's polling interval (including `slow_down`), pauses when closed, resumes when reopened, and restarts an expired attempt. Apify's only current device OAuth scope is `full_api_access`—full Apify API access, not access limited to this Actor or tool.
 
 The settings page uses three egress cards, with OAuth status and usage directly below. Expand **Usage details** for billing-cycle and proxy details. **Advanced** groups **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts**. **Save** and **Discard** remain at the bottom while scrolling; **Test connection** becomes available after changes are saved. Use the account menu beside the connection check to sign out. The layout follows the Host's light/dark theme and stacks on narrow screens.
 

@@ -8,8 +8,7 @@ import {
   type ApifyActorsView, type ApifyUsageView, type Draft,
 } from '../src/client/index.js';
 import {
-  APIFY_EST_COST_PER_CALL_USD, APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
-  GTFA_STORE_URL, apifyEstimatedCalls,
+  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL, GTFA_STORE_URL,
 } from '../src/options.js';
 
 const t = (key: string) => EN[key] ?? key;
@@ -258,12 +257,10 @@ describe('dsh settings form', () => {
     expect(network).toContain('Could not load your Actors');
   });
 
-  it('exposes the Apify sign-up, pricing, and cost constants', () => {
+  it('exposes the Apify sign-up, pricing, and free-credit constants', () => {
     expect(APIFY_SIGNUP_URL).toBe('https://console.apify.com/sign-up');
     expect(APIFY_PRICING_URL).toBe('https://apify.com/pricing');
     expect(APIFY_FREE_MONTHLY_CREDIT_USD).toBe(5);
-    expect(APIFY_EST_COST_PER_CALL_USD).toBe(0.0024);
-    expect(apifyEstimatedCalls()).toBe(2100);
   });
 
   it('keeps Advanced collapsed by default and shows its fields inside the disclosure', () => {

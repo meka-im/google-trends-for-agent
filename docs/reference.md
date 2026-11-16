@@ -76,9 +76,7 @@ Remote-only MCP clients connect to Apify's managed gateway:
 { "mcpServers": { "google-trends": { "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent" } } }
 ```
 
-The gateway handles client OAuth and exposes the Actor's input interface, run state, Dataset, key-value-store, and abort tools. This is a one-off run path, not the former four-tool Actor-owned MCP server. Local MCP and dsh still expose the four native `trends_*` tools. Apify's account-wide `full_api_access` scope must be disclosed before authorization. Use the client's credential storage for Bearer fallback if OAuth is unavailable.
-
-The former `*.apify.actor/mcp` endpoint and Standby deployment are retired in 0.2.7. Earlier GrokBot/Muse remote-protocol results apply to that older deployment and do not validate the new gateway connection. Reconfigure those clients before their next query.
+The gateway handles client OAuth and exposes the Actor's input interface, run state, Dataset, key-value-store, and abort tools. Each query starts an on-demand Actor run. Local MCP and dsh provide the four native `trends_*` tools. Apify's account-wide `full_api_access` scope must be disclosed before authorization. Use the client's credential storage for Bearer fallback if OAuth is unavailable.
 
 Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
@@ -103,7 +101,7 @@ If `npx …` exits 128 with empty stdout/stderr, the GitHub package fetch failed
 
 Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
 
-`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). The bundle registers the same four tools with unchanged names and contracts as native in-process tools, plus a bundled `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
+`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). The bundle registers four native in-process tools and a `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
 
 The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
 
@@ -120,7 +118,7 @@ The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh we
 
 When the dsh Host provides a credentials service, both Actor routes offer **Sign in with Apify**; without that service, OAuth is shown as unavailable while local egress, the manual token, and `APIFY_TOKEN` remain usable. The flow uses Apify's official standard RFC 8628 device OAuth, including client registration through Apify's official endpoints. The page displays Apify's official authorization link and user code. After the user confirms there, the plugin stores the token in the background through `ctx.credentials`. Login does not require **Save**.
 
-While pending, the page checks Host status every 2 seconds, and the Host follows Apify's polling interval, including `slow_down`. Closing the page pauses polling, reopening resumes it, and expiration requires starting a new attempt. OAuth session and client-registration persistence is delegated to the Host credentials service. Record keys, schema, and whether the backend uses OAuth grant records or legacy credential refs are provider-defined; new hosts can use OAuth grant records, while older hosts may use legacy credential refs.
+While pending, the page checks Host status every 2 seconds, and the Host follows Apify's polling interval, including `slow_down`. Closing the page pauses polling, reopening resumes it, and expiration requires starting a new attempt. OAuth session and client-registration persistence is delegated to the Host credentials service. Backend location, record keys, and schema are provider-defined.
 
 Each operation re-resolves credentials. A stored OAuth session is used first; only when none is stored does resolution use the saved config `apifyToken`, then `APIFY_TOKEN`. Resolution sources are `oauth`, `config`, and `env`; the usage API also reports `source: "oauth"` when applicable. If a stored OAuth session is expired or damaged and no refresh can be handled, the user must sign in again; do not silently fall back to another credential or report success.
 
@@ -138,7 +136,7 @@ The connection section uses three egress cards. OAuth status and usage share a c
 
 **Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
 
-When an Actor route has no connected credential, compact links offer [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show these links. Cost estimates remain in the cost table below.
+When an Actor route has no connected credential, compact links offer [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show these links. See [Actor costs](#actor-costs) for billing and runtime bounds.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -166,7 +164,7 @@ The settings page calls the following owner-only Host routes through dsh's Conne
 | `/api/gtfa.apify-oauth` | `GET` | Returns OAuth availability and connection state. Safe fields include `available`, `connected`, `pending`, `verificationUri`, `userCode`, `expiresAt`, `code`, and `message`; access tokens, refresh tokens, device codes, and client secrets are never returned. |
 | `/api/gtfa.apify-oauth-start` | `POST` | Starts a device authorization attempt through Apify's official RFC 8628 endpoints and returns the official verification link, user code, and pending state to the page. |
 | `/api/gtfa.apify-oauth-cancel` | `POST` | Cancels only the pending device flow. |
-| `/api/gtfa.apify-oauth-logout` | `POST` | Deletes the stored OAuth session but retains reusable client registration as determined by the provider backend (OAuth grant record or legacy ref); it does not revoke the authorization in Apify's cloud. |
+| `/api/gtfa.apify-oauth-logout` | `POST` | Deletes the stored OAuth session but retains reusable client registration as determined by the provider backend; it does not revoke the authorization in Apify's cloud. |
 | `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. A stored OAuth session is used first; only when none is stored do credentials fall back to saved config token, then `APIFY_TOKEN`. `source` can be `oauth`, `config`, or `env`. |
 | `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with the latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
 | `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby disabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
@@ -176,13 +174,13 @@ These routes are absent in headless/TUI profiles. Responses contain usage number
 
 **Cancel** has no effect beyond a pending device authorization. **Sign out** removes the stored OAuth session while retaining reusable client registration according to the provider backend. The current Apify authorization-server metadata has no `revocation_endpoint`, so sign-out cannot revoke the cloud grant; users must manage or revoke that authorization in Apify Console.
 
-`actor-public` uses `meka.im~google-trends-for-agent`; `actor-own` uses `apifyActor`. OAuth is resolved on every call, followed by saved token / `APIFY_TOKEN` only when no OAuth session exists. Each native cloud tool call starts exactly one run through `POST /v2/acts/{id}/runs`, with 256 MB and a 300 s platform timeout. The plugin polls that run, reads `TOOL_RESPONSE`, and returns the complete tool envelope. It never calls a Standby URL. Start requests are not automatically retried because an ambiguous response could duplicate paid work.
+`actor-public` uses `meka.im~google-trends-for-agent`; `actor-own` uses `apifyActor`. OAuth is resolved on every call, followed by saved token / `APIFY_TOKEN` only when no OAuth session exists. Each native cloud tool call starts exactly one run through `POST /v2/acts/{id}/runs`, with 256 MB and a 300 s platform timeout. The plugin polls that run, reads `TOOL_RESPONSE`, and returns the complete tool envelope. Start requests are not automatically retried because an ambiguous response could duplicate paid work.
 
 The programmatic input is `toolRequest: { protocol: 1, name, input, settings?, history? }`. `name` is one of the four native tools. `TOOL_RESPONSE` contains `{ protocol: 1, result, snapshots }`; this is additive and does not change Dataset v1. Query defaults and custom baselines are forwarded, while filesystem paths and credentials are kept on the Host. Snapshot history is validated and exchanged to preserve diff behavior between runs. Successful ask/snapshot envelopes are reusable locally for 360 minutes; failures/partial results are not cached. Cache hits start no Actor. Snapshot SVGs are saved to the Host's configured chart directory and inline SVG follows the caller's `svg` flag.
 
 Caller cancellation or an API failure after receiving a run id attempts to abort that owned run using a separate cleanup signal. If start acknowledgement is lost or cleanup cannot reach Apify, the platform's 300 s timeout bounds the run. This is not a promise of immediate cloud cancellation during a network outage.
 
-The local `gtfa-mcp --http` interface remains loopback-only with Host/Origin checks and a 300 s tool deadline. It has no paid cloud residency. Cloud Actor startup rejects Standby invocations and never opens an HTTP listener.
+The local `gtfa-mcp --http` interface is loopback-only with Host/Origin checks and a 300 s tool deadline. Cloud Actor startup rejects Standby invocations and never opens an HTTP listener.
 
 ## Output contract
 
@@ -289,8 +287,6 @@ In `now 1-d` windows, trailing points may be 0 or low while Google back-fills. P
 The [Actor input and output reference](../.actor/README.md) covers ordinary Dataset runs and the native TOOL_RESPONSE protocol.
 
 Cloud queries run once and exit. Defaults are 256 MB and a hard 300 s runtime limit; no Actor-owned MCP server or idle tail is used. Charges include actual run compute, proxy traffic, and any platform storage/transfer. Read each finished run's `usageTotalUsd` for its measured cost. A slow or failed request still has real platform costs. API metadata checks and local snapshot-cache hits start no Actor.
-
-[Historical 2026-11-13 Standby measurements](standby-costs-2026-11-13.md) are retained as evidence, not as on-demand price claims. The old 60 s idle guarantee was insufficient because long-lived MCP traffic was counted as active work.
 
 ## Rate limits, retries, and timeouts
 
