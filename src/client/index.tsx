@@ -8,8 +8,9 @@
  * `cordis.patch.yml`, so the UI says that instead of calling it a vault.
  *
  * The Apify usage card and Test connection button call owner-only Host routes
- * with relative URLs. The token and all Apify/Google traffic stay on the Host;
- * the browser only receives usage numbers and reachability results.
+ * with relative URLs. Connection tests can submit an unsaved manual token to
+ * the Host without persisting it. Stored tokens are never returned to the
+ * browser; all Apify/Google traffic runs on the Host.
  *
  * Every setting that has a finite set of values is a select, segmented control,
  * or switch. Only the token, a new anchor term, dailySearches, and directories
@@ -312,7 +313,6 @@ export const EN: Record<string, string> = {
   connectionCostShort: 'Compute and proxy usage are billed to your Apify account.',
   publicActorDetails: 'Actor details',
   advancedFix: 'Review advanced settings before saving.',
-  testSaveFirst: 'Save before testing',
   summary: 'Search trends, compare keywords, and create calibrated snapshots for your agent.',
   intro: 'OAuth is the preferred credential for Actor egress; a manual API Token remains under Advanced. Click Save to apply settings changes; no restart is needed. OAuth status, usage, Actor listing, deploy, and Test connection run on the dsh host, so credentials never reach the browser.',
   oauthTitle: 'Apify sign-in',
@@ -356,8 +356,7 @@ export const EN: Record<string, string> = {
   egressUnknown: 'Your saved egress value is not recognized; it now uses Local (this machine). Save to update the profile.',
   testConnection: 'Test connection',
   testing: 'Testing…',
-  testSavedNote: 'Tests the saved settings — save first.',
-  testNote: 'Checks connectivity and three common keywords. Allow up to 2 minutes.',
+  testNote: 'Tests the current connection and three keywords without saving. Allow up to 2 minutes.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
   testActorOk: 'Apify API, credentials and Actor available · {ms} ms',
   testNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to use an Actor egress.',
@@ -553,7 +552,6 @@ export const ZH: Record<string, string> = {
   connectionCostShort: '计算和代理用量计入你的 Apify 账号。',
   publicActorDetails: 'Actor 详情',
   advancedFix: '请检查高级设置后再保存。',
-  testSaveFirst: '保存后测试',
   summary: '查询搜索趋势，比较关键词，生成带图快照。',
   intro: 'Actor 出口优先使用 OAuth 登录，也可在高级设置中保留手动 API Token。点击保存后应用设置变更，无需重启。OAuth 状态、用量、Actor 列表、部署和测试连接都在 dsh 主机端运行，凭据不会发送到浏览器。',
   oauthTitle: 'Apify 登录',
@@ -597,8 +595,7 @@ export const ZH: Record<string, string> = {
   egressUnknown: '无法识别已保存的出口值；现在使用本机直连。保存以更新配置。',
   testConnection: '测试连接',
   testing: '测试中…',
-  testSavedNote: '测试的是已保存设置 — 请先保存。',
-  testNote: '检查基础连接与三个常用关键词，最长约 2 分钟。',
+  testNote: '测试当前连接和三个关键词，不保存设置，最长约 2 分钟。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
   testActorOk: 'Apify API、认证和 Actor 可用 · {ms} ms',
   testNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可使用 Actor 出口。',
@@ -757,8 +754,9 @@ const styles: Record<string, CSSProperties> = {
   readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '7px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
     fontSize: 12, overflowWrap: 'anywhere' },
   windowRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 14 },
-  saveBar: { position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 0, padding: '14px 18px', border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-surface)', boxShadow: '0 4px 20px #16234206' },
+  saveBar: { position: 'sticky', bottom: 12, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+    marginTop: 0, marginBottom: 12, padding: '14px 18px', border: '1px solid var(--gtfa-save-border)', borderRadius: 12,
+    background: 'var(--gtfa-save-surface)', boxShadow: 'var(--gtfa-save-shadow)' },
   button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '7px 13px', minHeight: 34,
     border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
   buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
@@ -1376,20 +1374,29 @@ export function resolveDeployBuild(actors: ApifyActorsView, target: DeployTarget
   return { status: 'pending' };
 }
 
-/** Send exactly one owner-authenticated test request for the saved egress. */
-export async function runConnectionTest(egress: EgressMode = 'local', signal?: AbortSignal): Promise<TestConnectionView> {
+/** Test the current connection without applying it to the Host configuration. */
+export async function runConnectionTest(settings: {
+  egress: EgressMode;
+  apifyActor?: string;
+  apifyToken?: string;
+} = { egress: 'local' }, signal?: AbortSignal): Promise<TestConnectionView> {
+  const { egress } = settings;
   const deadline = AbortSignal.timeout(135_000);
   try {
     const response = await fetch(TEST_URL, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify(settings),
       cache: 'no-store',
       signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
     });
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
     const row = record(body);
+    // Older Hosts ignore the body and can silently check a different saved route or Actor.
+    if (typeof row.ok === 'boolean' && row.settingsSource !== 'draft') {
+      return { ok: false, egress, status: null, latencyMs: 0, code: 'host-restart-required' };
+    }
     if (typeof row.ok === 'boolean' && row.egress === egress) {
       const basic: TestConnectionView = {
         ok: row.ok,
@@ -1400,10 +1407,7 @@ export async function runConnectionTest(egress: EgressMode = 'local', signal?: A
         ...(typeof row.message === 'string' ? { message: row.message } : {}),
         ...(typeof row.actorId === 'string' ? { actorId: row.actorId } : {}),
       };
-      if (row.ok && row.network === undefined && row.data === undefined) {
-        return { ...basic, ok: false, code: 'host-restart-required',
-          network: { ok: true, egress, status: basic.status, latencyMs: basic.latencyMs } };
-      }
+      if (row.ok && row.network === undefined && row.data === undefined) return { ...basic, ok: false, code: 'host-restart-required' };
       if ((row.network === undefined) !== (row.data === undefined)) return { ...basic, ok: false, code: 'protocol' };
       if (row.network !== undefined) {
         const net = record(row.network);
@@ -2099,6 +2103,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     setBaseline(draftKey(next));
     setFailure(null);
     setNotice(null);
+    setTestResult(null);
   };
 
   const save = async () => {
@@ -2150,7 +2155,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await runConnectionTest(draft.egress, controller.signal);
+      const result = await runConnectionTest({
+        egress: draft.egress,
+        ...(draft.egress === 'actor-own' ? { apifyActor: draft.actor.trim() } : {}),
+        ...(draft.egress !== 'local' && (draft.token.trim() || draft.clearToken)
+          ? { apifyToken: draft.clearToken ? '' : draft.token.trim() } : {}),
+      }, controller.signal);
       if (testAbort.current === controller) setTestResult(result);
     } finally {
       if (testAbort.current === controller) { testAbort.current = null; setTesting(false); }
@@ -2241,9 +2251,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     ...(actorEgress ? [{ id: 'token' as const, label: t('advancedToken') }] : []),
     { id: 'files' as const, label: t('advancedFiles') },
   ];
-  const testButton = <><button type="button" className="gtfa-button" style={dim(styles.button, !editable || testing || dirty)}
-    disabled={!editable || testing || dirty} title={dirty ? t('testSavedNote') : t('testNote')} onClick={() => { void test(); }}>
-    <Icon name="play" size={13} />{dirty ? t('testSaveFirst') : testing ? t('testing') : t('testConnection')}
+  const tokenConflict = actorEgress && Boolean(draft.token.trim() && draft.clearToken);
+  const testButton = <><button type="button" className="gtfa-button" style={dim(styles.button, !editable || tokenConflict)}
+    disabled={!editable || tokenConflict} title={tokenConflict ? t('tokenConflict') : t('testNote')} onClick={() => { void test(); }}>
+    <Icon name="play" size={13} />{testing ? t('testing') : t('testConnection')}
   </button>{testing ? <button type="button" className="gtfa-button" style={styles.button} onClick={() => testAbort.current?.abort()}>{t('testCancel')}</button> : null}</>;
   const walkAdvanced = (event: KeyboardEvent<HTMLDivElement>) => {
     const index = advancedTabs.findIndex(tab => tab.id === activeAdvancedTab);
@@ -2289,7 +2300,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
             connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
             onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
             onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
-          {!oauthConnected && (tokenSet || usage.status === 'ready') ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
+          {!oauthConnected && (tokenSet || usage.status === 'ready' || draft.token.trim()) ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
             <ApifyUsageCard state={usage} t={t} locale={intlLocale}
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
@@ -2320,7 +2331,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           <div className="gtfa-connection-actions">{testButton}</div>
         </div>}
       </div>
-      <p className="gtfa-test-help">{dirty ? t('testSavedNote') : t('testNote')}{actorEgress ? <span>{t('connectionCostShort')}</span> : null}</p>
+      <p className="gtfa-test-help">{t('testNote')}{actorEgress ? <span>{t('connectionCostShort')}</span> : null}</p>
       {testing || testResult ? <ConnectionTestResults result={testResult ?? undefined} testing={testing} t={t} locale={intlLocale} /> : null}
       {actorEgress ? <>
         <p className="gtfa-privacy-note"><Icon name="shield" size={13} />{t('connectionPrivacy')}</p>

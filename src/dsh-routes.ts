@@ -115,6 +115,30 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { 'cache-control': 'no-store' } });
 }
 
+/** Connection-only overrides are temporary; saved credentials never leave the Host. */
+async function readTestSettings(request: Request, saved: RouteSettings): Promise<{ settings: RouteSettings; source: 'draft' | 'saved' } | undefined> {
+  try {
+    const text = await request.text();
+    if (text.length > 16_384) return undefined;
+    const body: unknown = text.trim() ? JSON.parse(text) : {};
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+    const input = body as Record<string, unknown>;
+    if (Object.keys(input).some(key => !['egress', 'apifyActor', 'apifyToken'].includes(key))) return undefined;
+    if ('egress' in input && (typeof input.egress !== 'string' || !['local', 'actor-public', 'actor-own'].includes(input.egress))) return undefined;
+    for (const [key, limit] of [['apifyActor', 256], ['apifyToken', 4096]] as const) {
+      if (key in input && (typeof input[key] !== 'string' || input[key].length > limit || /[\u0000-\u001f\u007f]/.test(input[key]))) return undefined;
+    }
+    return {
+      settings: {
+        egress: (input.egress ?? saved.egress) as EgressMode,
+        apifyActor: 'apifyActor' in input ? (input.apifyActor as string).trim() : saved.apifyActor,
+        apifyToken: 'apifyToken' in input ? (input.apifyToken as string).trim() : saved.apifyToken,
+      },
+      source: Object.keys(input).length ? 'draft' : 'saved',
+    };
+  } catch { return undefined; }
+}
+
 /**
  * Reachability preflight only. Local sends a HEAD; Actor routes read API metadata.
  */
@@ -384,9 +408,11 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
       const rejected = rejectCrossSite(request);
       if (rejected) return rejected;
-      const settings = getSettings();
+      const selected = await readTestSettings(request, getSettings());
+      if (!selected) return json({ error: 'Invalid connection test settings.' }, 400);
+      const { settings, source } = selected;
       if (testing) {
-        return json(failure(settings.egress, 'busy', 'A connection test is already running. Try again in a moment.', 0), 429);
+        return json({ ...failure(settings.egress, 'busy', 'A connection test is already running. Try again in a moment.', 0), settingsSource: source }, 429);
       }
       testing = true;
       try {
@@ -402,7 +428,7 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           now: overrides.now,
           connectionProbe: overrides.connectionProbe,
         });
-        return json(result);
+        return json({ ...result, settingsSource: source });
       } finally {
         testing = false;
       }

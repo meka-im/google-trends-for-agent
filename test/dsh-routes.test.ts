@@ -431,6 +431,102 @@ describe('dsh host routes', () => {
     expect(transport.mock.calls[0]![0]).toMatchObject({ url: 'https://trends.google.com/trends/', method: 'HEAD' });
   });
 
+  it('checks the draft local route without changing the saved Actor route', async () => {
+    const saved = Object.freeze(settings());
+    const localTransport = vi.fn(async () => ({ status: 200, headers: {}, body: '' }));
+    const relayTransport = vi.fn();
+    const harness = routeHarness(() => saved, { localTransport, relayTransport });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, {
+      method: 'POST', body: JSON.stringify({ egress: 'local' }),
+    }));
+    expect(await response.json()).toMatchObject({ ok: true, egress: 'local', settingsSource: 'draft' });
+    expect(localTransport).toHaveBeenCalledTimes(1);
+    expect(relayTransport).not.toHaveBeenCalled();
+    expect(saved).toEqual(settings());
+  });
+
+  it('checks a draft Actor selection and token only for this request', async () => {
+    const saved = Object.freeze(settings({ egress: 'local' }));
+    const target = vi.fn(async () => ({ status: 200, headers: {}, body: '' }));
+    const relayTransport = vi.fn(() => target);
+    const harness = routeHarness(() => saved, { relayTransport, localTransport: async () => ({ status: 200, headers: {}, body: '' }) });
+    harness.connect();
+    const route = harness.routes.get(TEST_CONNECTION_PATH)!;
+    const response = await route.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, {
+      method: 'POST', body: JSON.stringify({ egress: 'actor-own', apifyActor: 'draft-actor', apifyToken: 'apify_api_draft' }),
+    }));
+    const result = await response.json();
+    expect(result).toMatchObject({ ok: true, egress: 'actor-own', actorId: 'draft-actor', settingsSource: 'draft' });
+    expect(JSON.stringify(result)).not.toContain('apify_api_draft');
+    expect(relayTransport).toHaveBeenCalledWith('apify_api_draft', 'draft-actor');
+    expect(saved).toEqual(settings({ egress: 'local' }));
+    // A later request with no overrides must still use the saved configuration.
+    expect(await (await route.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }))).json())
+      .toMatchObject({ ok: true, egress: 'local', settingsSource: 'saved' });
+  });
+
+  it('uses a Host-only stored token when only the route and Actor are edited', async () => {
+    const relayTransport = vi.fn(() => async () => ({ status: 200, headers: {}, body: '' }));
+    const harness = routeHarness(() => settings({ egress: 'local' }), { relayTransport });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, {
+      method: 'POST', body: JSON.stringify({ egress: 'actor-own', apifyActor: 'new-actor' }),
+    }));
+    expect(await response.json()).toMatchObject({ ok: true, actorId: 'new-actor' });
+    expect(relayTransport).toHaveBeenCalledWith(TOKEN, 'new-actor');
+  });
+
+  it('tests clearing a manual token without falling back to its saved value', async () => {
+    vi.stubEnv('APIFY_TOKEN', '');
+    const relayTransport = vi.fn();
+    const harness = routeHarness(() => settings(), { relayTransport });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, {
+      method: 'POST', body: JSON.stringify({ egress: 'actor-own', apifyToken: '' }),
+    }));
+    expect(await response.json()).toMatchObject({ ok: false, code: 'no-token', settingsSource: 'draft' });
+    expect(relayTransport).not.toHaveBeenCalled();
+  });
+
+  it('keeps OAuth priority over a draft manual token and scrubs OAuth errors', async () => {
+    const oauthToken = 'oauth-host-only-secret';
+    const resolveToken = vi.fn(async () => ({ token: oauthToken, source: 'oauth' as const }));
+    const relayTransport = vi.fn(() => async () => { throw new Error(`failed with ${oauthToken}`); });
+    const harness = routeHarness(() => settings(), { oauth: { resolveToken } as unknown as ApifyOAuthManager, relayTransport });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, {
+      method: 'POST', body: JSON.stringify({ egress: 'actor-own', apifyToken: 'draft-manual-token' }),
+    }));
+    const result = await response.json();
+    expect(resolveToken).toHaveBeenCalledWith('draft-manual-token');
+    expect(relayTransport).toHaveBeenCalledWith(oauthToken, ACTOR);
+    expect(result).toMatchObject({ ok: false, settingsSource: 'draft' });
+    expect(JSON.stringify(result)).not.toContain(oauthToken);
+    expect(JSON.stringify(result)).not.toContain('draft-manual-token');
+  });
+
+  it.each([
+    ['invalid JSON', 'invalid-json'], ['null', 'null'], ['array', '[]'],
+    ['non-string egress', JSON.stringify({ egress: ['local'] })],
+    ['unknown egress', JSON.stringify({ egress: 'invalid' })],
+    ['non-string token', JSON.stringify({ apifyToken: {} })],
+    ['control characters', JSON.stringify({ apifyActor: 'actor\ninvalid' })],
+    ['oversized Actor', JSON.stringify({ apifyActor: 'a'.repeat(257) })],
+    ['oversized token', JSON.stringify({ apifyToken: 't'.repeat(4097) })],
+    ['unknown key', JSON.stringify({ egress: 'local', arbitraryUrl: 'https://example.test' })],
+  ])('rejects %s before any upstream work', async (_label, body) => {
+    const localTransport = vi.fn(); const relayTransport = vi.fn(); const fetch = vi.fn();
+    const harness = routeHarness(() => settings(), { localTransport, relayTransport, fetch });
+    harness.connect();
+    const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST', body }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid connection test settings.' });
+    expect(localTransport).not.toHaveBeenCalled();
+    expect(relayTransport).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('tests actor-own egress with exactly one relay call through the saved Actor', async () => {
     const target = vi.fn(async () => ({ status: 200, headers: {}, body: '<html></html>' }));
     let seen: { token: string; actorId: string } | undefined;
