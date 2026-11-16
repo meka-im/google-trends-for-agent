@@ -46,14 +46,12 @@ export const SETTINGS_CSS = `
 .gtfa-account-menu button:not(:disabled):hover { background:var(--gtfa-hover); }
 .gtfa-oauth-foot { padding:0 18px 15px; display:grid; gap:10px; }
 .gtfa-oauth-code-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
-.gtfa-free-credit { margin:0 18px 16px; padding:14px 16px; border:1px solid var(--gtfa-line); border-radius:10px; background:var(--gtfa-surface); }
-.gtfa-free-credit-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 14px; }
-.gtfa-free-credit-heading strong { font-size:13px; font-weight:600; }
-.gtfa-free-credit-heading span { font-size:11px; color:var(--gtfa-ink); }
-.gtfa-free-credit p { margin:6px 0 0; font-size:11px; line-height:1.65; color:var(--gtfa-muted); }
-.gtfa-free-credit details { margin:7px 0 12px; font-size:11px; color:var(--gtfa-muted); }
-.gtfa-free-credit summary { width:fit-content; cursor:pointer; }
-.gtfa-free-credit details p { max-width:70ch; }
+.gtfa-free-credit { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; margin:0 18px 16px; padding:14px 16px; border:1px solid var(--gtfa-line); border-radius:10px; background:var(--gtfa-surface); }
+.gtfa-free-credit-copy { min-width:0; }
+.gtfa-free-credit-copy strong { font-size:13px; font-weight:600; }
+.gtfa-free-credit-estimate { margin:4px 0; font-size:12px; color:var(--gtfa-ink); }
+.gtfa-free-credit-copy small { font-size:10px; color:var(--gtfa-muted); }
+.gtfa-free-credit-actions { display:flex; align-items:center; gap:14px; flex-shrink:0; font-size:11px; }
 .gtfa-defaults-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 .gtfa-defaults-grid select { width:100%; }
 .gtfa-usage-row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }

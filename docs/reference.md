@@ -136,7 +136,7 @@ The connection section uses three egress cards. OAuth status and usage share a c
 
 **Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
 
-When either Actor route has no connected credential, a card shows Apify's $5 monthly Free-plan credit and an estimated 3,000–7,000 queries with this project's default settings, alongside [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Its expandable explanation states the sample basis and shared-account budget. Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show this card. See [Actor costs](#actor-costs) for the estimate and runtime bounds.
+When either Actor route has no connected credential, a compact card shows Apify's $5 monthly Free-plan credit, an estimated 3,000–7,000 queries and a short shared-account budget note, alongside [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show this card. See [Actor costs](#actor-costs) for the sample basis and runtime bounds.
 
 | Field | Default | Meaning |
 | --- | --- | --- |

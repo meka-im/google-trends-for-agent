@@ -192,11 +192,9 @@ describe('dsh settings form', () => {
 
   it.each(['actor-public', 'actor-own'] as const)('shows the shared free-credit estimate and sign-up links without credentials in %s', (egress) => {
     const html = render({ draft: { egress }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
-    expect(html).toContain(EN.signupCompact);
     expect(html).toContain('$5 in free credits every month');
     expect(html).toContain(EN.signupEstimate);
     expect(html).toContain(EN.signupCreditNote);
-    expect(html).toContain(EN.signupEstimateBasis);
     expect(html).toContain('full_api_access');
     expect(html).not.toContain('roughly');
     expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
