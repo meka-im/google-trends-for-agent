@@ -85,6 +85,8 @@ The manual token is an **Advanced / fallback** option. A token entered there is 
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
+After installing or upgrading this plugin, fully stop and restart dsh to load its backend. Reloading only the page can leave the running backend on a different plugin version.
+
 **Test connection** checks the saved egress, then makes one fresh `trends_compare` query for ChatGPT, Gemini and weather in the US over the past 24 hours. Local preflight uses HEAD; Actor preflight checks API authentication and the latest build, then starts one usage-billed on-demand run. The page separates network status from each keyword's valid/nonzero data-point counts; only all three successful series verify data access. Challenges, rate limits, malformed data and zero-only series do not pass. Diagnostic queries never retry. The check has a 120 s overall deadline; Cancel check or closing the page aborts the request and attempts to stop its owned Actor run. The platform's 300 s timeout remains the final cloud bound during a network outage.
 
 ## Verify networking first

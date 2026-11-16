@@ -118,6 +118,8 @@ Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBui
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
+After installing or upgrading the plugin, fully quit and reopen dsh to load its backend. Saving plugin settings applies them immediately.
+
 The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
 
 ```yaml

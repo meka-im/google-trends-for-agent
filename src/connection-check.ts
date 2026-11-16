@@ -6,7 +6,7 @@ export const CONNECTION_FILTER = { geo: 'US', time: 'now 1-d' } as const;
 export const CONNECTION_PROBE_PROTOCOL = 2;
 
 export type ConnectionCode = 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy'
-  | 'blocked' | 'rate-limited' | 'timeout' | 'no-data' | 'protocol' | 'cancelled';
+  | 'blocked' | 'rate-limited' | 'timeout' | 'no-data' | 'protocol' | 'cancelled' | 'host-restart-required';
 export interface ConnectionResult {
   ok: boolean;
   egress: EgressMode;

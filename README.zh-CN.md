@@ -120,6 +120,8 @@ curl -I https://trends.google.com
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
+安装或升级插件后，请完全退出并重新打开 dsh，以加载插件后端。插件设置保存后立即生效。
+
 首次运行通常会打印 key 并失败；pnpm store 已缓存构建时可能直接成功。将下方代码块以 pnpm 打印的完整 key（以 commit hash 结尾）**追加**到 dsh 已生成的 `$DSH_HOME/profiles/web/pnpm-workspace.yaml`（`DSH_HOME` 默认为 `~/.dsh`），保留已有键，不要覆盖文件，然后重跑。使用其他 profile 时，同时替换命令和路径中的 `web`：
 
 ```yaml
