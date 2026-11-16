@@ -190,9 +190,13 @@ describe('dsh settings form', () => {
     }
   });
 
-  it('offers compact sign-up and pricing links when there is no credential', () => {
-    const html = render({ draft: { egress: 'actor-own' }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
+  it.each(['actor-public', 'actor-own'] as const)('shows the shared free-credit estimate and sign-up links without credentials in %s', (egress) => {
+    const html = render({ draft: { egress }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
     expect(html).toContain(EN.signupCompact);
+    expect(html).toContain('$5 in free credits every month');
+    expect(html).toContain(EN.signupEstimate);
+    expect(html).toContain(EN.signupCreditNote);
+    expect(html).toContain(EN.signupEstimateBasis);
     expect(html).toContain('full_api_access');
     expect(html).not.toContain('roughly');
     expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
@@ -205,10 +209,12 @@ describe('dsh settings form', () => {
   it('hides the sign-up bar when a token exists or egress is local', () => {
     const paid = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: paidUsage, actors: oneActor });
     expect(paid).not.toContain('No Apify account?');
+    expect(paid).not.toContain('class="gtfa-free-credit"');
     expect(paid).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
 
     const local = render({ usage: { status: 'error', code: 'no-token' } });
     expect(local).not.toContain('No Apify account?');
+    expect(local).not.toContain('class="gtfa-free-credit"');
   });
 
   it('does not warn that Apify egress needs a paid plan', () => {

@@ -136,7 +136,7 @@ The connection section uses three egress cards. OAuth status and usage share a c
 
 **Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
 
-When an Actor route has no connected credential, compact links offer [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show these links. See [Actor costs](#actor-costs) for billing and runtime bounds.
+When either Actor route has no connected credential, a card shows Apify's $5 monthly Free-plan credit and an estimated 3,000–7,000 queries with this project's default settings, alongside [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Its expandable explanation states the sample basis and shared-account budget. Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show this card. See [Actor costs](#actor-costs) for the estimate and runtime bounds.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -289,6 +289,8 @@ In `now 1-d` windows, trailing points may be 0 or low while Google back-fills. P
 ## Actor costs
 
 The [Actor input and output reference](../.actor/README.md) covers ordinary Dataset runs and the native TOOL_RESPONSE protocol.
+
+Apify's [Free plan](https://apify.com/pricing) includes $5 of monthly usage credits shared across the account. The unsigned-in UI estimates 3,000–7,000 queries per month using this project's defaults. The basis is two completed US/24h runs checked on 2026-11-16: a three-keyword comparison (`eKqR8wNxKJlvRqk59`, $0.000656643) and a ChatGPT snapshot with SVG (`6F5LbYVnu0xIBnR39`, $0.001462250). These later-read totals include residential proxy charges as well as compute and run storage/transfer; immediate post-run totals had not yet included all charges. Dividing $5 by these sample costs gives about 3,400–7,600 runs, rounded down for the UI. This small-sample budget estimate is not a guaranteed success count or rate-limit allowance: slower requests, multi-country queries, retained storage, own-Actor builds, and other account usage reduce the available count. Other Actor implementations/configurations are outside this estimate.
 
 Cloud queries run once and exit. Defaults are 256 MB and a hard 300 s runtime limit; no Actor-owned MCP server or idle tail is used. Charges include actual run compute, proxy traffic, and any platform storage/transfer. Read each finished run's `usageTotalUsd` for its measured cost. A slow or failed request still has real platform costs. API metadata checks and local snapshot-cache hits start no Actor.
 

@@ -21,7 +21,7 @@ import { Icon } from './icons.js';
 import { SETTINGS_CSS } from './theme.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
-  APIFY_PRICING_URL, APIFY_SIGNUP_URL,
+  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
   GTFA_STORE_URL, regionLabel, resolveEgress, type EgressMode, type EgressNotice,
 } from '../options.js';
@@ -296,6 +296,11 @@ export const EN: Record<string, string> = {
   allSaved: 'All changes saved',
   usageDetails: 'Usage details',
   signupCompact: 'No Apify account?',
+  signupCredit: '${amount} in free credits every month',
+  signupEstimate: 'About 3,000–7,000 queries / month',
+  signupCreditNote: 'Estimated with this project’s default settings. Credits are shared across your Apify account; heavier queries leave room for fewer runs.',
+  signupEstimateDetails: 'How we estimate this',
+  signupEstimateBasis: 'Two completed comparison and snapshot samples cost about $0.00066 and $0.00146, including compute, residential proxy and run storage/transfer. $5 covers about 3,400–7,600 similar runs, rounded down here. This is a budget estimate, not a guaranteed quota. Builds for your own Actor and other account usage also use credits. Rates checked on Nov 16, 2026; see Apify pricing for current terms.',
   advancedFix: 'Review advanced settings before saving.',
   testSaveFirst: 'Save before testing',
   summary: 'Search trends, compare keywords, and create calibrated snapshots for your agent.',
@@ -522,6 +527,11 @@ export const ZH: Record<string, string> = {
   allSaved: '所有更改已保存',
   usageDetails: '用量详情',
   signupCompact: '还没有 Apify 账号？',
+  signupCredit: '每月 ${amount} 免费额度',
+  signupEstimate: '约可查询 3,000–7,000 次 / 月',
+  signupCreditNote: '按本项目默认配置估算。额度由 Apify 账号内所有任务共享；复杂查询可用次数更少。',
+  signupEstimateDetails: '次数怎么算的？',
+  signupEstimateBasis: '两次已完成的对比与快照样本，计入计算、住宅代理及运行读写和传输后，分别约 $0.00066、$0.00146。$5 可覆盖约 3,400–7,600 次同类运行，此处向下取整。这是预算估算，并非保证次数；自建 Actor 的构建及账号内其他用量也会消耗额度。价格核对于 2026-11-16，最新规则以 Apify 价格页为准。',
   advancedFix: '请检查高级设置后再保存。',
   testSaveFirst: '保存后测试',
   summary: '查询搜索趋势，比较关键词，生成带图快照。',
@@ -1529,13 +1539,21 @@ export function ApifyOAuthCard({
 }
 
 function ApifySignupBar({ t }: { t: Translate; locale: string }) {
-  return <div style={styles.signupBar}>
-    <p style={styles.signupText}>{t('signupCompact')}</p>
-    <div style={styles.signupLinks}>
-      <a style={styles.signupPrimary} href={APIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('signupAction')}</a>
-      <a style={styles.signupSecondary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('pricingAction')}</a>
+  return <aside className="gtfa-free-credit" aria-label={template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}>
+    <div className="gtfa-free-credit-heading">
+      <strong>{template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}</strong>
+      <span>{t('signupEstimate')}</span>
     </div>
-  </div>;
+    <p>{t('signupCreditNote')}</p>
+    <details><summary>{t('signupEstimateDetails')}</summary><p>{t('signupEstimateBasis')}</p></details>
+    <div style={styles.signupBar}>
+      <p style={styles.signupText}>{t('signupCompact')}</p>
+      <div style={styles.signupLinks}>
+        <a style={styles.signupPrimary} href={APIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('signupAction')}</a>
+        <a style={styles.signupSecondary} href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('pricingAction')}</a>
+      </div>
+    </div>
+  </aside>;
 }
 
 function actorErrorText(state: Extract<ApifyActorsView, { status: 'error' }>, t: Translate): string {
@@ -2196,6 +2214,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
             connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
             onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
             onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
+          {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
           {!oauthConnected && (tokenSet || usage.status === 'ready') ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
             <ApifyUsageCard state={usage} t={t} locale={intlLocale}
@@ -2213,7 +2232,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       {testing || testResult ? <ConnectionTestResults result={testResult ?? undefined} testing={testing} t={t} locale={intlLocale} /> : null}
       {actorEgress ? <>
         <p style={{ ...styles.hint, display: 'flex', alignItems: 'center', gap: 7, margin: 0 }}><Icon name="shield" size={13} />{t('actorAccountHint')}</p>
-        {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
         {ownEgress ? <>
           <div style={styles.field}>
             <div style={styles.switchRow}>
