@@ -13,12 +13,14 @@
  * browser; all Apify/Google traffic runs on the Host.
  *
  * Every setting that has a finite set of values is a select, segmented control,
- * or switch. Only the token, a new anchor term, dailySearches, and directories
- * are typed inputs.
+ * or switch. Query-default pickers allow searching, but only selecting a listed
+ * value changes the draft. Only the token, a new anchor term, dailySearches,
+ * and directories accept free-form configuration text.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
+import { ChoicePicker } from './choice-picker.js';
 import { SETTINGS_CSS } from './theme.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
@@ -444,8 +446,14 @@ export const EN: Record<string, string> = {
   geo: 'Default geo',
   geoHint: 'Used for trends and comparisons. Worldwide has no built-in traffic calibration.',
   geoWorldwide: 'Worldwide',
+  geoSearch: 'Search a country or code…',
+  choiceEmpty: 'No matching options',
+  anchorSearch: 'Search an anchor…',
+  anchorAutoOption: 'Choose an anchor for the query window',
+  anchorShortOption: 'For 24-hour and shorter windows',
+  anchorLongOption: 'For 7-day and longer windows',
   anchor: 'Traffic calibration',
-  anchorHint: 'Automatic uses sudoku for ≤1 day and gpts for 7 days and longer.',
+  anchorHint: 'Automatic mode matches the query window.',
   anchorAutomatic: 'Automatically select an anchor',
   cache: 'Reuse saved snapshots',
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
@@ -701,8 +709,14 @@ export const ZH: Record<string, string> = {
   geo: '默认地区',
   geoHint: '全球查询不估算搜索量。',
   geoWorldwide: '全球',
+  geoSearch: '搜索地区或代码…',
+  choiceEmpty: '没有匹配的选项',
+  anchorSearch: '搜索锚点…',
+  anchorAutoOption: '根据查询时间窗口选择锚点',
+  anchorShortOption: '适合 24 小时及更短窗口',
+  anchorLongOption: '适合 7 天及更长窗口',
   anchor: '流量校准',
-  anchorHint: '自动：1 天及更短窗口用 sudoku，7 天及更长用 gpts。',
+  anchorHint: '自动模式按查询时间窗口选择。',
   anchorAutomatic: '自动选择锚点',
   cache: '复用近期快照',
   cacheHint: '6 小时内复用结果，减少重复请求。',
@@ -2370,19 +2384,22 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, [draft.anchors, draft.anchor, draft.windowShort, draft.windowLong]);
 
   const anchorOptions = useMemo(() =>
-    anchorTerms.map(term => ({ value: term, label: term })), [anchorTerms]);
+    anchorTerms.map(term => ({ value: term, label: term,
+      description: term.toLowerCase() === 'sudoku' ? t('anchorShortOption') : term.toLowerCase() === 'gpts' ? t('anchorLongOption') : undefined,
+    })), [anchorTerms, t]);
   const fixedAnchorOptions = useMemo(() =>
-    [{ value: '', label: t('anchorAutomatic') }, ...anchorOptions], [anchorOptions, t]);
+    [{ value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') }, ...anchorOptions], [anchorOptions, t]);
   const windowOptions = useMemo(() =>
     [{ value: '', label: t('windowDefault') }, ...anchorOptions], [anchorOptions, t]);
   const geoOptions = useMemo(() => {
     const options = [
-      { value: '', label: t('geoWorldwide') },
-      ...GEO_CODES.filter(Boolean).map(code => ({ value: code, label: regionLabel(code, intlLocale) }))
+      { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
+      ...GEO_CODES.filter(Boolean).map(code => ({ value: code, label: regionLabel(code, intlLocale),
+        search: `${regionLabel(code, 'en')} ${regionLabel(code, 'zh-CN')}` }))
         .sort((a, b) => a.label.localeCompare(b.label, intlLocale)),
     ];
     if (draft.geo && !GEO_SET.has(draft.geo)) {
-      options.push({ value: draft.geo, label: regionLabel(draft.geo, intlLocale) || draft.geo });
+      options.push({ value: draft.geo, label: regionLabel(draft.geo, intlLocale) || draft.geo, search: draft.geo });
     }
     return options;
   }, [draft.geo, intlLocale, t]);
@@ -2497,9 +2514,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <section className="gtfa-section" style={styles.section}>
       <SectionHeader icon="sliders" title={t('defaults')} description={t('defaultsDescription')} />
       <div className="gtfa-defaults-grid">
-        <Select label={t('geo')} hint={t('geoHint')} value={draft.geo} disabled={!editable}
+        <ChoicePicker label={t('geo')} hint={t('geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
           options={geoOptions} onChange={value => edit({ geo: value })} />
-        <Select label={t('anchor')} hint={t('anchorHint')} value={draft.anchor} disabled={!editable}
+        <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}

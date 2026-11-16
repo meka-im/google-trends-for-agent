@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, EN, type ConfigPageProps } from '../src/client/index.js';
 import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
+import { regionLabel } from '../src/options.js';
 
 type PathOp = { op: 'set' | 'unset'; path: string[]; value?: unknown };
 const t = (key: string) => EN[key] ?? key;
@@ -84,6 +85,13 @@ function diagnostic() {
 }
 
 const button = (key: string) => screen.getByRole('button', { name: t(key) }) as HTMLButtonElement;
+const chooseGeo = async (user: ReturnType<typeof userEvent.setup>, code: string) => {
+  const input = screen.getByRole('combobox', { name: t('geo') });
+  await user.click(input);
+  await user.clear(input);
+  await user.type(input, code);
+  await user.click(screen.getByRole('option', { name: regionLabel(code, 'en') }));
+};
 const expectKeywordCounts = () => {
   for (const keyword of CONNECTION_KEYWORDS) {
     const row = screen.getByRole('rowheader', { name: keyword }).closest('tr')!;
@@ -186,14 +194,14 @@ describe('settings interactions', () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
     expect(network.requests).toHaveLength(0);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     expect(backend.saved().geo).toBe('US');
     expect(button('save').disabled).toBe(false);
     expect(button('testConnection').disabled).toBe(false);
     await user.click(button('discard'));
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).value).toBe('US');
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('US', 'en'));
     expect(backend.mutate).not.toHaveBeenCalled();
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().geo).toBe('GB'));
     expect(backend.mutate).toHaveBeenCalledTimes(1);
@@ -207,11 +215,11 @@ describe('settings interactions', () => {
     const backend = host(); api(); const user = userEvent.setup();
     backend.mutate.mockResolvedValueOnce(false);
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     await user.click(button('save'));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', t('failed'));
     expect(backend.saved().geo).toBe('US');
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).value).toBe('GB');
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('GB', 'en'));
     expect(button('save').disabled).toBe(false);
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().geo).toBe('GB'));
@@ -234,7 +242,7 @@ describe('settings interactions', () => {
   it('does not write a read-only Host configuration', async () => {
     const backend = host({}, false); api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).disabled).toBe(true);
     expect(button('save').disabled).toBe(true);
     await user.click(button('save'));
     expect(backend.mutate).not.toHaveBeenCalled();
@@ -286,7 +294,7 @@ describe('connection diagnostic interactions', () => {
     expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
     expectKeywordCounts();
     expect(network.count('api/gtfa.test-connection')).toBe(1);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     expect(backend.mutate).not.toHaveBeenCalled();
   });
@@ -339,7 +347,7 @@ describe('connection diagnostic interactions', () => {
     const page = render(<ConfigPage ctx={backend.ctx} t={t} />);
     await user.click(button('testConnection'));
     expect(button('testing').disabled).toBe(true);
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).disabled).toBe(true);
     await user.click(button('testing'));
     expect(network.fetch).toHaveBeenCalledTimes(1);
     await user.click(button('testCancel'));
@@ -349,6 +357,84 @@ describe('connection diagnostic interactions', () => {
     page.unmount();
     expect(signal?.aborted).toBe(true);
     expect(backend.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('query-default pickers', () => {
+  it('searches a region by code and commits a keyboard choice only after Save', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, 'gb');
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option').id);
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(input.value).toBe(regionLabel('GB', 'en'));
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(backend.saved().geo).toBe('US');
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().geo).toBe('GB'));
+  });
+
+  it('searches Chinese names in English UI and preserves the empty Worldwide value', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, '美国');
+    expect(screen.getByRole('option', { name: regionLabel('US', 'en') }).getAttribute('aria-selected')).toBe('true');
+    await user.clear(input);
+    await user.type(input, 'global');
+    await user.click(screen.getByRole('option', { name: t('geoWorldwide') }));
+    expect(input.value).toBe(t('geoWorldwide'));
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().geo).toBe(''));
+  });
+
+  it('shows anchor guidance and keeps a custom anchor until it is explicitly saved', async () => {
+    const backend = host({ anchor: '', baselines: { version: 2, anchors: [
+      { term: 'my research', geo: 'US', dailySearches: 1200, tolerance: 0.5 },
+    ] } }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('anchor') }) as HTMLInputElement;
+    await user.click(input);
+    expect(screen.getByText(t('anchorAutoOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorShortOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorLongOption'))).toBeTruthy();
+    await user.type(input, 'my re');
+    await user.click(within(screen.getByRole('listbox', { name: t('anchor') })).getByRole('option', { name: 'my research' }));
+    expect(input.value).toBe('my research');
+    expect(backend.saved().anchor).toBe('');
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().anchor).toBe('my research'));
+  });
+
+  it('dismisses unmatched searches with Escape, outside clicks and Tab without changing the draft', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, 'not-a-region');
+    expect(screen.getByText(t('choiceEmpty'))).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(input.value).toBe(regionLabel('US', 'en'));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}jp');
+    expect(screen.getByRole('option', { name: regionLabel('JP', 'en') })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    await user.click(input);
+    await user.click(screen.getByRole('heading', { name: t('defaults') }));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.click(screen.getByRole('combobox', { name: t('anchor') }));
+    await user.tab();
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    expect(button('save').disabled).toBe(true);
   });
 });
 

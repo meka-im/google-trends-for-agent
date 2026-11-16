@@ -359,9 +359,13 @@ describe('dsh settings form', () => {
     expect(html).toContain('aria-label="Geo chacha"');
   });
 
-  it('keeps only the allowed text inputs', () => {
+  it('keeps picker searches separate from free-form configuration inputs', () => {
     const local = render();
-    const localInputs = [...local.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
+    const allInputs = [...local.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
+    const pickers = allInputs.filter(input => input.includes('role="combobox"'));
+    expect(pickers).toHaveLength(2);
+    expect(pickers.every(input => input.includes('readonly=""'))).toBe(true);
+    const localInputs = allInputs.filter(input => !input.includes('role="combobox"'));
     expect(localInputs.filter(input => input.includes('type="text"'))).toHaveLength(3);
     expect(localInputs.filter(input => input.includes('type="password"'))).toHaveLength(0);
     expect(localInputs.filter(input => input.includes('type="number"'))).toHaveLength(2);
@@ -369,17 +373,17 @@ describe('dsh settings form', () => {
     expect(local).not.toContain('<textarea');
 
     const apify = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
-    const apifyInputs = [...apify.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
+    const apifyInputs = [...apify.matchAll(/<input\b[^>]*>/g)].map(match => match[0]).filter(input => !input.includes('role="combobox"'));
     expect(apifyInputs.filter(input => input.includes('type="password"'))).toHaveLength(1);
     expect(apifyInputs).toHaveLength(6);
   });
 
   it('shows Worldwide as the empty geo option and tolerances as selects', () => {
     const html = render({ value: { geo: '' } });
-    expect(html).toContain('<option value="" selected="">Worldwide</option>');
-    expect(html).toContain('aria-label="Default geo"');
-    // Anchors calibrate one country, so Worldwide appears only in the default-geo select.
-    expect(html.match(/>Worldwide</g)).toHaveLength(1);
+    expect(html).toMatch(/role="combobox"[^>]*value="Worldwide"/);
+    expect(html).toContain('>Default geo</label>');
+    // Anchors calibrate one country; only the query default can be Worldwide.
+    expect(html.match(/value="Worldwide"/g)).toHaveLength(1);
     expect(html.match(/aria-label="Tolerance /g)).toHaveLength(2);
     expect(html).toContain('<option value="0.1">±10%</option>');
     expect(html).toContain('<option value="1">±100%</option>');

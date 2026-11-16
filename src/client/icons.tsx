@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 const paths: Record<string, ReactNode> = {
+  globe: <><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3 12h18" /></>,
   laptop: <><rect x="5" y="4" width="14" height="11" rx="2" /><path d="M3 19h18M5 15l-2 4M19 15l2 4" /></>,
   cloud: <><path d="M7 18a5 5 0 0 1-.7-9.9A6 6 0 0 1 18 7a4.6 4.6 0 0 1-.2 9H15" /><path d="m9 17 3 3 3-3M12 12v8" /></>,
   server: <><rect x="4" y="3" width="16" height="7" rx="2" /><rect x="4" y="14" width="16" height="7" rx="2" /><path d="M7 6.5h.1M7 17.5h.1M12 6.5h5M12 17.5h5" /></>,
