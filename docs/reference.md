@@ -134,6 +134,8 @@ Apify's only current device OAuth scope is `full_api_access`. Authorizing grants
 
 The connection section uses three egress cards. OAuth status and usage share a compact panel; **Usage details** expands billing-cycle, plan, proxy, and credential-source information. Sign out is in the account menu. The sticky footer contains **Save** and **Discard**; **Test connection** is disabled while the draft has unsaved changes, because the Host checks the saved configuration. The layout follows the Host's light/dark theme and stacks on narrow screens.
 
+The own-Actor picker shows the prerequisite instead of a disabled empty select: sign in first, wait for the list, retry a failed request, or deploy when the list is empty. Completing authorization reloads the choices; choosing an Actor is a draft until Save. **Use a manual token** opens and focuses its advanced field.
+
 **Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
 
 When either Actor route has no connected credential, a compact card shows Apify's $5 monthly Free-plan credit, an estimated 3,000–7,000 queries and a short shared-account budget note, alongside [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show this card. See [Actor costs](#actor-costs) for the sample basis and runtime bounds.

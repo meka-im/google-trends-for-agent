@@ -40,6 +40,7 @@ function host(initial: Record<string, unknown> = {}, writable = true) {
 
 function api() {
   let oauth = { available: true, connected: false, pending: false } as Record<string, unknown>;
+  let actorFailure = false;
   const requests: Array<{ url: string; method: string; signal?: AbortSignal | null }> = [];
   const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url);
@@ -52,11 +53,18 @@ function api() {
     }
     if (path.startsWith('api/gtfa.apify-oauth')) return Response.json(oauth);
     if (path.startsWith('api/gtfa.apify-usage')) return Response.json({ ok: false, code: 'no-token' });
+    if (path.startsWith('api/gtfa.apify-actors')) {
+      if (!oauth.connected) return Response.json({ ok: false, code: 'no-token' });
+      if (actorFailure) return Response.json({ ok: false, code: 'network' });
+      return Response.json({ ok: true, actors: ['actor-one', 'actor-two'].map(id => ({ id, name: 'google-trends-for-agent', username: 'tester',
+        title: id, standbyUrl: null, standbyEnabled: false, lastBuildId: 'build-one', lastBuildStatus: 'SUCCEEDED' })) });
+    }
     if (path === 'api/gtfa.test-connection') return Response.json(diagnostic());
     throw new Error(`Unexpected request in interaction test: ${path}`);
   });
   vi.stubGlobal('fetch', fetch);
   return { requests, fetch, setOAuth: (value: Record<string, unknown>) => { oauth = value; },
+    failActors: (value: boolean) => { actorFailure = value; },
     count: (path: string) => requests.filter(row => row.url === path).length };
 }
 
@@ -84,6 +92,43 @@ afterEach(() => {
 });
 
 describe('settings interactions', () => {
+  it('replaces the locked Actor selector with login and loads choices after authorization', async () => {
+    vi.useFakeTimers(); const backend = host({ egress: 'actor-own' }); const network = api();
+    render(<ConfigPage ctx={backend.ctx} t={t} />); await tick(0);
+    expect(screen.queryByRole('combobox', { name: t('actor') })).toBeNull();
+    expect(screen.getByText(t('actorLoginRequired'))).toBeTruthy();
+    fireEvent.click(button('actorLoginAction')); await tick(0);
+    expect(network.count('api/gtfa.apify-oauth-start')).toBe(1);
+    expect(screen.getByText(t('actorLoginPending'))).toBeTruthy();
+    network.setOAuth({ available: true, connected: true, pending: false }); await tick(2000);
+    const select = screen.getByRole('combobox', { name: t('actor') }) as HTMLSelectElement;
+    expect(select.disabled).toBe(false);
+    fireEvent.change(select, { target: { value: 'actor-two' } });
+    expect(backend.saved().apifyActor).toBeUndefined();
+    fireEvent.click(button('save')); await tick(0);
+    expect(backend.saved().apifyActor).toBe('actor-two');
+  });
+
+  it('opens and focuses the manual token fallback instead of leaving a disabled Actor field', async () => {
+    const backend = host({ egress: 'actor-own' }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await user.click(await screen.findByRole('button', { name: t('actorManualAction') }));
+    const input = screen.getByLabelText(t('token'));
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed Actor list and restores an interactive selector', async () => {
+    const backend = host({ egress: 'actor-own' }); const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false }); network.failActors(true);
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await screen.findByRole('button', { name: t('actorListRetry') });
+    expect(screen.queryByRole('combobox', { name: t('actor') })).toBeNull();
+    network.failActors(false); await user.click(button('actorListRetry'));
+    expect((await screen.findByRole('combobox', { name: t('actor') }) as HTMLSelectElement).disabled).toBe(false);
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
   it('keeps edits local until Save, and Discard restores without writing', async () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);

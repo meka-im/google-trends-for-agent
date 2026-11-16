@@ -241,7 +241,7 @@ describe('dsh settings form', () => {
     expect(html).toContain('Deploy to my Apify account →');
     expect(html).toContain('or deploy manually');
     expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent#deploy-it-yourself"');
-    expect(html).toContain('aria-label="Actor"');
+    expect(html).not.toContain('aria-label="Actor"');
   });
 
   it('keeps the manual deploy anchor in both READMEs', () => {
@@ -256,7 +256,7 @@ describe('dsh settings form', () => {
     const loading = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'loading' } });
     expect(loading).toContain('Loading your Actors…');
     const invalid = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'invalid-token' } });
-    expect(invalid).toContain('Apify rejected the token');
+    expect(invalid).toContain(EN.oauthReauthRequired);
     const network = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'network' } });
     expect(network).toContain('Could not load your Actors');
   });

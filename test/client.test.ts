@@ -325,7 +325,7 @@ function renderSettings(initialOAuth: ApifyOAuthView, draft: Partial<Draft> = {}
 describe('dsh Apify OAuth settings', () => {
   it('offers sign-in for Actor egress and renders neither OAuth nor the manual token in local mode', () => {
     const actor = renderSettings({ status: 'idle' });
-    expect(actor.html).toContain('Sign in with Apify');
+    expect(actor.html).toContain(EN.actorLoginAction!.replaceAll('&', '&amp;'));
     expect(actor.html).toContain('full_api_access');
     expect(actor.html).toContain(EN.manualTokenSummary);
     expect(actor.html).toContain(EN.usageSourceOAuth);
