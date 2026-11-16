@@ -162,15 +162,16 @@ describe('dsh Config schema', () => {
 describe('Apify Actor transport', () => {
   it('never puts the configured token in a tool envelope or an error message', async () => {
     const token = 'super-secret-apify-token';
-    const fetchMock = vi.fn(async () => new Response('nope', { status: 401 }));
+    const fetchMock = vi.fn(async () => new Response(`rejected token: ${token}`, { status: 401 }));
+    const unexpectedFetch = vi.fn(async () => { throw new Error('Unexpected live request'); });
+    vi.stubGlobal('fetch', unexpectedFetch);
     const logged = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'error')];
     const tools = await (async () => {
       const registered: { execute: (args: unknown, exec: { signal?: AbortSignal }) => Promise<Record<string, unknown>> }[] = [];
       const ctx = { tools: { register: (definition: unknown) => registered.push(definition as never) } };
       await register(ctx, { egress: 'actor-own', apifyToken: token, apifyActor: 'actor-1', chartDir: null }, {
-        relay: {
+        onDemand: {
           fetch: fetchMock as unknown as typeof fetch,
-          resolveStandbyUrl: async () => 'https://actor.test',
         },
         minIntervalMs: 0,
       });
@@ -178,6 +179,10 @@ describe('Apify Actor transport', () => {
     })();
     const compare = tools.find(tool => (tool as unknown as { name?: string }).name === 'trends_compare');
     const result = await compare!.execute({ keywords: ['alpha', 'beta'] }, { signal: new AbortController().signal });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/^https:\/\/api\.apify\.com\/v2\/acts\/actor-1\/runs\?/),
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: `Bearer ${token}` }) }));
+    expect(unexpectedFetch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     expect(JSON.stringify(result)).not.toContain(token);
     expect(String((result.error as { message?: string })?.message)).not.toContain(token);
     for (const spy of logged) expect(JSON.stringify(spy.mock.calls)).not.toContain(token);
