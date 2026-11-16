@@ -1587,23 +1587,23 @@ function ApifyCardArt({ className = 'gtfa-credit-art' }: { className?: string })
   const artId = useId().replace(/:/g, '');
   return <svg className={className} viewBox="0 0 340 300" fill="none" aria-hidden="true" focusable="false">
       <defs>
-        <linearGradient id={`${artId}-signal`} x1="0" y1="0" x2="210" y2="160" gradientUnits="userSpaceOnUse"><stop stopColor="#a9efdf" /><stop offset="1" stopColor="#4a93f5" /></linearGradient>
-        <linearGradient id={`${artId}-blue`} x1="0" y1="0" x2="170" y2="110" gradientUnits="userSpaceOnUse"><stop stopColor="#99d4ff" /><stop offset="1" stopColor="#2e61e9" /></linearGradient>
+        <linearGradient id={`${artId}-signal`} x1="0" y1="0" x2="210" y2="160" gradientUnits="userSpaceOnUse"><stop stopColor="#e2f3ef" /><stop offset="1" stopColor="#bfd9f9" /></linearGradient>
+        <linearGradient id={`${artId}-blue`} x1="0" y1="0" x2="170" y2="110" gradientUnits="userSpaceOnUse"><stop stopColor="#e9f3ff" /><stop offset="1" stopColor="#c1d9ff" /></linearGradient>
       </defs>
       <g transform="translate(40 -30) rotate(-24 150 150)">
         <rect x="0" y="0" width="142" height="85" rx="12" fill={`url(#${artId}-blue)`} />
-        <path d="M16 22h65M16 34h37" stroke="white" strokeOpacity=".45" strokeWidth="5" strokeLinecap="round" />
+        <path d="M16 22h65M16 34h37" stroke="#6e93c8" strokeOpacity=".45" strokeWidth="5" strokeLinecap="round" />
         <rect x="154" y="0" width="150" height="85" rx="12" fill={`url(#${artId}-signal)`} />
-        <path d="m170 59 25-21 20 8 30-24 39 10" stroke="white" strokeOpacity=".6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="m170 59 25-21 20 8 30-24 39 10" stroke="#6e93c8" strokeOpacity=".6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         <rect x="0" y="97" width="234" height="112" rx="13" fill={`url(#${artId}-signal)`} />
-        <path d="M18 119h79M18 132h45" stroke="white" strokeOpacity=".55" strokeWidth="5" strokeLinecap="round" />
-        <path d="m18 181 29-13 29 7 34-29 29 12 33-24 39-3" stroke="white" strokeOpacity=".85" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M18 119h79M18 132h45" stroke="#6e93c8" strokeOpacity=".55" strokeWidth="5" strokeLinecap="round" />
+        <path d="m18 181 29-13 29 7 34-29 29 12 33-24 39-3" stroke="#6e93c8" strokeOpacity=".85" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         <rect x="246" y="97" width="100" height="112" rx="13" fill={`url(#${artId}-blue)`} />
         <rect x="0" y="221" width="102" height="100" rx="12" fill={`url(#${artId}-signal)`} />
         <rect x="114" y="221" width="190" height="100" rx="12" fill={`url(#${artId}-blue)`} />
-        <path d="M133 244h76M133 257h42" stroke="white" strokeOpacity=".5" strokeWidth="5" strokeLinecap="round" />
-        <circle cx="24" cy="283" r="9" fill="white" fillOpacity=".3" />
-        <path d="M44 282h36" stroke="white" strokeOpacity=".4" strokeWidth="5" strokeLinecap="round" />
+        <path d="M133 244h76M133 257h42" stroke="#6e93c8" strokeOpacity=".5" strokeWidth="5" strokeLinecap="round" />
+        <circle cx="24" cy="283" r="9" fill="#88acd4" fillOpacity=".3" />
+        <path d="M44 282h36" stroke="#6e93c8" strokeOpacity=".4" strokeWidth="5" strokeLinecap="round" />
       </g>
     </svg>;
 }
@@ -1696,12 +1696,12 @@ function UsageDetails({ data, t, locale, actions }: { data: ApifyUsageData; t: T
   const hasProgress = data.usageUsd !== null && data.limitUsd !== null && data.limitUsd > 0;
   const percent = hasProgress ? Math.min(100, Math.max(0, (data.usageUsd! / data.limitUsd!) * 100)) : 0;
   const color = !hasProgress
-    ? 'rgba(255,255,255,.3)'
+    ? 'rgba(46,97,233,.15)'
     : percent > 90
-      ? '#ffb4ae'
+      ? 'var(--gtfa-card-error)'
       : percent >= 70
-        ? '#ffe0a0'
-        : '#a9efdf';
+        ? 'var(--gtfa-card-warning)'
+        : 'var(--gtfa-card-progress)';
   const balance = data.usageUsd !== null && data.limitUsd !== null ? data.limitUsd - data.usageUsd : null;
   const remaining = template(t(balance !== null && balance < 0 ? 'usageOverBudget' : 'usageRemaining'), { amount: money(balance === null ? null : Math.abs(balance)) });
 
