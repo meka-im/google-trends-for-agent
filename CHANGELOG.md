@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.9 — 2026-11-16
+
+- Accept compatible schemastery 3.x peers so npm can install the plugin beside dsh 0.2.2-rc.1, which uses schemastery 3.19.0. The real Host checks cover this release and the declared dsh minimum 0.2.1-rc.3.
+- Add PR checks on Node 20 and 24, clean consumer-package validation, dependency audits, document-path checks, and an aggregate merge check. Compatibility checks boot the packed plugin with published dsh tools, configuration and credentials services; no Google or Apify calls are made.
+- Exercise the settings page's actual Save/Discard, validation, write rejection, OAuth actions, and polling lifecycle in DOM interaction tests.
+
 ## 0.2.8 — 2026-11-16
 
 - Map dsh's localized `meta.detail` to the packaged English and Simplified Chinese READMEs so plugin details follow the Host's display language.
