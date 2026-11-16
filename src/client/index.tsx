@@ -300,6 +300,17 @@ export const EN: Record<string, string> = {
   signupMonthly: 'Free credits, every month',
   signupEstimate: 'About 3,000–7,000 queries / month',
   signupCreditNote: 'Sample estimate · Credits shared across your account',
+  actorLoginRequired: 'Sign in to choose an Actor',
+  actorLoginHint: 'Your Actor list appears after authorization.',
+  actorLoginAction: 'Sign in & load Actors',
+  actorLoginPending: 'Waiting for authorization',
+  actorManualAction: 'Use a manual token',
+  actorListRetry: 'Reload Actors',
+  actorMissing: 'Saved Actor unavailable — choose another',
+  actorSelectionHint: 'Choose your deployment, then save.',
+  connectionPrivacy: 'On demand · Credentials stay on this device',
+  connectionCostShort: 'Compute and proxy usage are billed to your Apify account.',
+  publicActorDetails: 'Actor details',
   advancedFix: 'Review advanced settings before saving.',
   testSaveFirst: 'Save before testing',
   summary: 'Search trends, compare keywords, and create calibrated snapshots for your agent.',
@@ -307,7 +318,7 @@ export const EN: Record<string, string> = {
   oauthTitle: 'Apify sign-in',
   oauthSignedOut: 'Authorize once to query trends through your Actor.',
   oauthSignIn: 'Sign in with Apify',
-  oauthScope: 'Apify grants full_api_access to your account, beyond this Actor. Calls are billed to your Apify account.',
+  oauthScope: 'Grants full_api_access to your whole Apify account. Calls use your Apify balance.',
   oauthStarting: 'Starting Apify sign-in…',
   oauthPendingTitle: 'Finish signing in at Apify',
   oauthPending: 'Open the official Apify page, then enter this code:',
@@ -423,7 +434,7 @@ export const EN: Record<string, string> = {
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
   baselines: 'Anchors & baselines',
   baselinesDescription: 'Override the built-in calibration anchors or add your own.',
-  baselinesHint: 'Same format and validation as a version 2 baselines.json. Empty keeps the built-in US anchors.',
+  baselinesHint: 'Keep the built-in US baselines, or customize them below.',
   overrideBaselines: 'Override or add anchors',
   anchorTerm: 'Term',
   newAnchorTerm: 'New anchor term',
@@ -447,11 +458,11 @@ export const EN: Record<string, string> = {
   advanced: 'Advanced',
   advancedDescription: 'Calibration baselines, manual token, and file locations.',
   snapshotDir: 'Snapshot directory',
-  snapshotDirHint: 'Where snapshots are stored, resolved against the dsh process working directory.',
+  snapshotDirHint: 'Relative paths start from the dsh working directory.',
   chartDir: 'Chart directory',
   chartDirHint: 'Where SVG charts are written when chart files are on.',
   charts: 'Write chart files',
-  chartsHint: 'Turning this off disables SVG chart files; the tool still returns chart paths as null.',
+  chartsHint: 'Save SVG files alongside query results.',
   requiredDirectory: 'This directory must not be blank.',
   unsaved: 'Unsaved changes',
   discard: 'Discard',
@@ -530,6 +541,17 @@ export const ZH: Record<string, string> = {
   signupMonthly: '每月免费额度',
   signupEstimate: '约可查询 3,000–7,000 次 / 月',
   signupCreditNote: '按样本估算 · 额度全账号共享',
+  actorLoginRequired: '登录后选择 Actor',
+  actorLoginHint: '授权完成后，自动加载你账号中的 Actor。',
+  actorLoginAction: '登录并加载',
+  actorLoginPending: '等待授权完成',
+  actorManualAction: '使用手动 Token',
+  actorListRetry: '重新加载',
+  actorMissing: '已保存的 Actor 不可用，请重新选择',
+  actorSelectionHint: '选择你的部署，保存后生效。',
+  connectionPrivacy: '按需运行 · 凭据保留在本机',
+  connectionCostShort: '计算和代理用量计入你的 Apify 账号。',
+  publicActorDetails: 'Actor 详情',
   advancedFix: '请检查高级设置后再保存。',
   testSaveFirst: '保存后测试',
   summary: '查询搜索趋势，比较关键词，生成带图快照。',
@@ -537,7 +559,7 @@ export const ZH: Record<string, string> = {
   oauthTitle: 'Apify 登录',
   oauthSignedOut: '一次授权，即可通过 Actor 查询趋势。',
   oauthSignIn: '登录 Apify',
-  oauthScope: 'Apify 将授予账号的 full_api_access 权限，并不限于本 Actor；调用费用计入你的 Apify 账号。',
+  oauthScope: '授权 full_api_access（完整 Apify 账号权限），调用计入你的 Apify 账单。',
   oauthStarting: '正在开始 Apify 登录…',
   oauthPendingTitle: '请在 Apify 完成登录',
   oauthPending: '打开 Apify 官方页面，然后输入此代码：',
@@ -642,18 +664,18 @@ export const ZH: Record<string, string> = {
   deployFailed: '部署失败。请重试或手动部署。',
   deployBuildFailed: '刚部署的 Actor 构建失败。请在 Apify Console（Actor → Builds）中重新构建，然后刷新。',
   defaults: '查询默认值',
-  defaultsDescription: '工具调用没有指定参数时，使用以下设置。',
+  defaultsDescription: '查询时未指定的参数，使用这里的设置。',
   geo: '默认地区',
-  geoHint: '用于趋势查询与对比；全球没有内置流量校准。',
+  geoHint: '全球查询不估算搜索量。',
   geoWorldwide: '全球',
   anchor: '流量校准',
   anchorHint: '自动：1 天及更短窗口用 sudoku，7 天及更长用 gpts。',
   anchorAutomatic: '自动选择锚点',
   cache: '复用近期快照',
-  cacheHint: '6 小时内优先复用已保存的结果，减少重复请求。',
+  cacheHint: '6 小时内复用结果，减少重复请求。',
   baselines: '锚点与基线',
   baselinesDescription: '覆盖内置校准锚点或添加自定义锚点。',
-  baselinesHint: '格式和校验与 version 2 的 baselines.json 相同；留空使用内置美国基线。',
+  baselinesHint: '默认使用内置美国基线，也可在下方调整。',
   overrideBaselines: '覆盖或新增锚点',
   anchorTerm: '词',
   newAnchorTerm: '新锚点词',
@@ -677,11 +699,11 @@ export const ZH: Record<string, string> = {
   advanced: '高级',
   advancedDescription: '自定义锚点、手动 Token 与文件位置。',
   snapshotDir: '快照目录',
-  snapshotDirHint: '快照存放位置，相对于 dsh 进程的工作目录解析。',
+  snapshotDirHint: '相对路径以 dsh 的工作目录为起点。',
   chartDir: '图表目录',
   chartDirHint: '开启图表文件时 SVG 的写入位置。',
   charts: '写入图表文件',
-  chartsHint: '关闭后不再写 SVG 文件，工具返回的图表路径为 null。',
+  chartsHint: '查询时同时保存 SVG 图表。',
   requiredDirectory: '目录不能为空。',
   unsaved: '未保存的修改',
   discard: '还原',
@@ -705,8 +727,8 @@ export const ZH: Record<string, string> = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'grid', gap: 0, width: '100%', minWidth: 0, maxWidth: 960, padding: '0 0 24px' },
-  section: { display: 'grid', gap: 18, padding: '24px 0', borderTop: '1px solid var(--gtfa-line)' },
+  page: { display: 'grid', gap: 18, width: '100%', minWidth: 0, maxWidth: 920, padding: '8px 0 24px' },
+  section: { display: 'grid', gap: 18, padding: 24, border: '1px solid var(--gtfa-line)', borderRadius: 16, background: 'var(--gtfa-surface)' },
   sectionHeader: { display: 'grid', gap: 4 },
   sectionTitle: { margin: 0, fontSize: 15, lineHeight: 1.5, fontWeight: 650 },
   sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
@@ -719,7 +741,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
   select: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 36, padding: '0 28px 0 10px', border: '1px solid var(--gtfa-line)',
     borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
-  segment: { position: 'relative', display: 'grid', gap: 13, padding: '16px 17px', minHeight: 108, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
+  segment: { position: 'relative', display: 'grid', gap: 12, padding: '14px 16px', minHeight: 102, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
     borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13, cursor: 'pointer' },
   segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)', boxShadow: 'inset 0 0 0 .5px var(--gtfa-accent)' },
   switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, minHeight: 32, fontSize: 13 },
@@ -736,7 +758,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12, overflowWrap: 'anywhere' },
   windowRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 14 },
   saveBar: { position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 0, padding: '16px 0', borderTop: '1px solid var(--gtfa-line)', background: 'var(--gtfa-surface)' },
+    marginTop: 0, padding: '14px 18px', border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-surface)', boxShadow: '0 4px 20px #16234206' },
   button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '7px 13px', minHeight: 34,
     border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
   buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
@@ -746,7 +768,7 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--gtfa-green)', background: 'var(--gtfa-green-soft)' },
   status: { margin: 0, fontSize: 13 },
   error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
-  summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 0', cursor: 'pointer' },
+  summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px', cursor: 'pointer' },
   connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)' },
   usageCard: { padding: '12px 18px', borderTop: '1px solid var(--gtfa-line)', borderRadius: '0 0 12px 12px', background: 'var(--gtfa-surface)' },
   signupPrimary: { color: 'var(--gtfa-accent)', fontWeight: 550, textDecoration: 'none' },
@@ -1459,12 +1481,13 @@ export interface ApifyOAuthCardProps {
   onRetry?: () => void;
   connectionAction?: ReactNode;
   connectionDescription?: string;
+  signInLabel?: string;
 }
 
 /** SSR-safe Apify sign-in card. Buttons only call explicit parent actions. */
 export function ApifyOAuthCard({
   state, t, locale, busy = null, onStart, onCancel, onLogout, onRetry,
-  connectionAction, connectionDescription,
+  connectionAction, connectionDescription, signInLabel,
 }: ApifyOAuthCardProps) {
   const data = state.status === 'ready' ? state.data : undefined;
   const issue = oauthIssueCode(state);
@@ -1472,7 +1495,7 @@ export function ApifyOAuthCard({
   const signIn = <button type="button" className="gtfa-button" style={dim({ ...styles.button, ...styles.primary }, busy !== null)}
     disabled={busy !== null} onClick={onStart}>
     <Icon name="external" size={13} />
-    {busy === 'start' ? t('oauthStarting') : issue ? t('oauthSignInAgain') : t('oauthSignIn')}
+    {busy === 'start' ? t('oauthStarting') : issue ? t('oauthSignInAgain') : signInLabel ?? t('oauthSignIn')}
   </button>;
   const alert = issue ? <p style={styles.fieldError} role="alert">{oauthErrorText(issue, t)}</p> : null;
   const loading = state.status === 'loading';
@@ -1490,7 +1513,7 @@ export function ApifyOAuthCard({
         <div className="gtfa-connection-title" role="status">{title}</div>
         {!loading ? <p className="gtfa-connection-subtitle">{data?.connected
           ? connectionDescription ?? t('oauthConnectedHint')
-          : data?.pending ? t('oauthPending') : t('oauthSignedOut')}</p> : null}
+          : data?.pending ? t('oauthPending') : signInLabel ? t('actorLoginHint') : t('oauthSignedOut')}</p> : null}
       </div>
       <div className="gtfa-connection-actions">
         {data?.connected ? <>
@@ -1575,6 +1598,40 @@ function actorErrorText(state: Extract<ApifyActorsView, { status: 'error' }>, t:
   if (state.code === 'invalid-token') return t('testInvalidToken');
   if (state.code === 'network') return t('actorLoadNetwork');
   return template(t('actorLoadHttp'), { status: statusLabel(state.httpStatus ?? null) });
+}
+
+/** Replace an unusable selector with the action needed to obtain its options. */
+export function ActorSelection({ state, value, t, disabled, pending = false, onChange, onRefresh, onManual }: {
+  state: ApifyActorsView; value: string; t: Translate; disabled: boolean; pending?: boolean;
+  onChange: (value: string) => void; onRefresh: () => void; onManual: () => void;
+}) {
+  const loading = state.status === 'idle' || state.status === 'loading';
+  const needsLogin = state.status === 'error' && (state.code === 'no-token' || state.code === 'invalid-token');
+  const selected = state.status === 'ready' ? state.actors.find(actor => actor.id === value) : undefined;
+  return <div className="gtfa-actor-picker">
+    <div className="gtfa-picker-heading"><span><Icon name="server" size={15} />{t('actor')}</span>
+      {!needsLogin ? <button type="button" className="gtfa-button gtfa-quiet-button" style={styles.buttonSmall}
+        disabled={disabled || loading} onClick={onRefresh}><Icon name="refresh" size={12} />{t('actorRefresh')}</button> : null}
+    </div>
+    {state.status === 'ready' && state.actors.length > 0 ? <>
+      <select style={styles.select} aria-label={t('actor')} value={value} disabled={disabled}
+        onChange={event => onChange(event.target.value)}>
+        <option value="">{t('actorNone')}</option>
+        {value && !selected ? <option value={value} disabled>{t('actorMissing')}</option> : null}
+        {state.actors.map(actor => <option key={actor.id} value={actor.id}>
+          {[actor.username, actor.name].filter(Boolean).join('/')}{actor.title ? ` — ${actor.title}` : ''}
+        </option>)}
+      </select>
+      <p className="gtfa-picker-meta">{selected ? <><span className="gtfa-dot" />{template(t('actorBuild'), { status: (selected.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase() })}</> : t(value ? 'actorMissing' : 'actorSelectionHint')}</p>
+    </> : <div className={`gtfa-picker-state${needsLogin ? ' login' : ''}`} role={state.status === 'error' && !needsLogin ? 'alert' : 'status'}>
+      <span className="gtfa-picker-state-icon"><Icon name={loading ? 'refresh' : needsLogin ? 'plug' : state.status === 'error' ? 'alert' : 'server'} size={19} /></span>
+      <div className="gtfa-picker-state-copy"><strong>{loading ? t('actorLoading') : needsLogin ? t(pending ? 'actorLoginPending' : state.code === 'invalid-token' ? 'oauthReauthRequired' : 'actorLoginRequired') : state.status === 'error' ? actorErrorText(state, t) : t('actorEmpty')}</strong>
+      </div>
+      {needsLogin ? <div className="gtfa-picker-actions">
+        <button type="button" className="gtfa-text-button" disabled={disabled} onClick={onManual}>{t('actorManualAction')}</button>
+      </div> : state.status === 'error' ? <button type="button" className="gtfa-button" style={styles.buttonSmall} disabled={disabled} onClick={onRefresh}>{t('actorListRetry')}</button> : null}
+    </div>}
+  </div>;
 }
 
 export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshing = false }: {
@@ -1678,6 +1735,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   </div>;
 }
 
+function AnchorCell({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="gtfa-anchor-cell"><span className="gtfa-anchor-cell-label" aria-hidden="true">{label}</span>{children}</div>;
+}
+
 function Select({ label, hint, value, options, onChange, disabled, ariaLabel }: {
   label: string;
   hint?: string;
@@ -1758,19 +1819,18 @@ function Toggle({ label, hint, checked, onChange, disabled }: {
   onChange: (next: boolean) => void;
   disabled: boolean;
 }) {
-  return <div style={styles.field}>
-    <div style={styles.switchRow}>
-      <span style={{ ...styles.label, marginBottom: 0 }}>{label}</span>
-      <Switch label={label} checked={checked} onChange={onChange} disabled={disabled} />
-    </div>
-    {hint ? <p style={styles.hint}>{hint}</p> : null}
+  return <div className="gtfa-toggle-field">
+    <div><span style={{ ...styles.label, marginBottom: 0 }}>{label}</span>
+      {hint ? <p style={styles.hint}>{hint}</p> : null}</div>
+    <Switch label={label} checked={checked} onChange={onChange} disabled={disabled} />
   </div>;
 }
 
-function SectionHeader({ title, description }: { title: string; description: string }) {
-  return <div style={styles.sectionHeader}>
-    <h3 style={styles.sectionTitle}>{title}</h3>
-    <p style={styles.sectionDescription}>{description}</p>
+function SectionHeader({ title, description, icon }: { title: string; description: string; icon?: string }) {
+  return <div className="gtfa-section-heading">
+    {icon ? <span className="gtfa-section-icon"><Icon name={icon} size={18} /></span> : null}
+    <div style={styles.sectionHeader}><h3 style={styles.sectionTitle}>{title}</h3>
+      <p style={styles.sectionDescription}>{description}</p></div>
   </div>;
 }
 
@@ -2145,13 +2205,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     [{ value: '', label: t('anchorAutomatic') }, ...anchorOptions], [anchorOptions, t]);
   const windowOptions = useMemo(() =>
     [{ value: '', label: t('windowDefault') }, ...anchorOptions], [anchorOptions, t]);
-  const actorOptions = useMemo(() => actors.status === 'ready'
-    ? actors.actors.map(actor => ({
-      value: actor.id,
-      label: `${[actor.username, actor.name].filter(Boolean).join('/')}${actor.title ? ` — ${actor.title}` : ''}`,
-    }))
-    : [], [actors]);
-  const selectedActor = actors.status === 'ready' ? actors.actors.find(actor => actor.id === draft.actor) : undefined;
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide') },
@@ -2207,11 +2260,18 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     setAdvancedOpen(true);
     setAdvancedTab(validation.snapshotDir || validation.chartDir ? 'files' : 'anchors');
   };
+  const openManualToken = () => {
+    setAdvancedOpen(true);
+    setAdvancedTab('token');
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => {
+      document.getElementById(`${advancedId}-token-panel`)?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+  };
 
   return <form className="gtfa-settings" style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
     <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
-    <section style={styles.section}>
-      <SectionHeader title={t('connection')} description={t('connectionDescription')} />
+    <section className="gtfa-section" style={styles.section}>
+      <SectionHeader icon="plug" title={t('connection')} description={t('connectionDescription')} />
       <Segmented label={t('egress')} value={draft.egress} disabled={!editable}
         options={[
           { value: 'local', label: t('egressLocal'), description: t('routeLocalDescription'), icon: 'laptop' },
@@ -2222,52 +2282,23 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       {draft.egressNotice ? <p style={styles.warning} role="status">
         {t(draft.egressNotice === 'renamed' ? 'egressRenamed' : 'egressUnknown')}
       </p> : null}
-      <div style={styles.connectionPanel}>
+      <div className="gtfa-connection-panel" style={styles.connectionPanel}>
         {actorEgress ? <>
           <ApifyOAuthCard state={oauth} t={t} locale={intlLocale} busy={oauthBusy}
+            signInLabel={ownEgress ? t('actorLoginAction') : undefined}
             connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
             onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
             onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
-          {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
           {!oauthConnected && (tokenSet || usage.status === 'ready') ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
             <ApifyUsageCard state={usage} t={t} locale={intlLocale}
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
-        </> : <div className="gtfa-connection-top">
-          <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
-          <div className="gtfa-connection-copy"><div className="gtfa-connection-title">{t('localNetwork')}
-            <span style={{ ...styles.pill, color: line?.ok ? 'var(--gtfa-green)' : 'var(--gtfa-muted)', background: line?.ok ? 'var(--gtfa-green-soft)' : 'var(--gtfa-hover)' }}>
-              {testing ? t('testing') : line?.ok ? t('connectionReady') : testResult?.code === 'host-restart-required' ? t('connectionHostRestart') : testResult?.network?.ok ? t('connectionNetworkOnly') : testResult ? t('connectionFailed') : t('connectionUntested')}
-            </span></div><p className="gtfa-connection-subtitle">{t('localNetworkHint')}</p></div>
-          <div className="gtfa-connection-actions">{testButton}</div>
-        </div>}
-      </div>
-      <p style={styles.hint}>{dirty ? t('testSavedNote') : t('testNote')}{actorEgress ? ` ${t('testActorCost')}` : ''}</p>
-      {testing || testResult ? <ConnectionTestResults result={testResult ?? undefined} testing={testing} t={t} locale={intlLocale} /> : null}
-      {actorEgress ? <>
-        <p style={{ ...styles.hint, display: 'flex', alignItems: 'center', gap: 7, margin: 0 }}><Icon name="shield" size={13} />{t('actorAccountHint')}</p>
-        {ownEgress ? <>
-          <div style={styles.field}>
-            <div style={styles.switchRow}>
-              <span style={{ ...styles.label, marginBottom: 0 }}>{t('actor')}</span>
-              <button type="button" style={styles.buttonSmall} disabled={!editable || actors.status === 'loading'}
-                onClick={() => requestActors(true)}>{t('actorRefresh')}</button>
-            </div>
-            <select style={styles.select} aria-label={t('actor')} value={draft.actor}
-              disabled={!editable || actors.status !== 'ready' || actors.actors.length === 0}
-              onChange={event => edit({ actor: event.target.value })}>
-              <option value="">{t('actorNone')}</option>
-              {actorOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <p style={styles.hint}>{t('actorHint')}</p>
-            {selectedActor ? <p style={styles.hint}>{template(t('actorBuild'), {
-              status: (selectedActor.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase(),
-            })}</p> : null}
-            {actors.status === 'loading' ? <p style={styles.hint}>{t('actorLoading')}</p> : null}
-            {actors.status === 'error' ? <p style={styles.fieldError} role="alert">{actorErrorText(actors, t)}</p> : null}
-          </div>
-          {actors.status === 'ready' && actors.actors.length === 0 ? <div style={styles.usageBlock}>
-            <p style={styles.usageMeta}>{t('actorEmpty')}</p>
+          {ownEgress ? <ActorSelection state={actors} value={draft.actor} t={t} disabled={!editable || oauthBusy !== null}
+            pending={oauth.status === 'ready' && oauth.data.pending}
+            onChange={value => edit({ actor: value })} onRefresh={() => requestActors(true)}
+            onManual={openManualToken} /> : null}
+          {ownEgress && (actors.status === 'ready' && actors.actors.length === 0 || building || deployNotice) ? <div className="gtfa-own-actions">
+          {actors.status === 'ready' && actors.actors.length === 0 ? <div className="gtfa-deploy-actions" style={styles.usageBlock}>
             <div>
               <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
                 disabled={!editable || deploying} onClick={() => { void deploy(); }}>
@@ -2278,18 +2309,33 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           </div> : null}
           {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
           {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
-        </> : <details style={styles.hint}><summary style={{ cursor: 'pointer', width: 'fit-content' }}>{GTFA_PUBLIC_ACTOR_LABEL}</summary>
+                  </div> : null}
+          {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
+        </> : <div className="gtfa-connection-top">
+          <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
+          <div className="gtfa-connection-copy"><div className="gtfa-connection-title">{t('localNetwork')}
+            <span style={{ ...styles.pill, color: line?.ok ? 'var(--gtfa-green)' : 'var(--gtfa-muted)', background: line?.ok ? 'var(--gtfa-green-soft)' : 'var(--gtfa-hover)' }}>
+              {testing ? t('testing') : line?.ok ? t('connectionReady') : testResult?.code === 'host-restart-required' ? t('connectionHostRestart') : testResult?.network?.ok ? t('connectionNetworkOnly') : testResult ? t('connectionFailed') : t('connectionUntested')}
+            </span></div><p className="gtfa-connection-subtitle">{t('localNetworkHint')}</p></div>
+          <div className="gtfa-connection-actions">{testButton}</div>
+        </div>}
+      </div>
+      <p className="gtfa-test-help">{dirty ? t('testSavedNote') : t('testNote')}{actorEgress ? <span>{t('connectionCostShort')}</span> : null}</p>
+      {testing || testResult ? <ConnectionTestResults result={testResult ?? undefined} testing={testing} t={t} locale={intlLocale} /> : null}
+      {actorEgress ? <>
+        <p className="gtfa-privacy-note"><Icon name="shield" size={13} />{t('connectionPrivacy')}</p>
+        {!ownEgress ? <details className="gtfa-public-details" style={styles.hint}><summary style={{ cursor: 'pointer', width: 'fit-content' }}>{t('publicActorDetails')} · {GTFA_PUBLIC_ACTOR_LABEL}</summary>
           <Field label={t('publicActor')} hint={t('publicActorHint')}>
             <span style={styles.readOnlyTerm}>Actor: {GTFA_PUBLIC_ACTOR_LABEL}</span>
             <p style={styles.hint}><a style={styles.signupPrimary} href={GTFA_SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('viewSource')}</a> · <a style={styles.signupPrimary} href={GTFA_STORE_URL} target="_blank" rel="noopener noreferrer">{t('storePage')}</a></p>
             <p style={styles.hint}>{t('publicActorCost')}</p>
           </Field>
-        </details>}
+        </details> : null}
       </> : null}
     </section>
 
-    <section style={styles.section}>
-      <SectionHeader title={t('defaults')} description={t('defaultsDescription')} />
+    <section className="gtfa-section" style={styles.section}>
+      <SectionHeader icon="sliders" title={t('defaults')} description={t('defaultsDescription')} />
       <div className="gtfa-defaults-grid">
         <Select label={t('geo')} hint={t('geoHint')} value={draft.geo} disabled={!editable}
           options={geoOptions} onChange={value => edit({ geo: value })} />
@@ -2300,10 +2346,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         onChange={checked => edit({ cache: checked })} />
     </section>
 
-    <details className="gtfa-advanced" open={advancedOpen} style={{ borderTop: '1px solid var(--gtfa-line)' }}
+    <details className="gtfa-advanced" open={advancedOpen}
       onToggle={event => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }}>
       <summary style={styles.summary}>
-        <Icon name="sliders" size={18} />
+        <span className="gtfa-section-icon"><Icon name="sliders" size={18} /></span>
         <span style={{ display: 'grid', gap: 4 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{t('advanced')}</span>
           <span style={styles.sectionDescription}>{t('advancedDescription')}</span></span>
         <span className="gtfa-advanced-chevron" style={{ marginLeft: 'auto', color: 'var(--gtfa-quiet)' }}><Icon name="chevron" size={15} /></span>
@@ -2320,47 +2366,54 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           onChange={checked => edit(setBaselineOverride(draft, checked))} />
         {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
         {draft.baselineOverride ? <div className="gtfa-anchor-scroll"><div>
-          <div style={styles.anchorHead}>
+          <div className="gtfa-anchor-head" style={styles.anchorHead}>
             <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />
           </div>
-          {draft.anchors.map((anchor, index) => <div style={styles.anchorBlock} key={`${anchor.term}-${index}`}>
-            <div style={styles.anchorRow}>
-              <span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span>
+          {draft.anchors.map((anchor, index) => <div className="gtfa-anchor-block" style={styles.anchorBlock} key={`${anchor.term}-${index}`}>
+            <div className="gtfa-anchor-row" style={styles.anchorRow}>
+              <AnchorCell label={t('anchorTerm')}><span style={styles.readOnlyTerm} title={anchor.term}>{anchor.term}</span></AnchorCell>
+              <AnchorCell label={t('anchorGeo')}>
               <select style={styles.select} aria-label={`${t('anchorGeo')} ${anchor.term}`} value={anchor.geo} disabled={!editable}
                 onChange={event => editAnchor(index, { geo: event.target.value })}>
                 {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-              </select>
+              </select></AnchorCell>
+              <AnchorCell label={t('anchorDaily')}>
               <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${anchor.term}`}
                 aria-invalid={Boolean(validation.anchorRows[index])}
                 value={anchor.dailySearches} disabled={!editable}
-                onChange={event => editAnchor(index, { dailySearches: event.target.value })} />
+                onChange={event => editAnchor(index, { dailySearches: event.target.value })} /></AnchorCell>
+              <AnchorCell label={t('anchorTolerance')}>
               <select style={styles.select} aria-label={`${t('anchorTolerance')} ${anchor.term}`} value={anchor.tolerance} disabled={!editable}
                 onChange={event => editAnchor(index, { tolerance: event.target.value })}>
                 {toleranceChoices(anchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </select></AnchorCell>
               <button type="button" style={styles.button} disabled={!editable}
                 onClick={() => edit({ anchors: draft.anchors.filter((_, i) => i !== index) })}>{t('remove')}</button>
             </div>
             {validation.anchorRows[index] ? <p style={styles.fieldError} role="alert">{validation.anchorRows[index]}</p> : null}
           </div>)}
-          <div style={styles.anchorBlock}>
-            <div style={styles.anchorRow}>
+          <div className="gtfa-anchor-block" style={styles.anchorBlock}>
+            <div className="gtfa-anchor-row" style={styles.anchorRow}>
+              <AnchorCell label={t('anchorTerm')}>
               <input style={styles.input} type="text" aria-label={t('newAnchorTerm')} placeholder={t('newAnchorTerm')}
                 aria-invalid={Boolean(validation.newAnchorTerm)}
                 value={draft.newAnchor.term} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} />
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, term: event.target.value } })} /></AnchorCell>
+              <AnchorCell label={t('anchorGeo')}>
               <select style={styles.select} aria-label={`${t('anchorGeo')} ${t('newAnchorTerm')}`} value={draft.newAnchor.geo} disabled={!editable}
                 onChange={event => edit({ newAnchor: { ...draft.newAnchor, geo: event.target.value } })}>
                 {anchorGeoOptions.map(option => <option key={option.value || '__worldwide__'} value={option.value}>{option.label}</option>)}
-              </select>
+              </select></AnchorCell>
+              <AnchorCell label={t('anchorDaily')}>
               <input style={styles.input} type="number" min={1} step={1} aria-label={`${t('anchorDaily')} ${t('newAnchorTerm')}`}
                 aria-invalid={Boolean(validation.newAnchorDaily)}
                 value={draft.newAnchor.dailySearches} disabled={!editable}
-                onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} />
+                onChange={event => edit({ newAnchor: { ...draft.newAnchor, dailySearches: event.target.value } })} /></AnchorCell>
+              <AnchorCell label={t('anchorTolerance')}>
               <select style={styles.select} aria-label={`${t('anchorTolerance')} ${t('newAnchorTerm')}`} value={draft.newAnchor.tolerance} disabled={!editable}
                 onChange={event => edit({ newAnchor: { ...draft.newAnchor, tolerance: event.target.value } })}>
                 {toleranceChoices(draft.newAnchor.tolerance).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </select></AnchorCell>
               <button type="button" style={dim(styles.button, !editable || !newAnchorReady)} disabled={!editable || !newAnchorReady} onClick={addAnchor}>{t('addAnchor')}</button>
             </div>
             {validation.newAnchorTerm ? <p style={styles.fieldError} role="alert">{validation.newAnchorTerm}</p> : null}
