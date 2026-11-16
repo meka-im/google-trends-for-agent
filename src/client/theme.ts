@@ -13,6 +13,9 @@ export const SETTINGS_CSS = `
   --gtfa-accent-soft:color-mix(in srgb,var(--gtfa-accent) 7%,var(--gtfa-surface));
   --gtfa-green:var(--dsw-alias-state-success-primary,#238461);
   --gtfa-green-soft:color-mix(in srgb,var(--gtfa-green) 9%,var(--gtfa-surface));
+  --gtfa-save-surface:color-mix(in srgb,var(--gtfa-accent) 2%,var(--gtfa-surface));
+  --gtfa-save-border:color-mix(in srgb,var(--gtfa-accent) 18%,var(--gtfa-line));
+  --gtfa-save-shadow:0 -4px 18px rgba(22,35,66,.08),0 12px 32px rgba(22,35,66,.18);
   color:var(--gtfa-ink); font-size:13px; line-height:1.5;
 }
 .gtfa-settings *, .gtfa-settings *::before, .gtfa-settings *::after { box-sizing:border-box; }
@@ -201,7 +204,7 @@ export const SETTINGS_CSS = `
   .gtfa-usage-detail-grid { grid-template-columns:1fr; }
   .gtfa-usage-row .gtfa-progress { width:64px; }
   .gtfa-advanced-tabs { gap:18px; }
-  .gtfa-save-bar { gap:7px!important; padding:13px 0!important; }
+  .gtfa-save-bar { gap:7px!important; padding:12px 14px!important; }
   .gtfa-save-bar>button { padding:7px 10px!important; font-size:12px!important; }
   .gtfa-diagnostic-heading { padding:15px; gap:10px; }
   .gtfa-diagnostic-heading-copy>h4 { margin:0; font-size:13px; }
@@ -219,6 +222,7 @@ export const SETTINGS_CSS = `
     --gtfa-quiet:var(--dsw-alias-label-tertiary,#717e93);
     --gtfa-surface:var(--dsw-alias-bg-layer-1,#1a1f28);
     --gtfa-line:var(--dsw-alias-border-l4,#303847);
+    --gtfa-save-shadow:0 -4px 20px rgba(0,0,0,.24),0 12px 36px rgba(0,0,0,.44);
   }
 }
 @media(prefers-reduced-motion:reduce) {

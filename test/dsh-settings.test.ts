@@ -290,11 +290,12 @@ describe('dsh settings form', () => {
     expect(local).not.toContain('type="password"');
   });
 
-  it('requires saving a draft before testing its connection while leaving Save available', () => {
+  it('allows testing an unsaved connection while leaving Save available', () => {
     const dirty = render({ draft: { cache: false } });
     const dirtyTest = [...dirty.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
-      .find(match => match[2]!.includes(EN.testSaveFirst!));
-    expect(dirtyTest?.[1]).toContain('disabled=""');
+      .find(match => match[2]!.includes(EN.testConnection!));
+    expect(dirtyTest).toBeDefined();
+    expect(dirtyTest?.[1]).not.toContain('disabled=');
     expect(dirty).not.toMatch(/type="submit"[^>]*disabled/);
     const clean = render();
     const cleanTest = [...clean.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]

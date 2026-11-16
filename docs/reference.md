@@ -132,7 +132,7 @@ The manual token is an **Advanced / fallback** setting. `role('secret')` only re
 
 Apify's only current device OAuth scope is `full_api_access`. Authorizing grants full Apify API access, not access limited to this Actor or tool; disclose that before login.
 
-The connection section uses three egress cards. OAuth status and usage share a compact panel; **Usage details** expands billing-cycle, plan, proxy, and credential-source information. Sign out is in the account menu. The sticky footer contains **Save** and **Discard**; **Test connection** is disabled while the draft has unsaved changes, because the Host checks the saved configuration. The layout follows the Host's light/dark theme and stacks on narrow screens.
+The connection section uses three egress cards. OAuth status and usage share a compact panel; **Usage details** expands billing-cycle, plan, proxy, and credential-source information. Sign out is in the account menu. The floating footer contains **Save** and **Discard**. **Test connection** submits only the current egress, own-Actor selection and any newly entered or cleared manual token to the Host for that check; it never writes the configuration. OAuth still takes priority, and unchanged saved tokens remain on the Host. Discard clears a draft's test result. The layout follows the Host's light/dark theme and stacks on narrow screens.
 
 The own-Actor picker shows the prerequisite instead of a disabled empty select: sign in first, wait for the list, retry a failed request, or deploy when the list is empty. Completing authorization reloads the choices; choosing an Actor is a draft until Save. **Use a manual token** opens and focuses its advanced field.
 

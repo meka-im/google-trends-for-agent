@@ -41,10 +41,10 @@ function host(initial: Record<string, unknown> = {}, writable = true) {
 function api() {
   let oauth = { available: true, connected: false, pending: false } as Record<string, unknown>;
   let actorFailure = false;
-  const requests: Array<{ url: string; method: string; signal?: AbortSignal | null }> = [];
+  const requests: Array<{ url: string; method: string; body?: BodyInit | null; signal?: AbortSignal | null }> = [];
   const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url);
-    requests.push({ url: path, method: init?.method ?? 'GET', signal: init?.signal });
+    requests.push({ url: path, method: init?.method ?? 'GET', body: init?.body, signal: init?.signal });
     if (path === 'api/gtfa.apify-oauth-start') oauth = { available: true, connected: false, pending: true,
       userCode: 'TEST-ONLY', verificationUri: 'https://console.apify.com/authorize/device',
       expiresAt: '2099-01-01T00:00:00.000Z' };
@@ -59,7 +59,11 @@ function api() {
       return Response.json({ ok: true, actors: ['actor-one', 'actor-two'].map(id => ({ id, name: 'google-trends-for-agent', username: 'tester',
         title: id, standbyUrl: null, standbyEnabled: false, lastBuildId: 'build-one', lastBuildStatus: 'SUCCEEDED' })) });
     }
-    if (path === 'api/gtfa.test-connection') return Response.json(diagnostic());
+    if (path === 'api/gtfa.test-connection') {
+      const { egress } = JSON.parse(String(init?.body));
+      const result = diagnostic();
+      return Response.json({ ...result, egress, network: { ...result.network, egress } });
+    }
     throw new Error(`Unexpected request in interaction test: ${path}`);
   });
   vi.stubGlobal('fetch', fetch);
@@ -69,7 +73,7 @@ function api() {
 }
 
 function diagnostic() {
-  return { ok: true, egress: 'local', status: 200, latencyMs: 4, checkedAt: '2026-11-16T00:00:00.000Z',
+  return { ok: true, egress: 'local', settingsSource: 'draft', status: 200, latencyMs: 4, checkedAt: '2026-11-16T00:00:00.000Z',
     network: { ok: true, egress: 'local', status: 200, latencyMs: 1 },
     data: { ok: true, latencyMs: 3, ...CONNECTION_FILTER,
       keywords: CONNECTION_KEYWORDS.map(keyword => ({ keyword, status: 'ok', points: 12, nonzeroPoints: 10 })) } };
@@ -136,7 +140,7 @@ describe('settings interactions', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
     expect(backend.saved().geo).toBe('US');
     expect(button('save').disabled).toBe(false);
-    expect(button('testSaveFirst').disabled).toBe(true);
+    expect(button('testConnection').disabled).toBe(false);
     await user.click(button('discard'));
     expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).value).toBe('US');
     expect(backend.mutate).not.toHaveBeenCalled();
@@ -190,6 +194,40 @@ describe('settings interactions', () => {
 });
 
 describe('connection diagnostic interactions', () => {
+  it('tests an edited connection and Actor without saving, then clears the result on Discard', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await user.click(screen.getByRole('tab', { name: t('egressOwn') }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: t('actor') }), 'actor-two');
+    await user.click(button('testConnection'));
+    expect(await screen.findByRole('heading', { name: t('diagnosticPassed') })).toBeTruthy();
+    const request = network.requests.find(row => row.url === 'api/gtfa.test-connection')!;
+    expect(JSON.parse(String(request.body))).toEqual({ egress: 'actor-own', apifyActor: 'actor-two' });
+    expect(backend.saved().egress).toBe('local');
+    expect(backend.saved().apifyActor).toBeUndefined();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    expect(button('save').disabled).toBe(false);
+    await user.click(button('discard'));
+    expect(screen.getByRole('tab', { name: t('egressLocal') }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('heading', { name: t('diagnosticPassed') })).toBeNull();
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('tests a newly typed manual token without persisting or displaying it in results', async () => {
+    const backend = host({ egress: 'actor-own', apifyActor: 'actor-one' }); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await user.click(await screen.findByRole('button', { name: t('actorManualAction') }));
+    await user.type(screen.getByLabelText(t('token')), 'apify_api_draft_only');
+    await user.click(button('testConnection'));
+    expect(await screen.findByRole('heading', { name: t('diagnosticPassed') })).toBeTruthy();
+    expect(JSON.parse(String(network.requests.find(row => row.url === 'api/gtfa.test-connection')!.body)))
+      .toEqual({ egress: 'actor-own', apifyActor: 'actor-one', apifyToken: 'apify_api_draft_only' });
+    expect(backend.mutate).not.toHaveBeenCalled();
+    expect(backend.saved().apifyToken).toBeUndefined();
+    expect(document.body.textContent).not.toContain('apify_api_draft_only');
+  });
+
   it('shows real keyword counts only after a click and clears verification after edits', async () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
@@ -218,7 +256,7 @@ describe('connection diagnostic interactions', () => {
     await user.click(button('testConnection'));
     expect(await screen.findByText(t('testHostRestartRequired'))).toBeTruthy();
     expect(screen.getByRole('heading', { name: t('connectionHostRestart') })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Google Trends reachable (200, 1 ms)' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Google Trends reachable (200, 1 ms)' })).toBeNull();
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     network.fetch.mockResolvedValueOnce(Response.json({ ...diagnostic(), data: { ...diagnostic().data, keywords: [] } }));
     await user.click(button('testConnection'));
@@ -229,6 +267,16 @@ describe('connection diagnostic interactions', () => {
     expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
     expect(screen.queryByText(t('testHostRestartRequired'))).toBeNull();
     expectKeywordCounts();
+  });
+
+  it.each(['local', 'actor-own'])('does not accept an older Host that checks saved %s settings instead of the draft', async egress => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const { settingsSource: _source, ...oldHostResult } = diagnostic();
+    network.fetch.mockResolvedValueOnce(Response.json({ ...oldHostResult, egress }));
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('testHostRestartRequired'))).toBeTruthy();
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
   });
 
   it('aborts the request when cancelled or unmounted and prevents duplicate clicks', async () => {
