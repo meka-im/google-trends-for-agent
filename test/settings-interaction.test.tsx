@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, EN, type ConfigPageProps } from '../src/client/index.js';
 import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
+import { regionLabel } from '../src/options.js';
 
 type PathOp = { op: 'set' | 'unset'; path: string[]; value?: unknown };
 const t = (key: string) => EN[key] ?? key;
@@ -56,8 +57,7 @@ function api() {
     if (path.startsWith('api/gtfa.apify-actors')) {
       if (!oauth.connected) return Response.json({ ok: false, code: 'no-token' });
       if (actorFailure) return Response.json({ ok: false, code: 'network' });
-      return Response.json({ ok: true, actors: ['actor-one', 'actor-two'].map(id => ({ id, name: 'google-trends-for-agent', username: 'tester',
-        title: id, standbyUrl: null, standbyEnabled: false, lastBuildId: 'build-one', lastBuildStatus: 'SUCCEEDED' })) });
+      return Response.json({ ok: true, actors: ['actor-one', 'actor-two'].map(id => actorRow(id)) });
     }
     if (path === 'api/gtfa.test-connection') {
       const { egress } = JSON.parse(String(init?.body));
@@ -72,6 +72,11 @@ function api() {
     count: (path: string) => requests.filter(row => row.url === path).length };
 }
 
+function actorRow(id: string, status = 'SUCCEEDED', buildId = 'build-one') {
+  return { id, name: 'google-trends-for-agent', username: 'tester', title: id,
+    standbyUrl: null, standbyEnabled: false, lastBuildId: buildId, lastBuildStatus: status };
+}
+
 function diagnostic() {
   return { ok: true, egress: 'local', settingsSource: 'draft', status: 200, latencyMs: 4, checkedAt: '2026-11-16T00:00:00.000Z',
     network: { ok: true, egress: 'local', status: 200, latencyMs: 1 },
@@ -80,6 +85,13 @@ function diagnostic() {
 }
 
 const button = (key: string) => screen.getByRole('button', { name: t(key) }) as HTMLButtonElement;
+const chooseGeo = async (user: ReturnType<typeof userEvent.setup>, code: string) => {
+  const input = screen.getByRole('combobox', { name: t('geo') });
+  await user.click(input);
+  await user.clear(input);
+  await user.type(input, code);
+  await user.click(screen.getByRole('option', { name: regionLabel(code, 'en') }));
+};
 const expectKeywordCounts = () => {
   for (const keyword of CONNECTION_KEYWORDS) {
     const row = screen.getByRole('rowheader', { name: keyword }).closest('tr')!;
@@ -144,15 +156,15 @@ describe('settings interactions', () => {
   it('replaces the locked Actor selector with login and loads choices after authorization', async () => {
     vi.useFakeTimers(); const backend = host({ egress: 'actor-own' }); const network = api();
     render(<ConfigPage ctx={backend.ctx} t={t} />); await tick(0);
-    expect(screen.queryByRole('combobox', { name: t('actor') })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: t('actor') })).toBeNull();
     expect(screen.getByText(t('actorLoginRequired'))).toBeTruthy();
     fireEvent.click(button('actorLoginAction')); await tick(0);
     expect(network.count('api/gtfa.apify-oauth-start')).toBe(1);
     expect(screen.getByText(t('actorLoginPending'))).toBeTruthy();
     network.setOAuth({ available: true, connected: true, pending: false }); await tick(2000);
-    const select = screen.getByRole('combobox', { name: t('actor') }) as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
-    fireEvent.change(select, { target: { value: 'actor-two' } });
+    const choice = screen.getByRole('radio', { name: /actor-two/ }) as HTMLButtonElement;
+    expect(choice.disabled).toBe(false);
+    fireEvent.click(choice);
     expect(backend.saved().apifyActor).toBeUndefined();
     fireEvent.click(button('save')); await tick(0);
     expect(backend.saved().apifyActor).toBe('actor-two');
@@ -172,9 +184,9 @@ describe('settings interactions', () => {
     network.setOAuth({ available: true, connected: true, pending: false }); network.failActors(true);
     render(<ConfigPage ctx={backend.ctx} t={t} />);
     await screen.findByRole('button', { name: t('actorListRetry') });
-    expect(screen.queryByRole('combobox', { name: t('actor') })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: t('actor') })).toBeNull();
     network.failActors(false); await user.click(button('actorListRetry'));
-    expect((await screen.findByRole('combobox', { name: t('actor') }) as HTMLSelectElement).disabled).toBe(false);
+    expect((await screen.findByRole('radio', { name: /actor-one/ }) as HTMLButtonElement).disabled).toBe(false);
     expect(backend.mutate).not.toHaveBeenCalled();
   });
 
@@ -182,14 +194,14 @@ describe('settings interactions', () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
     expect(network.requests).toHaveLength(0);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     expect(backend.saved().geo).toBe('US');
     expect(button('save').disabled).toBe(false);
     expect(button('testConnection').disabled).toBe(false);
     await user.click(button('discard'));
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).value).toBe('US');
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('US', 'en'));
     expect(backend.mutate).not.toHaveBeenCalled();
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().geo).toBe('GB'));
     expect(backend.mutate).toHaveBeenCalledTimes(1);
@@ -203,11 +215,11 @@ describe('settings interactions', () => {
     const backend = host(); api(); const user = userEvent.setup();
     backend.mutate.mockResolvedValueOnce(false);
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     await user.click(button('save'));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', t('failed'));
     expect(backend.saved().geo).toBe('US');
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).value).toBe('GB');
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('GB', 'en'));
     expect(button('save').disabled).toBe(false);
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().geo).toBe('GB'));
@@ -230,7 +242,7 @@ describe('settings interactions', () => {
   it('does not write a read-only Host configuration', async () => {
     const backend = host({}, false); api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).disabled).toBe(true);
     expect(button('save').disabled).toBe(true);
     await user.click(button('save'));
     expect(backend.mutate).not.toHaveBeenCalled();
@@ -244,7 +256,7 @@ describe('connection diagnostic interactions', () => {
     network.setOAuth({ available: true, connected: true, pending: false });
     render(<ConfigPage ctx={backend.ctx} t={t} />);
     await user.click(screen.getByRole('tab', { name: t('egressOwn') }));
-    await user.selectOptions(await screen.findByRole('combobox', { name: t('actor') }), 'actor-two');
+    await user.click(await screen.findByRole('radio', { name: /actor-two/ }));
     await user.click(button('testConnection'));
     expect(await screen.findByRole('heading', { name: t('diagnosticPassed') })).toBeTruthy();
     const request = network.requests.find(row => row.url === 'api/gtfa.test-connection')!;
@@ -282,7 +294,7 @@ describe('connection diagnostic interactions', () => {
     expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
     expectKeywordCounts();
     expect(network.count('api/gtfa.test-connection')).toBe(1);
-    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    await chooseGeo(user, 'GB');
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     expect(backend.mutate).not.toHaveBeenCalled();
   });
@@ -335,7 +347,7 @@ describe('connection diagnostic interactions', () => {
     const page = render(<ConfigPage ctx={backend.ctx} t={t} />);
     await user.click(button('testConnection'));
     expect(button('testing').disabled).toBe(true);
-    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).disabled).toBe(true);
     await user.click(button('testing'));
     expect(network.fetch).toHaveBeenCalledTimes(1);
     await user.click(button('testCancel'));
@@ -345,6 +357,182 @@ describe('connection diagnostic interactions', () => {
     page.unmount();
     expect(signal?.aborted).toBe(true);
     expect(backend.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('query-default pickers', () => {
+  it('searches a region by code and commits a keyboard choice only after Save', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, 'gb');
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option').id);
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(input.value).toBe(regionLabel('GB', 'en'));
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(backend.saved().geo).toBe('US');
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().geo).toBe('GB'));
+  });
+
+  it('searches Chinese names in English UI and preserves the empty Worldwide value', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, '美国');
+    expect(screen.getByRole('option', { name: regionLabel('US', 'en') }).getAttribute('aria-selected')).toBe('true');
+    await user.clear(input);
+    await user.type(input, 'global');
+    await user.click(screen.getByRole('option', { name: t('geoWorldwide') }));
+    expect(input.value).toBe(t('geoWorldwide'));
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().geo).toBe(''));
+  });
+
+  it('shows anchor guidance and keeps a custom anchor until it is explicitly saved', async () => {
+    const backend = host({ anchor: '', baselines: { version: 2, anchors: [
+      { term: 'my research', geo: 'US', dailySearches: 1200, tolerance: 0.5 },
+    ] } }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('anchor') }) as HTMLInputElement;
+    await user.click(input);
+    expect(screen.getByText(t('anchorAutoOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorShortOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorLongOption'))).toBeTruthy();
+    await user.type(input, 'my re');
+    await user.click(within(screen.getByRole('listbox', { name: t('anchor') })).getByRole('option', { name: 'my research' }));
+    expect(input.value).toBe('my research');
+    expect(backend.saved().anchor).toBe('');
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().anchor).toBe('my research'));
+  });
+
+  it('dismisses unmatched searches with Escape, outside clicks and Tab without changing the draft', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const input = screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, 'not-a-region');
+    expect(screen.getByText(t('choiceEmpty'))).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(input.value).toBe(regionLabel('US', 'en'));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}jp');
+    expect(screen.getByRole('option', { name: regionLabel('JP', 'en') })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    await user.click(input);
+    await user.click(screen.getByRole('heading', { name: t('defaults') }));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.click(screen.getByRole('combobox', { name: t('anchor') }));
+    await user.tab();
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(backend.mutate).not.toHaveBeenCalled();
+    expect(button('save').disabled).toBe(true);
+  });
+});
+
+describe('Actor creation and selection', () => {
+  function deployment() {
+    const backend = host({ egress: 'actor-own', apifyActor: 'previous-account-actor' });
+    const network = api();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    const original = network.fetch.getMockImplementation()!;
+    let actors: ReturnType<typeof actorRow>[] = [];
+    let resolveDeploy: (response: Response) => void = () => {};
+    let signal: AbortSignal | null | undefined;
+    const deployRequest = vi.fn((init?: RequestInit) => {
+      signal = init?.signal;
+      return new Promise<Response>(resolve => { resolveDeploy = resolve; });
+    });
+    network.fetch.mockImplementation((url, init) => String(url).startsWith('api/gtfa.apify-actors')
+      ? Promise.resolve(Response.json({ ok: true, actors }))
+      : String(url) === 'api/gtfa.apify-deploy' ? deployRequest(init) : original(url, init));
+    return { backend, network, deployRequest, signal: () => signal,
+      setBuild: (status: string) => { actors = [actorRow('unrelated', 'SUCCEEDED', 'other-build'), actorRow('new-actor', status, 'new-build')]; },
+      finish: (result: Record<string, unknown> = { ok: true, actorId: 'new-actor', buildId: 'new-build' }) => resolveDeploy(Response.json(result)),
+    };
+  }
+
+  it('shows creation and building instead of a stale Actor warning, then selects only the completed build', async () => {
+    vi.useFakeTimers(); const flow = deployment();
+    render(<ConfigPage ctx={flow.backend.ctx} t={t} />); await tick(0);
+    fireEvent.click(button('deploy')); await tick(0);
+    expect(screen.getByText(t('actorCreatingTitle'))).toBeTruthy();
+    expect(screen.queryByText(t('actorMissing'))).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(button('testConnection').disabled).toBe(true);
+    expect(button('save').disabled).toBe(true);
+    expect(flow.deployRequest).toHaveBeenCalledTimes(1);
+
+    flow.setBuild('RUNNING'); flow.finish(); await tick(0);
+    expect(screen.getByText(t('actorBuildingTitle'))).toBeTruthy();
+    expect(screen.queryByText(t('actorMissing'))).toBeNull();
+    expect(screen.queryByText(t('actorNotBuilt'))).toBeNull();
+    flow.setBuild('SUCCEEDED'); await tick(15_000);
+    expect(screen.queryByText(t('actorBuildingTitle'))).toBeNull();
+    expect(screen.getByRole('radio', { name: /new-actor/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: /unrelated/ }).getAttribute('aria-checked')).toBe('false');
+    expect(flow.backend.saved().apifyActor).toBe('previous-account-actor');
+    expect(flow.backend.mutate).not.toHaveBeenCalled();
+    fireEvent.click(button('save')); await tick(0);
+    expect(flow.backend.saved().apifyActor).toBe('new-actor');
+  });
+
+  it('reports a failed build without claiming it is ready or selecting it', async () => {
+    vi.useFakeTimers(); const flow = deployment();
+    render(<ConfigPage ctx={flow.backend.ctx} t={t} />); await tick(0);
+    fireEvent.click(button('deploy')); await tick(0);
+    flow.setBuild('FAILED'); flow.finish(); await tick(0);
+    expect(screen.getByText(t('deployBuildFailed')).getAttribute('role')).toBe('alert');
+    const failed = screen.getByRole('radio', { name: /new-actor/ });
+    expect(failed.getAttribute('aria-checked')).toBe('false');
+    expect(within(failed).getByText(t('actorBuildFailed'))).toBeTruthy();
+    expect(within(failed).queryByText(t('actorReady'))).toBeNull();
+    expect(flow.backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('ignores a late deployment after switching routes and stops watching its build', async () => {
+    vi.useFakeTimers(); const flow = deployment();
+    render(<ConfigPage ctx={flow.backend.ctx} t={t} />); await tick(0);
+    fireEvent.click(button('deploy')); await tick(0);
+    fireEvent.click(screen.getByRole('tab', { name: t('egressPublic') })); await tick(0);
+    expect(flow.signal()?.aborted).toBe(true);
+    flow.setBuild('SUCCEEDED'); flow.finish(); await tick(0);
+    expect(screen.queryByText(t('actorBuildingTitle'))).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: t('egressOwn') })); await tick(0);
+    expect(screen.getByRole('radio', { name: /new-actor/ }).getAttribute('aria-checked')).toBe('false');
+    expect(flow.backend.saved().apifyActor).toBe('previous-account-actor');
+    expect(flow.backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('keeps a keyboard selection visible during refresh without saving it', async () => {
+    const backend = host({ egress: 'actor-own', apifyActor: 'actor-one' });
+    const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const first = await screen.findByRole('radio', { name: /actor-one/ });
+    first.focus(); await user.keyboard('{ArrowDown}');
+    const second = screen.getByRole('radio', { name: /actor-two/ });
+    expect(second.getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(second);
+    const original = network.fetch.getMockImplementation()!;
+    let finish: (response: Response) => void = () => {};
+    network.fetch.mockImplementation((url, init) => String(url).startsWith('api/gtfa.apify-actors')
+      ? new Promise(resolve => { finish = resolve; }) : original(url, init));
+    await user.click(button('actorRefreshLabel'));
+    expect(screen.getByRole('radio', { name: /actor-two/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radiogroup').getAttribute('aria-busy')).toBe('true');
+    await act(async () => { finish(Response.json({ ok: true, actors: [actorRow('actor-one'), actorRow('actor-two')] })); });
+    expect(screen.getByRole('radiogroup').getAttribute('aria-busy')).toBe('false');
+    expect(backend.mutate).not.toHaveBeenCalled();
+    expect(backend.saved().apifyActor).toBe('actor-one');
   });
 });
 

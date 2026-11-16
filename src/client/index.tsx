@@ -13,12 +13,14 @@
  * browser; all Apify/Google traffic runs on the Host.
  *
  * Every setting that has a finite set of values is a select, segmented control,
- * or switch. Only the token, a new anchor term, dailySearches, and directories
- * are typed inputs.
+ * or switch. Query-default pickers allow searching, but only selecting a listed
+ * value changes the draft. Only the token, a new anchor term, dailySearches,
+ * and directories accept free-form configuration text.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
+import { ChoicePicker } from './choice-picker.js';
 import { SETTINGS_CSS } from './theme.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
@@ -307,8 +309,22 @@ export const EN: Record<string, string> = {
   actorLoginPending: 'Waiting for authorization',
   actorManualAction: 'Use a manual token',
   actorListRetry: 'Reload Actors',
-  actorMissing: 'Saved Actor unavailable — choose another',
-  actorSelectionHint: 'Choose your deployment, then save.',
+  actorRefreshLabel: 'Refresh Actor list',
+  actorMissing: 'Your previous Actor is not in this list. Choose one below.',
+  actorSelectionHint: 'Test this selection now. Save to use it for future queries.',
+  actorCount: '{count} available',
+  actorReady: 'Ready',
+  actorBuilding: 'Building',
+  actorBuildFailed: 'Build failed',
+  actorNotBuilt: 'Not built',
+  actorCreatingTitle: 'Creating your Actor',
+  actorBuildingTitle: 'Building your Actor',
+  actorCreatingHint: 'Setting up Google Trends in your Apify account.',
+  actorBuildingHint: 'Usually 1–2 minutes. It will be selected when ready.',
+  actorCreateStep: 'Create',
+  actorBuildStep: 'Build',
+  actorReadyStep: 'Ready',
+  actorBuildCheckFailed: 'Could not check the build. Refresh to try again.',
   connectionPrivacy: 'On demand · Credentials stay on this device',
   connectionCostShort: 'Compute and proxy usage are billed to your Apify account.',
   publicActorDetails: 'Actor details',
@@ -430,8 +446,14 @@ export const EN: Record<string, string> = {
   geo: 'Default geo',
   geoHint: 'Used for trends and comparisons. Worldwide has no built-in traffic calibration.',
   geoWorldwide: 'Worldwide',
+  geoSearch: 'Search a country or code…',
+  choiceEmpty: 'No matching options',
+  anchorSearch: 'Search an anchor…',
+  anchorAutoOption: 'Choose an anchor for the query window',
+  anchorShortOption: 'For 24-hour and shorter windows',
+  anchorLongOption: 'For 7-day and longer windows',
   anchor: 'Traffic calibration',
-  anchorHint: 'Automatic uses sudoku for ≤1 day and gpts for 7 days and longer.',
+  anchorHint: 'Automatic mode matches the query window.',
   anchorAutomatic: 'Automatically select an anchor',
   cache: 'Reuse saved snapshots',
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
@@ -550,8 +572,22 @@ export const ZH: Record<string, string> = {
   actorLoginPending: '等待授权完成',
   actorManualAction: '使用手动 Token',
   actorListRetry: '重新加载',
-  actorMissing: '已保存的 Actor 不可用，请重新选择',
-  actorSelectionHint: '选择你的部署，保存后生效。',
+  actorRefreshLabel: '刷新 Actor 列表',
+  actorMissing: '之前选择的 Actor 不在当前列表，请在下方重新选择。',
+  actorSelectionHint: '可直接测试当前选择，保存后用于后续查询。',
+  actorCount: '{count} 个可选',
+  actorReady: '就绪',
+  actorBuilding: '构建中',
+  actorBuildFailed: '构建失败',
+  actorNotBuilt: '未构建',
+  actorCreatingTitle: '正在创建你的 Actor',
+  actorBuildingTitle: '正在构建你的 Actor',
+  actorCreatingHint: '正在将 Google Trends 部署到你的 Apify 账号。',
+  actorBuildingHint: '通常需要 1–2 分钟，就绪后自动选中。',
+  actorCreateStep: '创建',
+  actorBuildStep: '构建',
+  actorReadyStep: '就绪',
+  actorBuildCheckFailed: '暂时无法检查构建状态，请刷新重试。',
   connectionPrivacy: '按需运行 · 凭据保留在本机',
   connectionCostShort: '计算和代理用量计入你的 Apify 账号。',
   publicActorDetails: 'Actor 详情',
@@ -673,8 +709,14 @@ export const ZH: Record<string, string> = {
   geo: '默认地区',
   geoHint: '全球查询不估算搜索量。',
   geoWorldwide: '全球',
+  geoSearch: '搜索地区或代码…',
+  choiceEmpty: '没有匹配的选项',
+  anchorSearch: '搜索锚点…',
+  anchorAutoOption: '根据查询时间窗口选择锚点',
+  anchorShortOption: '适合 24 小时及更短窗口',
+  anchorLongOption: '适合 7 天及更长窗口',
   anchor: '流量校准',
-  anchorHint: '自动：1 天及更短窗口用 sudoku，7 天及更长用 gpts。',
+  anchorHint: '自动模式按查询时间窗口选择。',
   anchorAutomatic: '自动选择锚点',
   cache: '复用近期快照',
   cacheHint: '6 小时内复用结果，减少重复请求。',
@@ -784,7 +826,6 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 17, fontWeight: 600, letterSpacing: '.06em', overflowWrap: 'anywhere' },
   oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 34, padding: '7px 13px',
     borderRadius: 8, background: 'var(--gtfa-accent)', color: '#fff', fontSize: 12, fontWeight: 550, textDecoration: 'none' },
-  usageBlock: { display: 'grid', gap: 6 },
   usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
   testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.6 },
 };
@@ -1347,13 +1388,14 @@ export async function loadApifyActors(refresh = false, signal?: AbortSignal): Pr
 }
 
 /** Deploy this package's Actor into the user's account. */
-export async function deployApifyActor(): Promise<DeployActorView> {
+export async function deployApifyActor(signal?: AbortSignal): Promise<DeployActorView> {
   try {
     const response = await fetch(DEPLOY_URL, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: '{}',
       cache: 'no-store',
+      ...(signal ? { signal } : {}),
     });
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
@@ -1631,29 +1673,75 @@ function actorErrorText(state: Extract<ApifyActorsView, { status: 'error' }>, t:
   return template(t('actorLoadHttp'), { status: statusLabel(state.httpStatus ?? null) });
 }
 
-/** Replace an unusable selector with the action needed to obtain its options. */
-export function ActorSelection({ state, value, t, disabled, pending = false, onChange, onRefresh, onManual }: {
+function actorBuildState(status: string | null, buildId: string | null): { label: string; tone: string } {
+  const normalized = status?.trim().toUpperCase().replace(/_/g, '-');
+  if (normalized === 'SUCCEEDED') return { label: 'actorReady', tone: 'ready' };
+  if (normalized === 'RUNNING' || normalized === 'READY') return { label: 'actorBuilding', tone: 'building' };
+  if (normalized === 'FAILED' || normalized === 'ABORTED' || normalized === 'TIMED-OUT') return { label: 'actorBuildFailed', tone: 'failed' };
+  return { label: buildId ? 'actorBuildUnknown' : 'actorNotBuilt', tone: 'unknown' };
+}
+
+/** Keep deployment progress and available Actor choices in one consistent panel. */
+export function ActorSelection({ state, value, t, disabled, pending = false, refreshing = false,
+  deployment = null, notice, onChange, onRefresh, onManual, onDeploy }: {
   state: ApifyActorsView; value: string; t: Translate; disabled: boolean; pending?: boolean;
+  refreshing?: boolean; deployment?: 'creating' | 'building' | null; notice?: string | null;
   onChange: (value: string) => void; onRefresh: () => void; onManual: () => void;
+  onDeploy: () => void;
 }) {
   const loading = state.status === 'idle' || state.status === 'loading';
   const needsLogin = state.status === 'error' && (state.code === 'no-token' || state.code === 'invalid-token');
   const selected = state.status === 'ready' ? state.actors.find(actor => actor.id === value) : undefined;
+  const chooseWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled || state.status !== 'ready' || !state.actors.length) return;
+    const current = state.actors.findIndex(actor => actor.id === value);
+    const next = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? current + 1
+      : event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? current < 0 ? state.actors.length - 1 : current - 1
+        : event.key === 'Home' ? 0 : event.key === 'End' ? state.actors.length - 1 : undefined;
+    if (next === undefined) return;
+    event.preventDefault();
+    const index = (next + state.actors.length) % state.actors.length;
+    const target = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[index];
+    onChange(state.actors[index]!.id);
+    target?.focus();
+  };
   return <div className="gtfa-actor-picker">
-    <div className="gtfa-picker-heading"><span><Icon name="server" size={15} />{t('actor')}</span>
+    <div className="gtfa-picker-heading"><span><Icon name="server" size={15} />{t('actor')}
+      {!deployment && state.status === 'ready' && state.actors.length > 0 ? <small>{template(t('actorCount'), { count: state.actors.length })}</small> : null}</span>
       {!needsLogin ? <button type="button" className="gtfa-button gtfa-quiet-button" style={styles.buttonSmall}
-        disabled={disabled || loading} onClick={onRefresh}><Icon name="refresh" size={12} />{t('actorRefresh')}</button> : null}
+        aria-label={t('actorRefreshLabel')} disabled={disabled || loading || refreshing || deployment === 'creating'} onClick={onRefresh}>
+        <span className={refreshing ? 'gtfa-spin' : undefined}><Icon name="refresh" size={12} /></span>{t('actorRefresh')}</button> : null}
     </div>
-    {state.status === 'ready' && state.actors.length > 0 ? <>
-      <select style={styles.select} aria-label={t('actor')} value={value} disabled={disabled}
-        onChange={event => onChange(event.target.value)}>
-        <option value="">{t('actorNone')}</option>
-        {value && !selected ? <option value={value} disabled>{t('actorMissing')}</option> : null}
-        {state.actors.map(actor => <option key={actor.id} value={actor.id}>
-          {[actor.username, actor.name].filter(Boolean).join('/')}{actor.title ? ` — ${actor.title}` : ''}
-        </option>)}
-      </select>
-      <p className="gtfa-picker-meta">{selected ? <><span className="gtfa-dot" />{template(t('actorBuild'), { status: (selected.lastBuildStatus ?? t('actorBuildUnknown')).toLowerCase() })}</> : t(value ? 'actorMissing' : 'actorSelectionHint')}</p>
+    {deployment ? <div className="gtfa-deployment-card" role="status">
+      <div className="gtfa-deployment-intro"><span className="gtfa-deployment-icon gtfa-spin"><Icon name="refresh" size={20} /></span>
+        <div><strong>{t(deployment === 'creating' ? 'actorCreatingTitle' : 'actorBuildingTitle')}</strong>
+          <p>{t(deployment === 'creating' ? 'actorCreatingHint' : 'actorBuildingHint')}</p></div></div>
+      <ol className="gtfa-deployment-steps">
+        {['actorCreateStep', 'actorBuildStep', 'actorReadyStep'].map((step, index) => {
+          const active = index === (deployment === 'creating' ? 0 : 1);
+          const done = deployment === 'building' && index === 0;
+          return <li key={step} className={done ? 'done' : active ? 'active' : ''} aria-current={active ? 'step' : undefined}>
+            <span>{done ? <Icon name="check" size={12} /> : index + 1}</span>{t(step)}</li>;
+        })}
+      </ol>
+      {state.status === 'error' ? <p className="gtfa-picker-meta">{t('actorBuildCheckFailed')}</p> : null}
+    </div> : state.status === 'ready' && state.actors.length > 0 ? <>
+      {value && !selected ? <p className="gtfa-actor-missing" role="status"><Icon name="alert" size={14} />{t('actorMissing')}</p> : null}
+      <div className="gtfa-actor-choices" role="radiogroup" aria-label={t('actor')} aria-busy={refreshing} onKeyDown={chooseWithKeyboard}>
+        {state.actors.map((actor, index) => {
+          const active = actor.id === value;
+          const build = actorBuildState(actor.lastBuildStatus, actor.lastBuildId);
+          return <button key={actor.id} type="button" role="radio" aria-checked={active} className="gtfa-actor-choice"
+            disabled={disabled} tabIndex={active || !selected && index === 0 ? 0 : -1} onClick={() => onChange(actor.id)}>
+            <span className="gtfa-actor-choice-icon"><Icon name="server" size={18} /></span>
+            <span className="gtfa-actor-choice-copy"><strong>{actor.title ?? actor.name}</strong>
+              <span>{[actor.username, actor.name].filter(Boolean).join('/')}</span></span>
+            <span className={`gtfa-actor-build ${build.tone}`}><span className="gtfa-dot" />{t(build.label)}</span>
+            <span className="gtfa-actor-radio" aria-hidden="true">{active ? <Icon name="check" size={11} /> : null}</span>
+          </button>;
+        })}
+      </div>
+      <p className="gtfa-picker-meta">{t('actorSelectionHint')}</p>
     </> : <div className={`gtfa-picker-state${needsLogin ? ' login' : ''}`} role={state.status === 'error' && !needsLogin ? 'alert' : 'status'}>
       <span className="gtfa-picker-state-icon"><Icon name={loading ? 'refresh' : needsLogin ? 'plug' : state.status === 'error' ? 'alert' : 'server'} size={19} /></span>
       <div className="gtfa-picker-state-copy"><strong>{loading ? t('actorLoading') : needsLogin ? t(pending ? 'actorLoginPending' : state.code === 'invalid-token' ? 'oauthReauthRequired' : 'actorLoginRequired') : state.status === 'error' ? actorErrorText(state, t) : t('actorEmpty')}</strong>
@@ -1662,6 +1750,11 @@ export function ActorSelection({ state, value, t, disabled, pending = false, onC
         <button type="button" className="gtfa-text-button" disabled={disabled} onClick={onManual}>{t('actorManualAction')}</button>
       </div> : state.status === 'error' ? <button type="button" className="gtfa-button" style={styles.buttonSmall} disabled={disabled} onClick={onRefresh}>{t('actorListRetry')}</button> : null}
     </div>}
+    {!deployment && state.status === 'ready' && state.actors.length === 0 ? <div className="gtfa-actor-empty-actions">
+      <button type="button" className="gtfa-button" style={{ ...styles.button, ...styles.primary }} disabled={disabled} onClick={onDeploy}>{t('deploy')}</button>
+      <a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a>
+    </div> : null}
+    {!deployment && notice ? <p style={styles.fieldError} role="alert">{notice}</p> : null}
   </div>;
 }
 
@@ -1916,10 +2009,14 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [usageRequest, setUsageRequest] = useState({ id: 0, refresh: false });
   const [actors, setActors] = useState<ApifyActorsView>(initialActors ?? { status: 'idle' });
   const [actorsRequest, setActorsRequest] = useState({ id: 0, refresh: false });
+  const [actorsRefreshing, setActorsRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [building, setBuilding] = useState(false);
   const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
+  const deployAbort = useRef<AbortController | null>(null);
+  const deployGeneration = useRef(0);
+  useEffect(() => () => { deployGeneration.current++; deployAbort.current?.abort(); }, []);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
   const testAbort = useRef<AbortController | null>(null);
@@ -1930,6 +2027,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const lastRevision = useRef<number | undefined>(snapshot.revision);
   const oauthBusyRef = useRef(false);
   const oauthConnectedRef = useRef(initialOAuth?.status === 'ready' ? initialOAuth.data.connected : false);
+  const oauthKnownRef = useRef(initialOAuth?.status === 'ready');
   const oauthPollGeneration = useRef(0);
   const oauthPollAbort = useRef<AbortController | null>(null);
   const oauthPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1941,6 +2039,18 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const validation = useMemo(() => validateDraft(draft, t), [draft, t]);
   const dirty = draftKey(draft) !== baseline || Boolean(draft.egressNotice || draft.legacyKeys?.length);
   const blocking = hasBlockingValidation(validation);
+
+  const resetDeployment = useCallback(() => {
+    deployGeneration.current++;
+    deployAbort.current?.abort();
+    deployAbort.current = null;
+    setDeploying(false);
+    setBuilding(false);
+    setDeployTarget(null);
+    setDeployNotice(null);
+  }, []);
+
+  useEffect(() => { if (draft.egress !== 'actor-own') resetDeployment(); }, [draft.egress, resetDeployment]);
 
   const stopOAuthPolling = useCallback(() => {
     oauthPollGeneration.current++;
@@ -1954,19 +2064,22 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
 
   const applyOAuthView = useCallback((next: ApifyOAuthView) => {
     const wasConnected = oauthConnectedRef.current;
-    if (next.status === 'ready') oauthConnectedRef.current = next.data.connected;
+    const wasKnown = oauthKnownRef.current;
+    if (next.status === 'ready') { oauthConnectedRef.current = next.data.connected; oauthKnownRef.current = true; }
     setOauth(next);
     if (next.status === 'ready' && next.data.connected !== wasConnected) {
+      if (wasKnown) resetDeployment();
       testAbort.current?.abort();
       testAbort.current = null;
       setTesting(false);
       setTestResult(null);
       setUsageRequest(current => ({ id: current.id + 1, refresh: false }));
       if (draft.egress === 'actor-own') {
+        if (wasKnown) setActors({ status: 'loading' });
         setActorsRequest(current => ({ id: current.id + 1, refresh: true }));
       }
     }
-  }, [draft.egress]);
+  }, [draft.egress, resetDeployment]);
 
   useEffect(() => {
     if (snapshot.status !== 'ready') return;
@@ -2050,12 +2163,14 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   useEffect(() => {
     if (draft.egress !== 'actor-own') {
       setActors({ status: 'idle' });
+      setActorsRefreshing(false);
       return;
     }
     const controller = new AbortController();
-    setActors({ status: 'loading' });
+    setActors(current => current.status === 'ready' ? current : { status: 'loading' });
+    setActorsRefreshing(true);
     void loadApifyActors(actorsRequest.refresh, controller.signal).then(next => {
-      if (!controller.signal.aborted) setActors(next);
+      if (!controller.signal.aborted) { setActors(next); setActorsRefreshing(false); }
     });
     return () => { controller.abort(); };
   }, [draft.egress, actorsRequest]);
@@ -2080,7 +2195,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       setDraft(current => ({ ...current, actor: resolved.actorId! }));
       setBuilding(false);
       setDeployNotice(null);
-      requestActors(true);
+      setTestResult(null);
       return;
     }
     if (resolved.status === 'failed') {
@@ -2099,6 +2214,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
 
   const runOAuthAction = async (action: ApifyOAuthAction, request: () => Promise<ApifyOAuthView>) => {
     if (oauthBusyRef.current) return;
+    if (action === 'logout') resetDeployment();
     oauthBusyRef.current = true;
     setOauthBusy(action);
     stopOAuthPolling();
@@ -2141,6 +2257,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   };
 
   const discard = () => {
+    resetDeployment();
     const next = fromSnapshot(snapshot.value);
     setDraft(next);
     setBaseline(draftKey(next));
@@ -2150,6 +2267,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   };
 
   const save = async () => {
+    if (draft.egress === 'actor-own' && (deploying || building)) return;
     setFailure(null);
     setNotice(null);
     if (blocking) {
@@ -2211,17 +2329,27 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   };
 
   const deploy = async () => {
+    if (deployAbort.current || building) return;
+    const controller = new AbortController();
+    const generation = ++deployGeneration.current;
+    deployAbort.current = controller;
+    testAbort.current?.abort();
+    testAbort.current = null;
+    setTesting(false);
+    setTestResult(null);
     setDeploying(true);
     setDeployTarget(null);
     setDeployNotice(null);
     try {
-      const result = await deployApifyActor();
+      const result = await deployApifyActor(controller.signal);
+      if (controller.signal.aborted || generation !== deployGeneration.current) return;
       if (result.ok) {
         setDeployTarget({ actorId: result.actorId, buildId: result.buildId });
         setBuilding(true);
         requestActors(true);
       } else if (result.code === 'exists') {
         setDeployNotice(t('deployExists'));
+        requestActors(true);
       } else if (result.code === 'no-token') {
         setDeployNotice(t('testNoToken'));
       } else if (result.code === 'invalid-token') {
@@ -2230,7 +2358,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         setDeployNotice(t('deployFailed'));
       }
     } finally {
-      setDeploying(false);
+      if (deployAbort.current === controller) {
+        deployAbort.current = null;
+        setDeploying(false);
+      }
     }
   };
 
@@ -2253,19 +2384,22 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, [draft.anchors, draft.anchor, draft.windowShort, draft.windowLong]);
 
   const anchorOptions = useMemo(() =>
-    anchorTerms.map(term => ({ value: term, label: term })), [anchorTerms]);
+    anchorTerms.map(term => ({ value: term, label: term,
+      description: term.toLowerCase() === 'sudoku' ? t('anchorShortOption') : term.toLowerCase() === 'gpts' ? t('anchorLongOption') : undefined,
+    })), [anchorTerms, t]);
   const fixedAnchorOptions = useMemo(() =>
-    [{ value: '', label: t('anchorAutomatic') }, ...anchorOptions], [anchorOptions, t]);
+    [{ value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') }, ...anchorOptions], [anchorOptions, t]);
   const windowOptions = useMemo(() =>
     [{ value: '', label: t('windowDefault') }, ...anchorOptions], [anchorOptions, t]);
   const geoOptions = useMemo(() => {
     const options = [
-      { value: '', label: t('geoWorldwide') },
-      ...GEO_CODES.filter(Boolean).map(code => ({ value: code, label: regionLabel(code, intlLocale) }))
+      { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
+      ...GEO_CODES.filter(Boolean).map(code => ({ value: code, label: regionLabel(code, intlLocale),
+        search: `${regionLabel(code, 'en')} ${regionLabel(code, 'zh-CN')}` }))
         .sort((a, b) => a.label.localeCompare(b.label, intlLocale)),
     ];
     if (draft.geo && !GEO_SET.has(draft.geo)) {
-      options.push({ value: draft.geo, label: regionLabel(draft.geo, intlLocale) || draft.geo });
+      options.push({ value: draft.geo, label: regionLabel(draft.geo, intlLocale) || draft.geo, search: draft.geo });
     }
     return options;
   }, [draft.geo, intlLocale, t]);
@@ -2281,7 +2415,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   if (snapshot.status === 'loading') return <p style={styles.status}>{t('loading')}</p>;
   if (snapshot.status === 'unavailable') return <p style={styles.status}>{t('unavailable')}</p>;
   const editable = snapshot.writable && !busy && !testing;
-  const canSave = editable && dirty && !blocking;
+  const preparingActor = draft.egress === 'actor-own' && (deploying || building);
+  const canSave = editable && dirty && !blocking && !preparingActor;
   const newAnchorReady = Boolean(draft.newAnchor.term.trim()) && isPositiveNumber(draft.newAnchor.dailySearches) && !validation.newAnchorTerm && !validation.newAnchorDaily;
   const line = testResult ? testLine(testResult, t) : null;
   const actorEgress = draft.egress !== 'local';
@@ -2295,8 +2430,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     { id: 'files' as const, label: t('advancedFiles') },
   ];
   const tokenConflict = actorEgress && Boolean(draft.token.trim() && draft.clearToken);
-  const testButton = <><button type="button" className="gtfa-button" style={dim(styles.button, !editable || tokenConflict)}
-    disabled={!editable || tokenConflict} title={tokenConflict ? t('tokenConflict') : t('testNote')} onClick={() => { void test(); }}>
+  const testButton = <><button type="button" className="gtfa-button" style={dim(styles.button, !editable || tokenConflict || preparingActor)}
+    disabled={!editable || tokenConflict || preparingActor} title={tokenConflict ? t('tokenConflict') : preparingActor ? t('actorBuildingHint') : t('testNote')} onClick={() => { void test(); }}>
     <Icon name="play" size={13} />{testing ? t('testing') : t('testConnection')}
   </button>{testing ? <button type="button" className="gtfa-button" style={styles.button} onClick={() => testAbort.current?.abort()}>{t('testCancel')}</button> : null}</>;
   const walkAdvanced = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -2332,7 +2467,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           { value: 'actor-public', label: t('egressPublic'), description: t('routePublicDescription'), icon: 'cloud', recommended: t('recommended') },
           { value: 'actor-own', label: t('egressOwn'), description: t('routeOwnDescription'), icon: 'server' },
         ]}
-        onChange={value => { edit({ egress: value, egressNotice: undefined }); setTestResult(null); }} />
+        onChange={value => { if (value !== 'actor-own') resetDeployment(); edit({ egress: value, egressNotice: undefined }); setTestResult(null); }} />
       {draft.egressNotice ? <p style={styles.warning} role="status">
         {t(draft.egressNotice === 'renamed' ? 'egressRenamed' : 'egressUnknown')}
       </p> : null}
@@ -2349,21 +2484,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
           {ownEgress ? <ActorSelection state={actors} value={draft.actor} t={t} disabled={!editable || oauthBusy !== null}
             pending={oauth.status === 'ready' && oauth.data.pending}
+            refreshing={actorsRefreshing} deployment={deploying ? 'creating' : building ? 'building' : null} notice={deployNotice}
             onChange={value => edit({ actor: value })} onRefresh={() => requestActors(true)}
-            onManual={openManualToken} /> : null}
-          {ownEgress && (actors.status === 'ready' && actors.actors.length === 0 || building || deployNotice) ? <div className="gtfa-own-actions">
-          {actors.status === 'ready' && actors.actors.length === 0 ? <div className="gtfa-deploy-actions" style={styles.usageBlock}>
-            <div>
-              <button type="button" style={dim({ ...styles.button, ...styles.primary }, !editable || deploying)}
-                disabled={!editable || deploying} onClick={() => { void deploy(); }}>
-                {deploying ? t('deploying') : t('deploy')}
-              </button>
-            </div>
-            <div><a style={styles.signupSecondary} href={DEPLOY_MANUAL_URL} target="_blank" rel="noopener noreferrer">{t('deployManual')}</a></div>
-          </div> : null}
-          {building ? <p style={styles.usageMeta}>{t('deployBuilding')}</p> : null}
-          {deployNotice ? <p style={styles.fieldError} role="alert">{deployNotice}</p> : null}
-                  </div> : null}
+            onManual={openManualToken} onDeploy={() => { void deploy(); }} /> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
         </> : <div className="gtfa-connection-top">
           <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
@@ -2391,9 +2514,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <section className="gtfa-section" style={styles.section}>
       <SectionHeader icon="sliders" title={t('defaults')} description={t('defaultsDescription')} />
       <div className="gtfa-defaults-grid">
-        <Select label={t('geo')} hint={t('geoHint')} value={draft.geo} disabled={!editable}
+        <ChoicePicker label={t('geo')} hint={t('geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
           options={geoOptions} onChange={value => edit({ geo: value })} />
-        <Select label={t('anchor')} hint={t('anchorHint')} value={draft.anchor} disabled={!editable}
+        <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
