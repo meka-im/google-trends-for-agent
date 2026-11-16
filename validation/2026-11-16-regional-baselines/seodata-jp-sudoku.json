@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=sudoku&country=jp",
+  "checkedAt": "2026-11-16T14:22:18.187460+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "sudoku",
+    "volume": 27100,
+    "cpc": 0.37,
+    "competition": 0.05,
+    "country": "jp",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:17.000Z",
+    "similar": [
+      {
+        "keyword": "web sudoku",
+        "volume": 390,
+        "cpc": 0,
+        "overlap": 7
+      },
+      {
+        "keyword": "sudoku online",
+        "volume": 1000,
+        "cpc": 0.17,
+        "overlap": 6
+      },
+      {
+        "keyword": "スドク",
+        "volume": 480,
+        "cpc": 1.27,
+        "overlap": 5
+      },
+      {
+        "keyword": "sudoku game",
+        "volume": 390,
+        "cpc": 0.26,
+        "overlap": 5
+      },
+      {
+        "keyword": "sudoku online easy",
+        "volume": 10,
+        "cpc": 0,
+        "overlap": 5
+      },
+      {
+        "keyword": "数独 問題",
+        "volume": 14800,
+        "cpc": 0.34,
+        "overlap": 4
+      },
+      {
+        "keyword": "数独問題",
+        "volume": 14800,
+        "cpc": 0.34,
+        "overlap": 4
+      },
+      {
+        "keyword": "パズル数独",
+        "volume": 6600,
+        "cpc": 0.74,
+        "overlap": 4
+      },
+      {
+        "keyword": "数独パズル",
+        "volume": 6600,
+        "cpc": 0.75,
+        "overlap": 4
+      },
+      {
+        "keyword": "無料 数独パズル",
+        "volume": 3600,
+        "cpc": 0.5,
+        "overlap": 4
+      }
+    ]
+  }
+}

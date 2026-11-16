@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { GEO_CODES } from '../src/options.js';
+import { BUILTIN_ANCHOR_TERMS, GEO_CODES } from '../src/options.js';
 
 function json(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8')) as Record<string, unknown>;
@@ -83,8 +83,11 @@ describe('Actor input schema', () => {
       sectionCaption: 'Calibration',
       editor: 'select',
       default: '',
-      enum: ['', 'gpts', 'sudoku'],
+      enum: expect.arrayContaining(['', ...BUILTIN_ANCHOR_TERMS]),
     });
+    expect((properties.anchor.enum as string[]).length).toBe(BUILTIN_ANCHOR_TERMS.length + 1);
+    expect(properties.anchor.enum).toEqual(expect.arrayContaining(['calculator', 'ナンプレ']));
+    expect((properties.anchor.enumTitles as string[]).length).toBe((properties.anchor.enum as string[]).length);
     expect(properties.timeoutMs).toMatchObject({ type: 'integer', minimum: 1000, maximum: 60000 });
     expect(properties.proxyConfiguration).toMatchObject({ sectionCaption: 'Advanced: proxy', editor: 'proxy' });
     expect(properties.proxyConfiguration.default).toEqual(properties.proxyConfiguration.prefill);

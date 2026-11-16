@@ -8,6 +8,7 @@ export * from './api.js';
 export * from './geos.js';
 export * from './trending.js';
 export * from './traffic.js';
+export * from './baseline-catalog.js';
 export * from './calibration.js';
 export * from './filter.js';
 export * from './snapshot.js';

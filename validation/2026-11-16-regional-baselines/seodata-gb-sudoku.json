@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=sudoku&country=gb",
+  "checkedAt": "2026-11-16T14:22:05.259239+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "sudoku",
+    "volume": 823000,
+    "cpc": 2.16,
+    "competition": 0.01,
+    "country": "gb",
+    "cached": true,
+    "cached_at": "2026-09-10T18:41:20.958Z",
+    "similar": [
+      {
+        "keyword": "games sudoku online",
+        "volume": 110000,
+        "cpc": 1.47,
+        "overlap": 20
+      },
+      {
+        "keyword": "online games sudoku",
+        "volume": 110000,
+        "cpc": 0.96,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku online",
+        "volume": 110000,
+        "cpc": 1.47,
+        "overlap": 20
+      },
+      {
+        "keyword": "free games of sudoku",
+        "volume": 22200,
+        "cpc": 1.55,
+        "overlap": 20
+      },
+      {
+        "keyword": "free sudoku",
+        "volume": 22200,
+        "cpc": 1.55,
+        "overlap": 20
+      },
+      {
+        "keyword": "game sudoku free",
+        "volume": 22200,
+        "cpc": 1.55,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku for free",
+        "volume": 22200,
+        "cpc": 2.39,
+        "overlap": 20
+      },
+      {
+        "keyword": "online sudoku",
+        "volume": 12100,
+        "cpc": 0.81,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku free",
+        "volume": 9900,
+        "cpc": 1.07,
+        "overlap": 20
+      },
+      {
+        "keyword": "free online games sudoku",
+        "volume": 8100,
+        "cpc": 0.94,
+        "overlap": 20
+      }
+    ]
+  }
+}

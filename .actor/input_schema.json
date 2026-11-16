@@ -322,17 +322,21 @@
     "anchor": {
       "title": "Calibration anchor",
       "type": "string",
-      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic (sudoku for \u22641 day, gpts for 7 days and longer).",
+      "description": "Anchor used to calibrate searches/day. Example: \"gpts\". Leave blank for automatic selection by country and time window. Worldwide has its own estimate; unknown regions return null traffic.",
       "editor": "select",
       "enum": [
         "",
         "gpts",
-        "sudoku"
+        "sudoku",
+        "calculator",
+        "ナンプレ"
       ],
       "enumTitles": [
-        "Automatic (sudoku \u22641 day, gpts 7 days+)",
+        "Automatic by region and window",
         "gpts",
-        "sudoku"
+        "sudoku",
+        "calculator",
+        "ナンプレ"
       ],
       "default": "",
       "prefill": "",

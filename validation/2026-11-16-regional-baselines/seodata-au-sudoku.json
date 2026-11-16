@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=sudoku&country=au",
+  "checkedAt": "2026-11-16T14:22:08.780191+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "sudoku",
+    "volume": 246000,
+    "cpc": 0.29,
+    "competition": 0.04,
+    "country": "au",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:06.414Z",
+    "similar": [
+      {
+        "keyword": "sudoku free",
+        "volume": 1300,
+        "cpc": 0.97,
+        "overlap": 12
+      },
+      {
+        "keyword": "free sudoku games",
+        "volume": 720,
+        "cpc": 1.27,
+        "overlap": 12
+      },
+      {
+        "keyword": "sudoku games free",
+        "volume": 90,
+        "cpc": 0.52,
+        "overlap": 12
+      },
+      {
+        "keyword": "sudoku online game",
+        "volume": 70,
+        "cpc": 0.64,
+        "overlap": 12
+      },
+      {
+        "keyword": "games sudoku online",
+        "volume": 49500,
+        "cpc": 0.14,
+        "overlap": 11
+      },
+      {
+        "keyword": "sudoku online",
+        "volume": 49500,
+        "cpc": 0.93,
+        "overlap": 11
+      },
+      {
+        "keyword": "free games of sudoku",
+        "volume": 6600,
+        "cpc": 0.16,
+        "overlap": 11
+      },
+      {
+        "keyword": "free sudoku",
+        "volume": 6600,
+        "cpc": 0.16,
+        "overlap": 11
+      },
+      {
+        "keyword": "sudoku for free",
+        "volume": 6600,
+        "cpc": 0.16,
+        "overlap": 11
+      },
+      {
+        "keyword": "sudoku free play online",
+        "volume": 5400,
+        "cpc": 0.57,
+        "overlap": 11
+      }
+    ]
+  }
+}

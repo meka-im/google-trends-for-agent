@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=calculator&country=in",
+  "checkedAt": "2026-11-16T14:22:23.140195+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "calculator",
+    "volume": 9140000,
+    "cpc": 0.01,
+    "competition": 0.16,
+    "country": "in",
+    "cached": true,
+    "cached_at": "2026-10-17T00:31:26.854Z",
+    "similar": [
+      {
+        "keyword": "calculator calculation",
+        "volume": 590,
+        "cpc": 0.04,
+        "overlap": 20
+      },
+      {
+        "keyword": "calculator online",
+        "volume": 165000,
+        "cpc": 0.14,
+        "overlap": 19
+      },
+      {
+        "keyword": "online calculator",
+        "volume": 135000,
+        "cpc": 0,
+        "overlap": 18
+      },
+      {
+        "keyword": "automatic calculator",
+        "volume": 2400,
+        "cpc": 0.03,
+        "overlap": 18
+      },
+      {
+        "keyword": "show calculator",
+        "volume": 390,
+        "cpc": 0.02,
+        "overlap": 17
+      },
+      {
+        "keyword": "calculators",
+        "volume": 9140000,
+        "cpc": 0.01,
+        "overlap": 16
+      },
+      {
+        "keyword": "calculadora online",
+        "volume": 165000,
+        "cpc": 0.05,
+        "overlap": 16
+      },
+      {
+        "keyword": "calculators online",
+        "volume": 165000,
+        "cpc": 0.08,
+        "overlap": 16
+      },
+      {
+        "keyword": "calculator calculator",
+        "volume": 12100,
+        "cpc": 0.02,
+        "overlap": 16
+      },
+      {
+        "keyword": "calculator free",
+        "volume": 880,
+        "cpc": 0.05,
+        "overlap": 16
+      }
+    ]
+  }
+}

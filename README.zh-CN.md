@@ -195,6 +195,8 @@ Snapshot 的近 7 天工作按顺序执行。主窗口不是 `now 7-d` 时，主
 | `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/天**，±50% |
 | `now 7-d`、`today 1-m`、`today 3-m`、`today 12-m`、`today 5-y`、`all` | `gpts` | **3,500/天**，±50% |
 
+加拿大、英国、澳大利亚、德国、法国、日本、印度和全球现有各自的自动基准（±75% 假设区间）。[地区数值、来源与验证](docs/baselines.md)列出统计期及限制；未知地区或稀疏数据仍返回 null。
+
 推导过程、锚点覆盖、基线文件和 null 流量规则见[校准与锚点](docs/reference.md#calibration-and-the-anchor)。
 
 ## 文档

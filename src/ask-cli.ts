@@ -18,7 +18,7 @@ export const askHelp = `Usage: gtfa ask <term> [options]
                       wrappers: {leads|rows|keywords|table: [...]}. Optional metadata:
                       variants (string[]), source, url, firstSeen (strings); preserved, not queried.
                       All rows use CLI filters; per-row geo/time are ignored.
-  --anchor TERM       Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+; --no-anchor to skip
+  --anchor TERM       Anchor override; default automatic by region and time window; --no-anchor to skip
   --trending          With --validate: also check Trending Now
   --diff              Fetch fresh and save, then diff vs the previous snapshot; implies JSON, overrides --refresh
   --points            Include the full interest series (omitted by default to keep agent context small)

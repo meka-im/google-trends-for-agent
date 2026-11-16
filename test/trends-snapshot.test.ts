@@ -157,15 +157,15 @@ describe('trends_snapshot traffic conversion', () => {
     expect(e.meta.warnings).toContain('No anchor calibration for geo JP; traffic fields are null');
   });
 
-  it('treats empty geo as Worldwide and honestly returns null traffic', async () => {
+  it('calibrates explicit Worldwide with its own baseline instead of borrowing US volume', async () => {
     const snap = fixture();
     snap.filter = { ...snap.filter, geo: '' };
     const e = await trafficSnapshotEnvelope(snap, { cached: false, ageMin: 0, chartDir: null });
     expect(e.filter.geo).toBe('');
-    expect(e.anchor).toMatchObject({ dailySearches: null, tolerance: null, ratio: 0.58, source: 'baseline' });
-    expect(e.anchor.note).toContain('No calibration for geo Worldwide');
-    expect(e.traffic).toEqual({ unit: 'searches/day', average: null, latest: null, settledLatest: null, peak: null, low: null, high: null, gapCount: 1 });
-    expect(e.meta.warnings).toContain('No anchor calibration for geo Worldwide; traffic fields are null');
+    expect(e.anchor).toMatchObject({ dailySearches: 220000, tolerance: 0.75, ratio: 0.58, source: 'baseline' });
+    expect(e.anchor.note).toContain('not measured volume');
+    expect(e.traffic).toMatchObject({ unit: 'searches/day', average: 127600, low: 31900, high: 223300, gapCount: 1 });
+    expect(e.meta.warnings).not.toContain('No anchor calibration for geo Worldwide; traffic fields are null');
   });
 
   it('emits an inline SVG with term/anchor lines and writes the same file', async () => {

@@ -5,6 +5,8 @@ import { GTrendsError } from './core.js';
 import { abortError, throwIfAborted } from './transport.js';
 import { SnapshotStore, atomicJson } from './snapshot.js';
 import { ACTOR_REQUEST_PROTOCOL, ACTOR_RESPONSE_KEY, storedSnapshotSchema, type ActorToolRequest } from './actor-request.js';
+import { baselinesForActor, defaultAnchorFor } from './traffic.js';
+import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
 import type { GtfaTool, ToolLiveSettings } from './tools.js';
 
 const API = 'https://api.apify.com/v2';
@@ -99,10 +101,14 @@ export async function callActorTool(client: OnDemandActorClient, options: {
   throwIfAborted(options.signal);
   const { input, settings, name } = options;
   const store = new SnapshotStore(settings.snapshotDir);
-  const cloudSettings = { defaultGeo: settings.defaultGeo, anchor: settings.anchor, baselines: settings.baselines, cache: settings.cache, charts: settings.chartDir !== null };
+  const geo = String(input.geo ?? settings.defaultGeo ?? 'US');
+  const calibrates = name === 'trends_snapshot' || name === 'trends_ask' && input.validate === true;
+  const cloudSettings = { defaultGeo: settings.defaultGeo, anchor: settings.anchor,
+    baselines: calibrates ? baselinesForActor(geo, settings.baselines) : settings.baselines,
+    cache: settings.cache, charts: settings.chartDir !== null };
   const { fresh: _fresh, ...cacheInput } = input;
   const cacheable = name === 'trends_ask' || name === 'trends_snapshot';
-  const key = createHash('sha256').update(JSON.stringify([options.actorId, createHash('sha256').update(options.token).digest('hex'), name, cacheInput, cloudSettings])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([BASELINE_CATALOG_REVISION, options.actorId, createHash('sha256').update(options.token).digest('hex'), name, cacheInput, cloudSettings])).digest('hex');
   const cachePath = join(store.dir, '.actor-results', `${key}.json`);
   let result: Record<string, unknown> | undefined;
   if (cacheable && settings.cache !== false && !input.fresh) {
@@ -118,7 +124,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
   if (!result) {
     const history: NonNullable<ActorToolRequest['history']> = [];
     if (cacheable && typeof input.term === 'string') {
-      for (const time of [input.time ?? 'now 1-d', 'now 7-d']) for (const anchor of [undefined, 'gpts', 'sudoku', settings.anchor, input.anchor, settings.baselines?.windowAnchors?.short, settings.baselines?.windowAnchors?.long]) {
+      for (const time of [input.time ?? 'now 1-d', 'now 7-d']) for (const anchor of [undefined, defaultAnchorFor(String(time), cloudSettings.baselines, geo), 'gpts', 'sudoku', settings.anchor, input.anchor, settings.baselines?.windowAnchors?.short, settings.baselines?.windowAnchors?.long]) {
         const saved = await store.history(input.term, { geo: String(input.geo ?? settings.defaultGeo ?? 'US'), time: String(time) } as never, 2, typeof anchor === 'string' ? anchor : undefined);
         for (const snapshot of saved) {
           const parsed = storedSnapshotSchema.safeParse(snapshot);

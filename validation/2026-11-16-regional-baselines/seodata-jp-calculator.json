@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=calculator&country=jp",
+  "checkedAt": "2026-11-16T14:22:20.960507+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "calculator",
+    "volume": 90500,
+    "cpc": 0.26,
+    "competition": 0.04,
+    "country": "jp",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:18.756Z",
+    "similar": [
+      {
+        "keyword": "0nline calculator",
+        "volume": 1600,
+        "cpc": 0,
+        "overlap": 8
+      },
+      {
+        "keyword": "calc online",
+        "volume": 1600,
+        "cpc": 0.51,
+        "overlap": 8
+      },
+      {
+        "keyword": "calculator online",
+        "volume": 1900,
+        "cpc": 0,
+        "overlap": 7
+      },
+      {
+        "keyword": "online calculator",
+        "volume": 1600,
+        "cpc": 0,
+        "overlap": 7
+      },
+      {
+        "keyword": "calculator google",
+        "volume": 1900,
+        "cpc": 0.2,
+        "overlap": 5
+      },
+      {
+        "keyword": "計算機 英語",
+        "volume": 2900,
+        "cpc": 0,
+        "overlap": 4
+      },
+      {
+        "keyword": "google calculator",
+        "volume": 2400,
+        "cpc": 0.13,
+        "overlap": 4
+      },
+      {
+        "keyword": "app calculator",
+        "volume": 720,
+        "cpc": 0.36,
+        "overlap": 4
+      },
+      {
+        "keyword": "calculator 意味",
+        "volume": 2900,
+        "cpc": 0,
+        "overlap": 3
+      },
+      {
+        "keyword": "google kalkulator",
+        "volume": 2900,
+        "cpc": 0.15,
+        "overlap": 3
+      }
+    ]
+  }
+}

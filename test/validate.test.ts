@@ -43,14 +43,17 @@ it.each([
   expect(rows[0].verdict).toBe(verdict);
 });
 it('uses the full shared-scale comparison window and calibrates only matching geos', async () => {
-  for (const geo of ['US', 'JP']) {
+  for (const geo of ['US', 'CA', 'JP', 'SG']) {
     const [r] = await validateTerms(['x'], { store: await store(), filter: { geo }, query: mock([20, 20, 20, 20, 100]) });
     expect(r.anchor.ratio).toBe(3.6);
-    expect(r.anchor.term).toBe('sudoku');
+    expect(r.anchor.term).toBe(geo === 'JP' ? 'ナンプレ' : 'sudoku');
     if (geo === 'US') {
       expect(r.anchor.dailySearches).toBe(63000);
       expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'sudoku', dailySearches: 63000 });
       expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 226800, low: 113400, high: 340200 });
+    } else if (geo === 'CA' || geo === 'JP') {
+      expect(r.anchor.dailySearches).toBe(geo === 'CA' ? 12000 : 22000);
+      expect(r.anchor.traffic.average).toBe(geo === 'CA' ? 43200 : 79200);
     } else {
       expect(r.anchor.dailySearches).toBeNull();
       expect(r.anchor.traffic.average).toBeNull();

@@ -1,3 +1,4 @@
+import { BUILTIN_ANCHOR_TERMS } from './options.js';
 import { createHash } from 'node:crypto';
 import { readFile as readFileDefault } from 'node:fs/promises';
 import { GTrendsError, TIME_RANGES, type GTrendsTimeRange } from './core.js';
@@ -363,7 +364,7 @@ function validate(input: ActorRunInput): ValidatedInput | string {
   }
   const window = rawWindow as GTrendsTimeRange;
   const anchor = text(input.anchor) ?? '';
-  if (anchor && anchor !== 'gpts' && anchor !== 'sudoku') return `Unknown anchor "${anchor}"; use gpts, sudoku, or leave it blank.`;
+  if (anchor && !BUILTIN_ANCHOR_TERMS.includes(anchor)) return `Unknown anchor "${anchor}"; use ${BUILTIN_ANCHOR_TERMS.join(', ')}, or leave it blank.`;
   if (tool === 'now') {
     if (!geo) return 'Trending now needs a country code; Worldwide is not supported.';
     if (!GEO_CODES.includes(geo)) return `Trending now does not support "${geo}".`;

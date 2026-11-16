@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=sudoku&country=de",
+  "checkedAt": "2026-11-16T14:22:10.997831+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "sudoku",
+    "volume": 1000000,
+    "cpc": 0.76,
+    "competition": 0.01,
+    "country": "de",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:09.802Z",
+    "similar": [
+      {
+        "keyword": "zeit sudoku leicht",
+        "volume": 880,
+        "cpc": 0,
+        "overlap": 18
+      },
+      {
+        "keyword": "zeitung sudoku",
+        "volume": 90,
+        "cpc": 0.32,
+        "overlap": 18
+      },
+      {
+        "keyword": "zeit sudoku mittel",
+        "volume": 720,
+        "cpc": 0,
+        "overlap": 16
+      },
+      {
+        "keyword": "zeit sudoku kostenlos",
+        "volume": 90,
+        "cpc": 0,
+        "overlap": 16
+      },
+      {
+        "keyword": "sudoku gratis online",
+        "volume": 18100,
+        "cpc": 1.36,
+        "overlap": 14
+      },
+      {
+        "keyword": "sudoku kostenlos online",
+        "volume": 33100,
+        "cpc": 1.44,
+        "overlap": 13
+      },
+      {
+        "keyword": "sudoku online kostenlos",
+        "volume": 33100,
+        "cpc": 1.44,
+        "overlap": 13
+      },
+      {
+        "keyword": "sudoku spielen kostenlos",
+        "volume": 8100,
+        "cpc": 0.99,
+        "overlap": 13
+      },
+      {
+        "keyword": "sudoku gratis",
+        "volume": 3600,
+        "cpc": 1.09,
+        "overlap": 13
+      },
+      {
+        "keyword": "sudoku mittel kostenlos spielen tägliches rätsel",
+        "volume": 1900,
+        "cpc": 1.32,
+        "overlap": 13
+      }
+    ]
+  }
+}

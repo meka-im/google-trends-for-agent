@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=calculator&country=au",
+  "checkedAt": "2026-11-16T14:22:09.342074+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "calculator",
+    "volume": 1830000,
+    "cpc": 0.35,
+    "competition": 0.01,
+    "country": "au",
+    "cached": true,
+    "cached_at": "2026-08-24T07:24:07.805Z",
+    "similar": [
+      {
+        "keyword": "calculate tool",
+        "volume": 90,
+        "cpc": 0.55,
+        "overlap": 10
+      },
+      {
+        "keyword": "calc",
+        "volume": 135000,
+        "cpc": 0.29,
+        "overlap": 9
+      },
+      {
+        "keyword": "free calculate",
+        "volume": 880,
+        "cpc": 0.41,
+        "overlap": 9
+      },
+      {
+        "keyword": "calculator calculator",
+        "volume": 260,
+        "cpc": 0,
+        "overlap": 9
+      },
+      {
+        "keyword": "calculator site",
+        "volume": 210,
+        "cpc": 0,
+        "overlap": 9
+      },
+      {
+        "keyword": "calculator to calculate",
+        "volume": 70,
+        "cpc": 0,
+        "overlap": 9
+      },
+      {
+        "keyword": "calculators online",
+        "volume": 60500,
+        "cpc": 0.62,
+        "overlap": 8
+      },
+      {
+        "keyword": "calculate free",
+        "volume": 880,
+        "cpc": 0.41,
+        "overlap": 8
+      },
+      {
+        "keyword": "calculator google search",
+        "volume": 320,
+        "cpc": 0,
+        "overlap": 8
+      },
+      {
+        "keyword": "calcu calculator",
+        "volume": 260,
+        "cpc": 0.01,
+        "overlap": 8
+      }
+    ]
+  }
+}

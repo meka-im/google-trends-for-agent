@@ -376,12 +376,12 @@ describe('dsh settings form', () => {
     expect(apifyInputs).toHaveLength(6);
   });
 
-  it('shows Worldwide only for query geo and uses choice controls for anchor tolerances', () => {
+  it('preserves Worldwide for query and new-anchor geos and uses choice controls for tolerances', () => {
     const html = render({ value: { geo: '' } });
     expect(html).toMatch(/role="combobox"[^>]*value="Worldwide"/);
     expect(html).toContain('>Default geo</label>');
-    // Anchors calibrate one country; only the query default can be Worldwide.
-    expect(html.match(/value="Worldwide"/g)).toHaveLength(1);
+    // A new anchor follows the query region, including explicit Worldwide.
+    expect(html.match(/value="Worldwide"/g)).toHaveLength(2);
     expect(html.match(/aria-label="Tolerance /g)).toHaveLength(2);
     expect(html).toMatch(/role="combobox"[^>]*aria-autocomplete="none"[^>]*value="±50%"/);
     expect(html).not.toContain('<select');
