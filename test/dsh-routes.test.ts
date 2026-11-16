@@ -103,7 +103,7 @@ function actorFetch() {
   return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const target = String(url);
     if (target === ACTS_URL) {
-      return json({ data: { items: [{ id: ACTOR, name: 'google-trends-for-agent', username: 'alice' }] } });
+      return json({ data: { items: [{ id: ACTOR, name: 'google-trends-for-agent', username: 'alice', title: 'Google Trends for AI Agents' }] } });
     }
     if (target === `https://api.apify.com/v2/acts/${ACTOR}`) {
       return json({
@@ -119,6 +119,7 @@ function actorFetch() {
       });
     }
     if (target === 'https://api.apify.com/v2/actor-builds/build-1') return json({ data: { status: 'SUCCEEDED' } });
+    if (target === `https://api.apify.com/v2/acts/${ACTOR}/builds?desc=1&limit=1`) return json({ data: { items: [{ id: 'build-1', status: 'SUCCEEDED' }] } });
     if (target === 'https://api.apify.com/v2/acts' && init?.method === 'POST') return json({ data: { id: 'new-actor' } }, 201);
     if (target === 'https://api.apify.com/v2/acts/new-actor/builds?version=0.1&tag=latest') return json({ data: { id: 'new-build' } }, 201);
     throw new Error(`unexpected URL ${target}`);
@@ -314,13 +315,15 @@ describe('dsh host routes', () => {
         name: 'google-trends-for-agent',
         username: 'alice',
         title: 'Google Trends for AI Agents',
-        standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
-        standbyEnabled: true,
+        standbyUrl: null,
+        standbyEnabled: false,
         lastBuildId: 'build-1',
         lastBuildStatus: 'SUCCEEDED',
       }],
     });
     expect(JSON.stringify(body)).not.toContain(TOKEN);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === `https://api.apify.com/v2/acts/${ACTOR}`)).toBe(false);
     expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: `Bearer ${TOKEN}` });
 
     vi.stubEnv('APIFY_TOKEN', '');

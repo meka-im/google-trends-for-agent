@@ -96,6 +96,51 @@ afterEach(() => {
 });
 
 describe('settings interactions', () => {
+  it('dismisses the account menu on outside clicks, focus changes, and Escape without signing out', async () => {
+    const backend = host({ egress: 'actor-public' }); const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const trigger = await screen.findByLabelText(t('accountActions'));
+    const menu = trigger.closest('details')!;
+    await user.click(trigger);
+    expect(menu.open).toBe(true);
+    await user.click(screen.getByRole('heading', { name: t('connection') }));
+    expect(menu.open).toBe(false);
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    expect(menu.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    await user.click(trigger);
+    await user.tab();
+    expect(document.activeElement).toBe(button('oauthLogout'));
+    await user.tab();
+    expect(menu.open).toBe(false);
+    expect(network.count('api/gtfa.apify-oauth-logout')).toBe(0);
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('aborts a pending Actor list on route changes and ignores its late result', async () => {
+    const backend = host({ egress: 'actor-own' }); const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    const original = network.fetch.getMockImplementation()!;
+    const pending: Array<{ signal?: AbortSignal | null; resolve: (response: Response) => void }> = [];
+    network.fetch.mockImplementation((url, init) => String(url).startsWith('api/gtfa.apify-actors')
+      ? new Promise(resolve => { pending.push({ signal: init?.signal, resolve }); }) : original(url, init));
+    const page = render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('tab', { name: t('egressPublic') }));
+    expect(pending.every(request => request.signal?.aborted)).toBe(true);
+    await act(async () => { for (const request of pending) request.resolve(Response.json({ ok: true, actors: [] })); });
+    expect(screen.queryByText(t('actorEmpty'))).toBeNull();
+    await user.click(screen.getByRole('tab', { name: t('egressOwn') }));
+    await waitFor(() => expect(pending.at(-1)!.signal?.aborted).toBe(false));
+    const last = pending.at(-1)!;
+    page.unmount();
+    expect(last.signal?.aborted).toBe(true);
+    last.resolve(Response.json({ ok: true, actors: [] }));
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
   it('replaces the locked Actor selector with login and loads choices after authorization', async () => {
     vi.useFakeTimers(); const backend = host({ egress: 'actor-own' }); const network = api();
     render(<ConfigPage ctx={backend.ctx} t={t} />); await tick(0);

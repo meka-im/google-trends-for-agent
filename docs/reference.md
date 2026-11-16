@@ -136,6 +136,8 @@ The connection section uses three egress cards. OAuth status and usage share a c
 
 The own-Actor picker shows the prerequisite instead of a disabled empty select: sign in first, wait for the list, retry a failed request, or deploy when the list is empty. Completing authorization reloads the choices; choosing an Actor is a draft until Save. **Use a manual token** opens and focuses its advanced field.
 
+The account menu closes on an outside click, focus leaving the menu, or Escape. The Actor picker reads the basic list and most recent build directly, avoiding full Actor details. Listing has a 30-second Host deadline and a 45-second browser deadline; API request timeouts also cover response bodies. Switching connection modes, refreshing or closing settings cancels the previous list request; failures remain retryable.
+
 **Advanced** contains **Calibration baselines**, **Manual Token** (Actor routes only), and **Files and charts** tabs. Closing Advanced or switching tabs keeps draft edits. A validation link in the footer opens the relevant advanced controls when they block saving.
 
 When either Actor route has no connected credential, a compact card shows Apify's $5 monthly Free-plan credit, an estimated 3,000–7,000 queries and a short shared-account budget note, alongside [Sign up →](https://console.apify.com/sign-up) and [Pricing](https://apify.com/pricing). Sign in with Apify, or use the manual token fallback under **Advanced → Manual Token**. Local mode needs no token and does not show this card. See [Actor costs](#actor-costs) for the sample basis and runtime bounds.
