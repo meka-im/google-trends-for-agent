@@ -193,6 +193,8 @@ Snapshot attempts its 7-day work sequentially. For a primary window other than `
 | `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/day**, ±50% |
 | `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | **3,500/day**, ±50% |
 
+Canada, the UK, Australia, Germany, France, Japan, India and Worldwide have their own automatic baselines (±75% assumption bands). See [regional values, sources and validation](docs/baselines.md). Unsupported regions and sparse data retain null traffic.
+
 Derivation, anchor overrides, baseline files, and null-traffic rules: [Calibration and the anchor](docs/reference.md#calibration-and-the-anchor).
 
 ## Docs

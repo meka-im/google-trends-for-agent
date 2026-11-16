@@ -57,13 +57,13 @@ function createConfig(Schema: SchemaFactory) {
   const baselines = Schema.transform(Schema.object({
     anchors: Schema.array(Schema.object({
       term: Schema.string().required().description('Anchor term, for example gpts or sudoku.'),
-      geo: Schema.string().default('US').description('Country code for this anchor.'),
+      geo: Schema.string().default('US').description('Country code for this anchor; empty string means Worldwide.'),
       dailySearches: Schema.transform(Schema.number().required(), (value: number) => {
         if (!(value > 0)) throw new Error('dailySearches must be a positive number');
         return value;
       }).description('Estimated daily searches for the anchor; must be positive.'),
       tolerance: Schema.number().min(0).max(1).description('Allowed ± fraction, for example 0.5.'),
-    })).default([]).description('Override or add anchors; an empty list keeps the built-in US baselines.'),
+    })).default([]).description('Override or add anchors; an empty list keeps the built-in regional baselines.'),
     windowAnchors: Schema.object({
       short: Schema.string().description('Anchor term for now 1-H, now 4-H, and now 1-d.'),
       long: Schema.string().description('Anchor term for now 7-d and longer windows.'),
@@ -72,7 +72,7 @@ function createConfig(Schema: SchemaFactory) {
     // Keep this callback self-contained: dsh serializes transform callbacks to the
     // browser settings form, where this module's imports are not in scope.
     const row = (value ?? {}) as { anchors?: Array<{ term?: unknown }> | null; windowAnchors?: Record<string, unknown> | null };
-    const terms = new Set(['gpts', 'sudoku']);
+    const terms = new Set(['gpts', 'sudoku', 'calculator', 'ナンプレ']);
     for (const anchor of row.anchors ?? []) {
       const term = String(anchor.term ?? '').trim().toLowerCase();
       if (!term) throw new Error('anchor term must not be blank');
@@ -177,7 +177,7 @@ export function baselinesFromConfig(value: unknown): Baselines | undefined {
   return parseBaselines({
     version: 2,
     // Window-only overrides pick among the built-in anchors.
-    anchors: anchors.length ? anchors.map(anchor => ({ ...anchor, geo: anchor.geo?.trim() || 'US' })) : [...BUILTIN_ANCHORS],
+    anchors: anchors.length ? anchors.map(anchor => ({ ...anchor, geo: typeof anchor.geo === 'string' ? anchor.geo.trim() : anchor.geo === undefined ? 'US' : anchor.geo })) : [...BUILTIN_ANCHORS],
     ...(hasWindow ? { windowAnchors: windows } : {}),
   }, 'dsh baselines');
 }

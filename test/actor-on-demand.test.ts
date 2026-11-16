@@ -8,6 +8,7 @@ import { runToolRequest } from '../src/actor-request.js';
 import type { GtfaTool } from '../src/tools.js';
 import { SnapshotStore, snapshotDiff, type TermSnapshot } from '../src/snapshot.js';
 import { testConnection } from '../src/dsh-routes.js';
+import { findAnchor, parseBaselines } from '../src/traffic.js';
 
 const input = { protocol: 1 as const, name: 'trends_ask' as const, input: { term: 'ChatGPT' } };
 const envelope = () => ({ ok: true, schemaVersion: 1, status: 'ok', term: 'ChatGPT', diff: null,
@@ -102,6 +103,42 @@ describe('on-demand Actor execution', () => {
     expect(fetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
     await callActorTool(client, { ...options, input: { ...options.input, fresh: true } });
     expect(fetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(2);
+  });
+
+  it.each([
+    { geo: 'CA', anchor: 'sudoku', daily: 12000 },
+    { geo: 'JP', anchor: 'ナンプレ', daily: 22000 },
+    { geo: 'IN', anchor: 'calculator', daily: 300000 },
+    { geo: '', anchor: 'sudoku', daily: 220000 },
+  ])('forwards $geo regional calibration to both native cloud tools', async ({ geo, anchor, daily }) => {
+    const fetch = service(), client = new OnDemandActorClient({ fetch: fetch as typeof globalThis.fetch, pollIntervalMs: 0 });
+    for (const name of ['trends_ask', 'trends_snapshot'] as const) {
+      await callActorTool(client, { token: 'secret', actorId: 'actor', name,
+        input: { term: 'ChatGPT', geo, validate: true, fresh: true },
+        settings: { defaultGeo: 'US', snapshotDir: await directory(), chartDir: null },
+      });
+    }
+    const starts = fetch.mock.calls.filter(([url]) => String(url).includes('/runs?'));
+    expect(starts).toHaveLength(2);
+    for (const [, init] of starts) {
+      const request = JSON.parse(String(init!.body)).toolRequest;
+      expect(request.input.geo).toBe(geo);
+      const baselines = parseBaselines(request.settings.baselines);
+      expect(baselines.windowAnchors).toEqual({ short: anchor, long: anchor });
+      expect(findAnchor(baselines, anchor, geo)?.dailySearches).toBe(daily);
+    }
+  });
+
+  it('keeps a user regional override when preparing a calibrated cloud request', async () => {
+    const fetch = service();
+    await callActorTool(new OnDemandActorClient({ fetch: fetch as typeof globalThis.fetch, pollIntervalMs: 0 }), {
+      token: 'secret', actorId: 'actor', name: 'trends_ask', input: { term: 'ChatGPT', validate: true },
+      settings: { defaultGeo: 'CA', snapshotDir: await directory(), chartDir: null,
+        baselines: { version: 2, anchors: [{ term: 'sudoku', geo: ' ca ', dailySearches: 4321, tolerance: 0.2 }] } },
+    });
+    const start = fetch.mock.calls.find(([url]) => String(url).includes('/runs?'))!;
+    const baselines = parseBaselines(JSON.parse(String(start[1]!.body)).toolRequest.settings.baselines);
+    expect(findAnchor(baselines, 'sudoku', 'CA')).toMatchObject({ dailySearches: 4321, tolerance: 0.2 });
   });
 
   it('writes returned charts locally and projects inline SVG according to the caller', async () => {

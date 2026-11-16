@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createTools, invalidInputEnvelope, zodRejectionEnvelope, type GtfaTool, type ToolLiveSettings } from './tools.js';
 import { SnapshotStore, type TermSnapshot } from './snapshot.js';
-import { parseBaselines } from './traffic.js';
+import { defaultAnchorFor, parseBaselines } from './traffic.js';
 import { normalizeGeo } from './options.js';
 import { CONNECTION_PROBE_PROTOCOL } from './connection-check.js';
 
@@ -66,7 +66,7 @@ export async function runToolRequest(value: unknown, options: {
     const filter = { ...result.filter as Record<string, unknown> };
     if (filter.property === 'web') filter.property = '';
     for (const range of [filter.time, 'now 7-d']) {
-      for (const anchor of [undefined, 'gpts', 'sudoku', request.settings.anchor, request.input.anchor, settings.baselines?.windowAnchors?.short, settings.baselines?.windowAnchors?.long]) {
+      for (const anchor of [undefined, defaultAnchorFor(String(range), settings.baselines, String(filter.geo ?? 'US')), 'gpts', 'sudoku', request.settings.anchor, request.input.anchor, settings.baselines?.windowAnchors?.short, settings.baselines?.windowAnchors?.long]) {
         const history = await store.history(request.input.term, { ...filter, time: range } as never, 2, typeof anchor === 'string' ? anchor : undefined);
         for (const snapshot of history) if (!snapshots.some(row => row.id === snapshot.id)) snapshots.push(snapshot);
       }

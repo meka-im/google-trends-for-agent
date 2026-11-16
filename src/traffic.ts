@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { TrendsFilter } from './filter.js';
-import { BUILTIN_ANCHOR_TERMS } from './options.js';
+import { automaticAnchorFor, BASELINE_CATALOG } from './baseline-catalog.js';
 
 export interface Anchor { term: string; dailySearches?: number; tolerance?: number; geo: string }
 /** Optional per-window overrides; short = now 1-H / now 4-H / now 1-d, long = everything else. */
@@ -9,28 +9,20 @@ export interface Baselines { version: 2; anchors: Anchor[]; windowAnchors?: Wind
 
 /** Windows measured in hours or one day: dense, fast-moving, and better anchored by sudoku. */
 export const SHORT_WINDOWS = ['now 1-H', 'now 4-H', 'now 1-d'] as const;
-const DEFAULTS = { short: 'sudoku', long: 'gpts' } as const;
 
-/**
- * Built-in US baselines. gpts ≈3,500/day is the long-window ruler (now 7-d and beyond),
- * back-derived from public keyword-tool volumes through measured 7-day Trends ratios.
- * sudoku ≈63,000/day is the same ruler measured through the 7-day sudoku/gpts ratio.
- */
-export const BUILTIN_ANCHORS: readonly Anchor[] = [
-  { term: BUILTIN_ANCHOR_TERMS[0], dailySearches: 3500, geo: 'US', tolerance: 0.5 },
-  { term: BUILTIN_ANCHOR_TERMS[1], dailySearches: 63000, geo: 'US', tolerance: 0.5 },
-];
+/** Runtime calibration fields; source metadata stays in the shared catalog. */
+export const BUILTIN_ANCHORS: readonly Anchor[] = BASELINE_CATALOG.map(({ term, geo, dailySearches, tolerance }) => ({ term, geo, dailySearches, tolerance }));
 
 function invalid(message: string): never { throw new Error(`Invalid baselines: ${message}`); }
 const isShort = (time: string) => (SHORT_WINDOWS as readonly string[]).includes(time);
 
 /** Anchor term for a window unless an explicit anchor overrides it. */
-export function defaultAnchorFor(time: string, baselines?: Baselines): string {
+export function defaultAnchorFor(time: string, baselines?: Baselines, geo = 'US'): string {
   const window = isShort(time) ? 'short' : 'long';
-  return baselines?.windowAnchors?.[window]?.trim() || DEFAULTS[window];
+  return baselines?.windowAnchors?.[window]?.trim() || automaticAnchorFor(time, geo);
 }
 export function validateAnchor(a: Anchor): Anchor {
-  if (!a || typeof a.term !== 'string' || !a.term.trim() || !Number.isFinite(a.dailySearches) || (a.dailySearches ?? 0) <= 0 || typeof a.geo !== 'string' || !a.geo.trim()) throw new Error('invalid baseline anchor');
+  if (!a || typeof a.term !== 'string' || !a.term.trim() || !Number.isFinite(a.dailySearches) || (a.dailySearches ?? 0) <= 0 || typeof a.geo !== 'string') throw new Error('invalid baseline anchor');
   if (a.tolerance !== undefined && (typeof a.tolerance !== 'number' || !Number.isFinite(a.tolerance) || a.tolerance < 0 || a.tolerance > 1)) throw new Error('tolerance must be a number from 0 to 1');
   return a;
 }
@@ -49,7 +41,7 @@ export function baselineScopeMismatch(filter: Pick<TrendsFilter, 'category' | 'p
   const property = filter.property.trim().toLowerCase() || 'web';
   return `Baseline calibration applies only to web/all categories; requested category ${filter.category}, property ${property}`;
 }
-/** Match a calibration by term + normalized geo in user baselines first, then the built-in US anchors. */
+/** Match term + normalized geo exactly; explicit empty geo is Worldwide, never US. */
 export function findAnchor(
   baselines: Baselines | undefined,
   term: string,
@@ -61,6 +53,25 @@ export function findAnchor(
   const wantedGeo = geo.trim().toUpperCase();
   return baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo.trim().toUpperCase() === wantedGeo)
     ?? BUILTIN_ANCHORS.find(a => a.term === wanted && a.geo.trim().toUpperCase() === wantedGeo);
+}
+
+/**
+ * Pin regional defaults into an on-demand request, including for existing Actors.
+ * Country requests omit the built-in Worldwide row for older v2 parsers, which
+ * rejected empty anchor geos. User-provided rows are preserved and always win.
+ */
+export function baselinesForActor(geo: string, baselines?: Baselines): Baselines {
+  const user = baselines?.anchors ?? [];
+  const key = (anchor: Anchor) => JSON.stringify([anchor.term.trim().toLowerCase(), anchor.geo.trim().toUpperCase()]);
+  const overridden = new Set(user.map(key));
+  return {
+    version: 2,
+    anchors: [...user, ...BUILTIN_ANCHORS.filter(anchor => (anchor.geo !== '' || geo.trim() === '') && !overridden.has(key(anchor)))],
+    windowAnchors: {
+      short: defaultAnchorFor('now 1-d', baselines, geo),
+      long: defaultAnchorFor('now 7-d', baselines, geo),
+    },
+  };
 }
 /** Validate a version 2 baselines value; version 1 is rejected rather than translated. */
 export function parseBaselines(parsed: unknown, source = 'baselines'): Baselines {

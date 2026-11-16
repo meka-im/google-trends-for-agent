@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=calculator&country=fr",
+  "checkedAt": "2026-11-16T14:22:16.533280+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "calculator",
+    "volume": 110000,
+    "cpc": 0.32,
+    "competition": 0.02,
+    "country": "fr",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:15.302Z",
+    "similar": [
+      {
+        "keyword": "calculator google",
+        "volume": 260,
+        "cpc": 0.16,
+        "overlap": 14
+      },
+      {
+        "keyword": "calculator site",
+        "volume": 70,
+        "cpc": 0,
+        "overlap": 14
+      },
+      {
+        "keyword": "google calculator",
+        "volume": 880,
+        "cpc": 0.38,
+        "overlap": 12
+      },
+      {
+        "keyword": "online calculator",
+        "volume": 2400,
+        "cpc": 0,
+        "overlap": 10
+      },
+      {
+        "keyword": "calculator app",
+        "volume": 590,
+        "cpc": 0.3,
+        "overlap": 10
+      },
+      {
+        "keyword": "calculadora google",
+        "volume": 90,
+        "cpc": 0,
+        "overlap": 10
+      },
+      {
+        "keyword": "calculators",
+        "volume": 110000,
+        "cpc": 0.29,
+        "overlap": 8
+      },
+      {
+        "keyword": "calculator online",
+        "volume": 3600,
+        "cpc": 0.46,
+        "overlap": 8
+      },
+      {
+        "keyword": "calculator on google",
+        "volume": 880,
+        "cpc": 0,
+        "overlap": 8
+      },
+      {
+        "keyword": "google google calculator",
+        "volume": 880,
+        "cpc": 0.38,
+        "overlap": 8
+      }
+    ]
+  }
+}

@@ -447,6 +447,40 @@ describe('baseline editor', () => {
     { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
   ], windowAnchors: { short: 'research', long: 'gpts' } });
 
+  it.each([
+    { geo: 'CA', anchor: 'sudoku', daily: '12000' },
+    { geo: 'JP', anchor: 'ナンプレ', daily: '22000' },
+    { geo: 'IN', anchor: 'calculator', daily: '300000' },
+    { geo: '', anchor: 'sudoku', daily: '220000' },
+  ])('seeds editable $geo baselines and preserves explicit regions on Save', async ({ geo, anchor, daily }) => {
+    const backend = host({ geo }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    await user.click(screen.getByRole('switch', { name: t('overrideBaselines') }));
+    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${anchor}` }) as HTMLInputElement).value).toBe(daily);
+    expect((screen.getByRole('combobox', { name: t('windowShort') }) as HTMLInputElement).value).toBe(`${t('windowDefault')} · ${anchor}`);
+    expect((screen.getByRole('combobox', { name: t('windowLong') }) as HTMLInputElement).value).toBe(`${t('windowDefault')} · ${anchor}`);
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
+      { term: anchor, geo, dailySearches: Number(daily), tolerance: 0.75 },
+    ] }));
+  });
+
+  it('follows a changed default region for an empty new row but retains edited new rows', async () => {
+    const backend = host(); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    await pick(user, t('geo'), regionLabel('CA', 'en'));
+    await user.click(screen.getByRole('switch', { name: t('overrideBaselines') }));
+    const newRegion = () => screen.getByRole('combobox', { name: `${t('anchorGeo')} ${t('newAnchorTerm')}` }) as HTMLInputElement;
+    expect(newRegion().value).toBe(regionLabel('CA', 'en'));
+    await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'research');
+    await pick(user, t('geo'), t('geoWorldwide'));
+    expect(newRegion().value).toBe(regionLabel('CA', 'en'));
+    expect((screen.getByRole('combobox', { name: `${t('anchorGeo')} sudoku` }) as HTMLInputElement).value).toBe(regionLabel('CA', 'en'));
+    expect(backend.saved().geo).toBe('US');
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
   it('edits region, daily searches, tolerance and windows without writing until Save', async () => {
     const backend = host(); api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
@@ -455,7 +489,7 @@ describe('baseline editor', () => {
     expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` }) as HTMLInputElement).value).toBe('3500');
     const geo = screen.getByRole('combobox', { name: `${t('anchorGeo')} gpts` });
     await user.click(geo);
-    expect(screen.queryByRole('option', { name: t('geoWorldwide') })).toBeNull();
+    expect(screen.getByRole('option', { name: t('geoWorldwide') })).toBeTruthy();
     await user.type(geo, 'gb');
     await user.click(screen.getByRole('option', { name: regionLabel('GB', 'en') }));
     const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` });

@@ -103,6 +103,22 @@ describe('dsh Config schema', () => {
       .toBeTruthy();
   });
 
+  it('preserves explicit Worldwide baseline rows through the Host schema', () => {
+    const settings = resolveGtfaSettings(Config!({ geo: '', baselines: {
+      anchors: [{ term: 'sudoku', geo: '', dailySearches: 123000, tolerance: 0.25 }],
+      windowAnchors: { long: 'sudoku' },
+    } }) as never);
+    expect(settings.geo).toBe('');
+    expect(settings.baselines).toEqual({ version: 2,
+      anchors: [{ term: 'sudoku', geo: '', dailySearches: 123000, tolerance: 0.25 }],
+      windowAnchors: { long: 'sudoku' },
+    });
+    expect(baselinesFromConfig({ anchors: [{ term: 'sudoku', dailySearches: 1234 }] })?.anchors[0].geo).toBe('US');
+    expect(() => baselinesFromConfig({ anchors: [{ term: 'sudoku', geo: null, dailySearches: 1234 }] })).toThrow(/invalid baseline anchor/);
+    expect(resolveGtfaSettings(Config!({ baselines: { windowAnchors: { short: 'calculator', long: 'ナンプレ' } } }) as never).baselines?.windowAnchors)
+      .toEqual({ short: 'calculator', long: 'ナンプレ' });
+  });
+
   it('rejects invalid baseline edits at Config time', () => {
     for (const dailySearches of [0, -1]) {
       expect(() => Config!({ baselines: { anchors: [{ term: 'gpts', geo: 'US', dailySearches }] } }))

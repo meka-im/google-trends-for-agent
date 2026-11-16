@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=sudoku&country=in",
+  "checkedAt": "2026-11-16T14:22:22.650462+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "sudoku",
+    "volume": 550000,
+    "cpc": 0.24,
+    "competition": 0.01,
+    "country": "in",
+    "cached": false,
+    "cached_at": "2026-11-16T14:22:21.467Z",
+    "similar": [
+      {
+        "keyword": "sudoku online",
+        "volume": 135000,
+        "cpc": 0.07,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku puzzle",
+        "volume": 110000,
+        "cpc": 0.22,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku puzzles",
+        "volume": 110000,
+        "cpc": 0.22,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku game",
+        "volume": 74000,
+        "cpc": 0.2,
+        "overlap": 20
+      },
+      {
+        "keyword": "online sudoku",
+        "volume": 27100,
+        "cpc": 0.05,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku free",
+        "volume": 1900,
+        "cpc": 0.16,
+        "overlap": 20
+      },
+      {
+        "keyword": "free sudoku",
+        "volume": 1300,
+        "cpc": 0.11,
+        "overlap": 20
+      },
+      {
+        "keyword": "play sudoku",
+        "volume": 880,
+        "cpc": 0.03,
+        "overlap": 20
+      },
+      {
+        "keyword": "best online sudoku",
+        "volume": 390,
+        "cpc": 0.22,
+        "overlap": 20
+      },
+      {
+        "keyword": "sudoku number game",
+        "volume": 320,
+        "cpc": 0.05,
+        "overlap": 20
+      }
+    ]
+  }
+}

@@ -12,7 +12,7 @@ export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   traffic series, related queries, verdict, and chart file paths for the requested
   window plus an always-on now 7-d curve (chart7d / traffic7d); --svg embeds SVG text.
   --geo US --time "now 1-d"          Explore filter (all categories, web)
-  --anchor TERM                     Anchor override; default auto: sudoku for 1h/4h/1d, gpts for 7d+
+  --anchor TERM                     Anchor override; default automatic by region and time window
   --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
   --timeout MS                      Per-request timeout (integer 1000-60000; Explore default ${DEFAULT_EXPLORE_TIMEOUT_MS})

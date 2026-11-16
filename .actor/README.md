@@ -40,7 +40,7 @@ For self-deployment, keep Server / Standby disabled. This Actor runs queries on 
 - `terms`: one or more terms for ask/snapshot, 1–5 distinct terms for compare; ignored by now.
 - `geo`: supported country code; `WORLDWIDE` is accepted except for now.
 - `window`: a supported Trends time window, default `now 1-d`.
-- `anchor`: automatic when blank, or built-in `gpts` / `sudoku`.
+- `anchor`: automatic by query region and window when blank; built-in terms are `gpts`, `sudoku`, `calculator` and `ナンプレ`.
 - `timeoutMs`: optional 1000–60000 ms per upstream request.
 - `proxyConfiguration`: defaults to the on-platform US residential proxy.
 
@@ -79,6 +79,6 @@ Inspect each finished run's `usageTotalUsd` for its measured cost; see [cost det
 
 ## Data boundaries
 
-Searches/day are anchor-calibrated estimates, not measured Google volume. Sparse or unavailable calibration returns null with a warning. Snapshot related-query `estDaily` remains null in native envelopes. Built-in baselines cover the US; other countries require a suitable baseline. On `BLOCKED`, stop. On `RATE_LIMITED`, respect the indicated backoff and keep retries bounded. Use this for light interactive research.
+Searches/day are anchor-calibrated estimates, not measured Google volume. Sparse or unavailable calibration returns null with a warning. Snapshot related-query `estDaily` remains null in native envelopes. Built-in baselines cover the US, Canada, UK, Australia, Germany, France, Japan, India and Worldwide. New regional estimates use ±75% assumption bands, not statistical confidence intervals. See [regional values, source periods and validation](https://github.com/meka-im/google-trends-for-agent/blob/main/docs/baselines.md). Other regions still return relative interest without an absolute volume estimate. On `BLOCKED`, stop. On `RATE_LIMITED`, respect the indicated backoff and keep retries bounded. Use this for light interactive research.
 
 The project is unofficial and is not affiliated with Google. [Source and local usage](../README.md), [MCP field guide](../docs/mcp-api.md), [reference](../docs/reference.md).

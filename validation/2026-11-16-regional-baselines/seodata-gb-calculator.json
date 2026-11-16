@@ -1,0 +1,76 @@
+{
+  "url": "https://api.seodata.dev/v1/keyword?q=calculator&country=gb",
+  "checkedAt": "2026-11-16T14:22:05.862918+00:00",
+  "httpStatus": 200,
+  "data": {
+    "keyword": "calculator",
+    "volume": 5000000,
+    "cpc": 0.47,
+    "competition": 0.01,
+    "country": "gb",
+    "cached": true,
+    "cached_at": "2026-10-17T00:19:52.799Z",
+    "similar": [
+      {
+        "keyword": "calculator calculator",
+        "volume": 720,
+        "cpc": 0.62,
+        "overlap": 20
+      },
+      {
+        "keyword": "go to calculator",
+        "volume": 170,
+        "cpc": 0.55,
+        "overlap": 20
+      },
+      {
+        "keyword": "find calculator",
+        "volume": 90,
+        "cpc": 0.53,
+        "overlap": 20
+      },
+      {
+        "keyword": "calculate tool",
+        "volume": 70,
+        "cpc": 0,
+        "overlap": 20
+      },
+      {
+        "keyword": "calculator tool",
+        "volume": 70,
+        "cpc": 0,
+        "overlap": 20
+      },
+      {
+        "keyword": "calculation calculator",
+        "volume": 50,
+        "cpc": 0,
+        "overlap": 20
+      },
+      {
+        "keyword": "calculator online",
+        "volume": 135000,
+        "cpc": 0.5,
+        "overlap": 18
+      },
+      {
+        "keyword": "calculator uk",
+        "volume": 6600,
+        "cpc": 0.67,
+        "overlap": 18
+      },
+      {
+        "keyword": "online calculator uk",
+        "volume": 2400,
+        "cpc": 0.54,
+        "overlap": 18
+      },
+      {
+        "keyword": "calculator please",
+        "volume": 480,
+        "cpc": 0.37,
+        "overlap": 18
+      }
+    ]
+  }
+}

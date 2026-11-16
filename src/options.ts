@@ -1,4 +1,5 @@
 import { TRENDING_GEOS } from './geos.js';
+import { CATALOG_ANCHOR_TERMS } from './baseline-catalog.js';
 
 /** `local` sends Google requests from this machine; the Actor routes relay them through Apify. */
 export type EgressMode = 'local' | 'actor-public' | 'actor-own';
@@ -51,7 +52,7 @@ export const APIFY_PRICING_URL = 'https://apify.com/pricing';
 export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
 
 /** Built-in calibration anchor terms, shared by the host and the browser form without importing baselines. */
-export const BUILTIN_ANCHOR_TERMS = ['gpts', 'sudoku'] as const;
+export const BUILTIN_ANCHOR_TERMS = CATALOG_ANCHOR_TERMS;
 
 /** Empty geo means Worldwide in Google Trends Explore. */
 export const WORLDWIDE_GEO = '';

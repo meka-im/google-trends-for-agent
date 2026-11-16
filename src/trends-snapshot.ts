@@ -14,7 +14,7 @@ import { resolveTimeZone } from './timezone.js';
 
 export interface TrafficSnapshotOptions {
   filter?: Partial<TrendsFilter>;
-  /** Explicit anchor override; when unset the window default (sudoku or gpts) is used. */
+  /** Explicit anchor override; when unset the region and window select the anchor. */
   anchor?: string;
   baselines?: Baselines;
   store?: SnapshotStore;
@@ -75,7 +75,7 @@ function detectSpike(values: number[], filter: Pick<TrendsFilter, 'time'>): { ra
 /** Fetch the shared-scale term+anchor comparison and the term's related queries in one logical query. */
 export async function snapshotTrafficTerm(term: string, opts: TrafficSnapshotOptions = {}): Promise<TermSnapshot> {
   resolveTimeZone(opts.timeZone);
-  const filter = resolveFilter(opts.filter), query = opts.query ?? queryTrends, anchorTerm = opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
+  const filter = resolveFilter(opts.filter), query = opts.query ?? queryTrends, anchorTerm = opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines, filter.geo);
   const same = normalizeKeyword(term) === normalizeKeyword(anchorTerm);
   let r: TrendsResponse;
   try { r = await query({ queries: same ? [term] : [term, anchorTerm], ...filterInput(filter), dataTypes: ['interestOverTime', 'relatedQueries'] }); }
@@ -119,8 +119,8 @@ export async function fetchTrafficSnapshot(term: string, opts: TrafficSnapshotOp
   resolveTimeZone(opts.timeZone);
   const store = opts.store ?? new SnapshotStore(), filter = resolveFilter(opts.filter);
   const explicit = opts.anchor?.trim();
-  const anchorTerm = explicit || defaultAnchorFor(filter.time, opts.baselines);
-  const weekAnchor = explicit || defaultAnchorFor('now 7-d', opts.baselines);
+  const anchorTerm = explicit || defaultAnchorFor(filter.time, opts.baselines, filter.geo);
+  const weekAnchor = explicit || defaultAnchorFor('now 7-d', opts.baselines, filter.geo);
   const result = await fetchOne(term, opts, store, filter, anchorTerm);
   if (filter.time === 'now 7-d') return { ...result, week: result.snapshot };
   if (result.snapshot.status === 'blocked') {
@@ -161,7 +161,7 @@ function baselineAnchor(term: string, filter: TrendsFilter, baselines?: Baseline
 /** Calibrate one shared-scale snapshot into traffic, series points and an inline SVG. */
 function calibrate(snap: TermSnapshot, opts: TrafficEnvelopeOptions) {
   const filter = snap.filter;
-  const anchorTerm = snap.anchor?.term ?? defaultAnchorFor(filter.time, opts.baselines);
+  const anchorTerm = snap.anchor?.term ?? defaultAnchorFor(filter.time, opts.baselines, filter.geo);
   const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo, filter);
   const daily = calibration ? anchorDailySearches(calibration) : null;
   const tolerance = daily === null ? null : calibration?.tolerance ?? .5;
@@ -231,7 +231,7 @@ export async function trafficSnapshotEnvelope(snap: TermSnapshot, opts: TrafficE
   const status = blockError ? 'blocked' as const : snap.status;
   const error = blockError ?? snap.error;
   const geoLabel = filter.geo || 'Worldwide';
-  const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines), filter, opts.baselines);
+  const anchor7d = week ? week.anchor : baselineAnchor(opts.weekAnchor?.trim() || defaultAnchorFor('now 7-d', opts.baselines, filter.geo), filter, opts.baselines);
   if (primary.gapCount) warnings.push(`${primary.gapCount} low-sample gap point${primary.gapCount === 1 ? '' : 's'} in interest series (zero values between nonzero points) excluded from aggregates and verdict`);
   if (primary.daily === null) {
     const scopeMismatch = baselineScopeMismatch(filter);

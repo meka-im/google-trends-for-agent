@@ -42,7 +42,7 @@ export async function validateTerms(input: (string | LeadInput)[], opts: Validat
   if (opts.concurrency !== undefined && opts.concurrency !== 1) throw new Error('validation concurrency must be 1');
   const filter = resolveFilter(opts.filter), store = opts.store ?? new SnapshotStore(), query = opts.query ?? queryTrends;
   const geoLabel = filter.geo || 'Worldwide';
-  const anchorTerm = opts.anchor === false ? '' : opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines);
+  const anchorTerm = opts.anchor === false ? '' : opts.anchor?.trim() || defaultAnchorFor(filter.time, opts.baselines, filter.geo);
   const scopeMismatch = anchorTerm ? baselineScopeMismatch(filter) : undefined;
   const calibration = findAnchor(opts.baselines, anchorTerm, filter.geo, filter);
   const daily = calibration ? anchorDailySearches(calibration) : null;

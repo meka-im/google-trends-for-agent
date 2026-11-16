@@ -22,6 +22,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
 import { SETTINGS_CSS } from './theme.js';
+import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL } from '../baseline-catalog.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -444,22 +445,25 @@ export const EN: Record<string, string> = {
   defaults: 'Query defaults',
   defaultsDescription: 'Defaults applied when a tool call omits them.',
   geo: 'Default geo',
-  geoHint: 'Used for trends and comparisons. Worldwide has no built-in traffic calibration.',
+  geoHint: 'Relative interest is available; no built-in volume baseline for this region.',
+  geoBaselineHint: 'Regional volume estimate available; sparse data can still return null.',
+  baselineSources: 'Baseline sources & validation',
   geoWorldwide: 'Worldwide',
   geoSearch: 'Search a country or code…',
   choiceEmpty: 'No matching options',
   anchorSearch: 'Search an anchor…',
-  anchorAutoOption: 'Choose an anchor for the query window',
+  anchorAutoOption: 'Choose an anchor for the region and query window',
+  anchorRegionalOption: 'Automatic anchor for this region',
   anchorShortOption: 'For 24-hour and shorter windows',
   anchorLongOption: 'For 7-day and longer windows',
   anchor: 'Traffic calibration',
-  anchorHint: 'Automatic mode matches the query window.',
+  anchorHint: 'Automatic mode matches the region and query window.',
   anchorAutomatic: 'Automatically select an anchor',
   cache: 'Reuse saved snapshots',
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
   baselines: 'Anchors & baselines',
   baselinesDescription: 'Set daily searches for each anchor to calibrate traffic estimates.',
-  baselinesHint: 'Using built-in US baselines. Turn on to customize.',
+  baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
   overrideBaselines: 'Custom baselines',
   anchorTerm: 'Anchor term',
   newAnchorTerm: 'New anchor term',
@@ -708,22 +712,25 @@ export const ZH: Record<string, string> = {
   defaults: '查询默认值',
   defaultsDescription: '查询时未指定的参数，使用这里的设置。',
   geo: '默认地区',
-  geoHint: '全球查询不估算搜索量。',
+  geoHint: '可查询相对热度，此地区暂无内置搜索量基准。',
+  geoBaselineHint: '已内置地区估算基准；数据稀疏时搜索量仍可能为空。',
+  baselineSources: '基准来源与校验',
   geoWorldwide: '全球',
   geoSearch: '搜索地区或代码…',
   choiceEmpty: '没有匹配的选项',
   anchorSearch: '搜索锚点…',
-  anchorAutoOption: '根据查询时间窗口选择锚点',
+  anchorAutoOption: '根据查询地区和时间窗口选择锚点',
+  anchorRegionalOption: '此地区的自动校准锚点',
   anchorShortOption: '适合 24 小时及更短窗口',
   anchorLongOption: '适合 7 天及更长窗口',
   anchor: '流量校准',
-  anchorHint: '自动模式按查询时间窗口选择。',
+  anchorHint: '自动模式按地区和时间窗口选择。',
   anchorAutomatic: '自动选择锚点',
   cache: '复用近期快照',
   cacheHint: '6 小时内复用结果，减少重复请求。',
   baselines: '锚点与基线',
   baselinesDescription: '设置锚点词的每日搜索量，用于估算流量。',
-  baselinesHint: '当前使用内置美国基线，开启后可自定义。',
+  baselinesHint: '当前使用内置地区基线，开启后可自定义。',
   overrideBaselines: '自定义基线',
   anchorTerm: '锚点词',
   newAnchorTerm: '新锚点词',
@@ -970,12 +977,8 @@ function normalizeTolerance(value: unknown): string {
   return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1 ? String(numeric) : '';
 }
 
-function defaultUsBaselineAnchors(): AnchorDraft[] {
-  const [gptsTerm, sudokuTerm] = BUILTIN_ANCHOR_TERMS;
-  return [
-    { term: gptsTerm, geo: DEFAULT_GEO, dailySearches: '3500', tolerance: '0.5' },
-    { term: sudokuTerm, geo: DEFAULT_GEO, dailySearches: '63000', tolerance: '0.5' },
-  ];
+function defaultRegionalBaselineAnchors(geo: string): AnchorDraft[] {
+  return catalogForGeo(geo).map(({ term, geo, dailySearches, tolerance }) => ({ term, geo, dailySearches: String(dailySearches), tolerance: String(tolerance) }));
 }
 
 function blankAnchor(geo = DEFAULT_GEO): AnchorDraft {
@@ -1018,7 +1021,7 @@ export function fromSnapshot(value: Record<string, unknown> | undefined): Draft 
     chartDir: chartDir || '.gtfa/charts',
     baselineOverride: anchors.length > 0 || Boolean(text(windows.short) || text(windows.long)),
     anchors,
-    newAnchor: blankAnchor(),
+    newAnchor: blankAnchor(text(source.geo, DEFAULT_GEO).toUpperCase()),
     windowShort: text(windows.short),
     windowLong: text(windows.long),
   };
@@ -1029,7 +1032,7 @@ export function setBaselineOverride(draft: Draft, enabled: boolean): Draft {
   return {
     ...draft,
     baselineOverride: enabled,
-    anchors: enabled && draft.anchors.length === 0 ? defaultUsBaselineAnchors() : draft.anchors,
+    anchors: enabled && draft.anchors.length === 0 ? defaultRegionalBaselineAnchors(draft.geo) : draft.anchors,
   };
 }
 
@@ -1042,7 +1045,7 @@ export function withPendingAnchor(draft: Draft): Draft {
   const term = draft.baselineOverride ? draft.newAnchor.term.trim() : '';
   if (!term) return draft;
   const anchor = { ...draft.newAnchor, term, dailySearches: String(Number(draft.newAnchor.dailySearches)) };
-  return { ...draft, anchors: [...draft.anchors, anchor], newAnchor: blankAnchor() };
+  return { ...draft, anchors: [...draft.anchors, anchor], newAnchor: blankAnchor(draft.geo) };
 }
 
 export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
@@ -1083,7 +1086,7 @@ export function opsFor(draft: Draft, t: Translate): PathOp[] | string {
     const tolerance = row.tolerance.trim() === '' ? undefined : Number(row.tolerance);
     if (!term || !Number.isFinite(dailySearches) || dailySearches <= 0) throw new Error(t('invalidAnchor'));
     if (tolerance !== undefined && !(Number.isFinite(tolerance) && tolerance >= 0 && tolerance <= 1)) throw new Error(t('invalidTolerance'));
-    if (!row.geo || !GEO_SET.has(row.geo)) throw new Error(t('invalidGeo'));
+    if (!GEO_SET.has(row.geo)) throw new Error(t('invalidGeo'));
     return { term, geo: row.geo, dailySearches, ...(tolerance === undefined ? {} : { tolerance }) };
   });
   const windowAnchors = {
@@ -2231,7 +2234,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     edit({
       baselineOverride: true,
       anchors: [...draft.anchors, { ...draft.newAnchor, term, dailySearches: String(dailySearches) }],
-      newAnchor: blankAnchor(),
+      newAnchor: blankAnchor(draft.geo),
     });
     setFailure(null);
   };
@@ -2271,7 +2274,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       if (!accepted) setFailure(t('failed'));
       else {
         const cleaned: Draft = {
-          ...toSave, token: '', clearToken: false, newAnchor: blankAnchor(),
+          ...toSave, token: '', clearToken: false, newAnchor: blankAnchor(toSave.geo),
           egressNotice: undefined, legacyKeys: undefined,
         };
         setDraft(cleaned);
@@ -2348,7 +2351,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const anchorTerms = useMemo(() => {
     const seen = new Set<string>(), terms: string[] = [];
     for (const term of [
-      ...BUILTIN_ANCHOR_TERMS,
+      ...catalogForGeo(draft.geo).map(anchor => anchor.term),
       ...draft.anchors.map(anchor => anchor.term),
       draft.anchor,
       draft.windowShort,
@@ -2361,18 +2364,19 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       terms.push(trimmed);
     }
     return terms;
-  }, [draft.anchors, draft.anchor, draft.windowShort, draft.windowLong]);
+  }, [draft.geo, draft.anchors, draft.anchor, draft.windowShort, draft.windowLong]);
 
   const anchorOptions = useMemo(() =>
     anchorTerms.map(term => ({ value: term, label: term,
-      description: term.toLowerCase() === 'sudoku' ? t('anchorShortOption') : term.toLowerCase() === 'gpts' ? t('anchorLongOption') : undefined,
-    })), [anchorTerms, t]);
+      description: automaticAnchorFor('now 1-d', draft.geo) === term && automaticAnchorFor('now 7-d', draft.geo) === term
+        ? t('anchorRegionalOption') : term.toLowerCase() === 'sudoku' ? t('anchorShortOption') : term.toLowerCase() === 'gpts' ? t('anchorLongOption') : undefined,
+    })), [anchorTerms, draft.geo, t]);
   const fixedAnchorOptions = useMemo(() =>
     [{ value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') }, ...anchorOptions], [anchorOptions, t]);
   const shortWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · sudoku` }, ...anchorOptions], [anchorOptions, t]);
+    [{ value: '', label: `${t('windowDefault')} · ${automaticAnchorFor('now 1-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, t]);
   const longWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · gpts` }, ...anchorOptions], [anchorOptions, t]);
+    [{ value: '', label: `${t('windowDefault')} · ${automaticAnchorFor('now 7-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, t]);
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
@@ -2391,8 +2395,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const toleranceChoices = (current: string) => current === '' || toleranceOptions.some(option => option.value === current)
     ? toleranceOptions
     : [...toleranceOptions, { value: current, label: `±${Math.round(Number(current) * 100)}%` }];
-  // Anchors calibrate one country; Worldwide is not an anchor geo.
-  const anchorGeoOptions = useMemo(() => geoOptions.filter(option => option.value !== ''), [geoOptions]);
+  const anchorGeoOptions = geoOptions;
 
   if (snapshot.status === 'loading') return <p style={styles.status}>{t('loading')}</p>;
   if (snapshot.status === 'unavailable') return <p style={styles.status}>{t('unavailable')}</p>;
@@ -2496,11 +2499,15 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <section className="gtfa-section" style={styles.section}>
       <SectionHeader icon="sliders" title={t('defaults')} description={t('defaultsDescription')} />
       <div className="gtfa-defaults-grid">
-        <ChoicePicker label={t('geo')} hint={t('geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
-          options={geoOptions} onChange={value => edit({ geo: value })} />
+        <ChoicePicker label={t('geo')} hint={t(catalogForGeo(draft.geo).length ? 'geoBaselineHint' : 'geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
+          options={geoOptions} onChange={value => edit({ geo: value,
+            ...(!draft.newAnchor.term.trim() && !draft.newAnchor.dailySearches.trim() && draft.newAnchor.geo === draft.geo
+              ? { newAnchor: { ...draft.newAnchor, geo: value } } : {}),
+          })} />
         <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
+      <p style={{ ...styles.hint, margin: 0 }}><a href={BASELINE_REFERENCE_URL} target="_blank" rel="noopener noreferrer">{t('baselineSources')}</a></p>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
         onChange={checked => edit({ cache: checked })} />
     </section>

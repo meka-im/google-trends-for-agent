@@ -1,0 +1,40 @@
+{
+  "checkedDate": "2026-11-16",
+  "note": "Factual keyword-volume observations, not website visits. Search-index observations are historical provider reports and must not be described as current live API data.",
+  "observations": [
+    {
+      "url": "https://www.semrush.com/website/zeit.de/overview/",
+      "access": "provider-page",
+      "tableRegion": "DE",
+      "dataPeriod": "2026-10",
+      "keyword": "sudoku",
+      "monthlySearches": 673000
+    },
+    {
+      "url": "https://www.semrush.com/website/e-sudoku.fr/overview/",
+      "access": "provider-page",
+      "tableRegion": "FR",
+      "dataPeriod": "2026-10",
+      "keyword": "sudoku",
+      "monthlySearches": 673000
+    },
+    {
+      "url": "https://de.semrush.com/website/sudoku.name/overview/",
+      "access": "search-index",
+      "tableRegion": "JP",
+      "dataPeriod": "2026-09",
+      "keyword": "ナンプレ",
+      "monthlySearches": 673000,
+      "note": "The indexed September provider table contains this row. The current English October table no longer includes it."
+    },
+    {
+      "url": "https://www.thewordfinder.com/blog/5000-years-of-games-how-we-got-from-senet-to-wordle/",
+      "access": "publisher-page",
+      "tableRegion": "",
+      "dataPeriod": "2026-07",
+      "keyword": "sudoku",
+      "monthlySearches": 6640000,
+      "note": "Publisher reports an Ahrefs global export; this is not a direct Ahrefs API observation."
+    }
+  ]
+}
