@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, EN, type ConfigPageProps } from '../src/client/index.js';
@@ -68,6 +68,12 @@ function diagnostic() {
 }
 
 const button = (key: string) => screen.getByRole('button', { name: t(key) }) as HTMLButtonElement;
+const expectKeywordCounts = () => {
+  for (const keyword of CONNECTION_KEYWORDS) {
+    const row = screen.getByRole('rowheader', { name: keyword }).closest('tr')!;
+    expect(within(row).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['12', '10', t('diagnosticPass')]);
+  }
+};
 const tick = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
 
 afterEach(() => {
@@ -146,7 +152,7 @@ describe('connection diagnostic interactions', () => {
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     await user.click(button('testConnection'));
     expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
-    expect(screen.getAllByText('12 points · 10 nonzero')).toHaveLength(3);
+    expectKeywordCounts();
     expect(network.count('api/gtfa.test-connection')).toBe(1);
     await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
@@ -165,12 +171,19 @@ describe('connection diagnostic interactions', () => {
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     network.fetch.mockResolvedValueOnce(Response.json({ ok: true, egress: 'local', status: 200, latencyMs: 1 }));
     await user.click(button('testConnection'));
-    expect(await screen.findByText(t('testIncomplete'))).toBeTruthy();
+    expect(await screen.findByText(t('testHostRestartRequired'))).toBeTruthy();
+    expect(screen.getByRole('heading', { name: t('connectionHostRestart') })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Google Trends reachable (200, 1 ms)' })).toBeTruthy();
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     network.fetch.mockResolvedValueOnce(Response.json({ ...diagnostic(), data: { ...diagnostic().data, keywords: [] } }));
     await user.click(button('testConnection'));
     expect(await screen.findByText(t('testProtocol'))).toBeTruthy();
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
+    network.fetch.mockResolvedValueOnce(Response.json(diagnostic()));
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
+    expect(screen.queryByText(t('testHostRestartRequired'))).toBeNull();
+    expectKeywordCounts();
   });
 
   it('aborts the request when cancelled or unmounted and prevents duplicate clicks', async () => {

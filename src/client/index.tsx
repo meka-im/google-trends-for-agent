@@ -255,6 +255,21 @@ export const EN: Record<string, string> = {
   connectionReady: 'Data verified',
   connectionNetworkOnly: 'Network only',
   connectionFailed: 'Check failed',
+  diagnosticRunning: 'Checking connection and data',
+  diagnosticRunningHint: 'Fetching three keywords in one request',
+  diagnosticPassed: 'All checks passed',
+  diagnosticDataFailed: 'Keyword check needs attention',
+  diagnosticConnectionFailed: 'Connection check failed',
+  diagnosticKeywordCount: '{passed} of {total} keywords verified',
+  diagnosticPass: 'Passed', diagnosticFailed: 'Failed', diagnosticAttention: 'Attention',
+  diagnosticPending: 'Checking', diagnosticWaiting: 'Waiting', diagnosticReachable: 'Reachable',
+  diagnosticCancelled: 'Cancelled', diagnosticUnfinished: 'Incomplete',
+  diagnosticNetwork: 'Connectivity', diagnosticKeywords: 'Keyword data', diagnosticScope: 'US · Past 24 hours',
+  diagnosticTerm: 'Keyword', diagnosticPoints: 'Data points', diagnosticNonzero: 'Nonzero', diagnosticResult: 'Result',
+  diagnosticNoData: 'No data', diagnosticDuration: 'Total', diagnosticSeconds: '{seconds} s',
+  diagnosticFresh: 'Fresh data · No cache', diagnosticNotComplete: 'Check not completed',
+  connectionHostRestart: 'Backend reload required',
+  testHostRestartRequired: 'The dsh backend has not loaded this plugin version. Fully quit dsh and reopen it, then run the check again.',
   testComplete: 'Network and all three keywords verified · {ms} ms',
   testIncomplete: 'Network checked; keyword data has not been verified.',
   testDataTitle: 'Keyword data · US · past 24 hours',
@@ -327,7 +342,7 @@ export const EN: Record<string, string> = {
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
-  testNote: 'Check connectivity, then query ChatGPT, Gemini and weather together (US, past 24 hours). Up to 2 minutes.',
+  testNote: 'Checks connectivity and three common keywords. Allow up to 2 minutes.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
   testActorOk: 'Apify API, credentials and Actor available · {ms} ms',
   testNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to use an Actor egress.',
@@ -466,6 +481,21 @@ export const ZH: Record<string, string> = {
   connectionReady: '取数已验证',
   connectionNetworkOnly: '仅网络可达',
   connectionFailed: '检查未通过',
+  diagnosticRunning: '正在检查连接与数据',
+  diagnosticRunningHint: '合并获取三个关键词的实时结果',
+  diagnosticPassed: '全部检查通过',
+  diagnosticDataFailed: '关键词取数需要关注',
+  diagnosticConnectionFailed: '连接检查未通过',
+  diagnosticKeywordCount: '{passed} / {total} 个关键词通过',
+  diagnosticPass: '通过', diagnosticFailed: '未通过', diagnosticAttention: '需关注',
+  diagnosticPending: '检查中', diagnosticWaiting: '等待结果', diagnosticReachable: '可访问',
+  diagnosticCancelled: '检查已取消', diagnosticUnfinished: '未完成',
+  diagnosticNetwork: '基础连接', diagnosticKeywords: '关键词取数', diagnosticScope: '美国 · 近 24 小时',
+  diagnosticTerm: '关键词', diagnosticPoints: '数据点', diagnosticNonzero: '非零点', diagnosticResult: '结果',
+  diagnosticNoData: '暂无数据', diagnosticDuration: '总耗时', diagnosticSeconds: '{seconds} 秒',
+  diagnosticFresh: '实时查询 · 不使用缓存', diagnosticNotComplete: '检查尚未完成',
+  connectionHostRestart: '需重载后端',
+  testHostRestartRequired: 'dsh 后端尚未加载当前插件。请完全退出 dsh 后重新打开，再测试连接。',
   testComplete: '网络和三个关键词取数均通过 · {ms} ms',
   testIncomplete: '已检查网络，尚未验证关键词取数。',
   testDataTitle: '关键词取数 · 美国 · 近 24 小时',
@@ -538,7 +568,7 @@ export const ZH: Record<string, string> = {
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
-  testNote: '先检查连接，再合并查询 ChatGPT、Gemini、weather（美国，近 24 小时），最长 2 分钟。',
+  testNote: '检查基础连接与三个常用关键词，最长约 2 分钟。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
   testActorOk: 'Apify API、认证和 Actor 可用 · {ms} ms',
   testNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可使用 Actor 出口。',
@@ -1114,6 +1144,7 @@ function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text
   const diagnosticKeys: Partial<Record<ConnectionCode, string>> = {
     blocked: 'testBlocked', 'rate-limited': 'testRateLimited', timeout: 'testTimeout', protocol: 'testProtocol',
     cancelled: 'testCancelled', 'no-data': 'testNoDataSummary',
+    'host-restart-required': 'testHostRestartRequired',
   };
   if (result.code && diagnosticKeys[result.code]) return { ok: false, text: t(diagnosticKeys[result.code]!) };
   if (result.network?.ok && result.data && !result.data.ok && (result.code === 'network' || result.code === 'http')) return { ok: false, text: t('testDataError') };
@@ -1134,27 +1165,64 @@ function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text
   return { ok: false, text: base + detail };
 }
 
-export function ConnectionTestResults({ result, t, locale }: { result: TestConnectionView; t: Translate; locale: string }) {
-  const network = result.network ?? result;
-  const line = testLine(result, t);
-  const errorColor = 'var(--dsw-alias-state-error-primary, #c55151)';
-  return <div role="status" aria-live="polite" style={styles.testLine}>
-    <p style={{ margin: '0 0 10px', color: network.ok ? 'var(--gtfa-green)' : errorColor }}>
-      {network.ok ? '✓ ' : '✗ '}{network.ok ? template(t(result.egress === 'local' ? 'testLocalOk' : 'testActorOk'),
-        { status: statusLabel(network.status), ms: network.latencyMs }) : testLine(network, t).text}
-    </p>
-    <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('testDataTitle')}</div>
-    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 7 }}>
-      {(result.data?.keywords ?? CONNECTION_KEYWORDS.map(keyword => ({ keyword, status: 'skipped' as const, points: 0, nonzeroPoints: 0 }))).map(check =>
-        <li key={check.keyword} style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
-          color: check.status === 'ok' ? 'var(--gtfa-green)' : check.status === 'skipped' ? 'var(--gtfa-muted)' : errorColor }}>
-          <span>{check.status === 'ok' ? '✓' : check.status === 'skipped' ? '—' : '✗'} {check.keyword}</span>
-          <span>{check.status === 'ok' ? template(t('testPoints'), { points: check.points, nonzero: check.nonzeroPoints })
-            : t(check.status === 'no_data' ? 'testNoData' : check.status === 'skipped' ? 'testSkipped' : 'testDataError')}</span>
-        </li>)}
-    </ul>
-    <p style={{ margin: '12px 0 0', color: line.ok ? 'var(--gtfa-green)' : errorColor }}>{line.text}</p>
-    {result.checkedAt ? <p style={{ ...styles.hint, margin: '6px 0 0' }}>{template(t('testCheckedAt'), { time: new Date(result.checkedAt).toLocaleString(locale) })}</p> : null}
+export function ConnectionTestResults({ result, t, locale, testing = false }: {
+  result?: TestConnectionView; t: Translate; locale: string; testing?: boolean;
+}) {
+  const network = result?.network ?? result;
+  const line = result ? testLine(result, t) : null;
+  const checks = result?.data?.keywords ?? CONNECTION_KEYWORDS.map(keyword => ({ keyword, status: 'skipped' as const, points: 0, nonzeroPoints: 0 }));
+  const passed = checks.filter(check => check.status === 'ok').length;
+  const positive = !testing && line?.ok;
+  const cancelled = !testing && result?.code === 'cancelled';
+  const warning = !testing && (result?.code === 'host-restart-required' || result?.code === 'no-data' || result?.code === 'rate-limited');
+  const tone = testing ? 'pending' : cancelled ? 'quiet' : positive ? 'positive' : warning ? 'warning' : 'negative';
+  const title = testing ? 'diagnosticRunning' : cancelled ? 'diagnosticCancelled' : positive ? 'diagnosticPassed' : result?.code === 'host-restart-required'
+    ? 'connectionHostRestart' : result?.network?.ok ? 'diagnosticDataFailed' : 'diagnosticConnectionFailed';
+  const duration = (ms: number) => ms < 1000 ? `${Math.round(ms)} ms` : template(t('diagnosticSeconds'), {
+    seconds: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000),
+  });
+  return <div className={`gtfa-diagnostic ${tone}`} role="status" aria-live="polite" aria-busy={testing}>
+    <div className="gtfa-diagnostic-heading">
+      <span className={`gtfa-diagnostic-symbol ${testing ? 'spinning' : ''}`}><Icon name={testing ? 'refresh' : positive ? 'check' : 'alert'} size={19} /></span>
+      <div className="gtfa-diagnostic-heading-copy"><h4>{t(title)}</h4>
+        <span>{testing ? t('diagnosticRunningHint') : template(t('diagnosticKeywordCount'), { passed, total: checks.length })}</span>
+      </div>
+      <span className="gtfa-diagnostic-badge">{t(testing ? 'diagnosticPending' : cancelled ? 'diagnosticCancelled' : positive ? 'diagnosticPass' : warning ? 'diagnosticAttention' : 'diagnosticFailed')}</span>
+    </div>
+    <div className="gtfa-diagnostic-network" role="group" aria-label={network?.ok && !testing
+      ? template(t(result?.egress === 'local' ? 'testLocalOk' : 'testActorOk'), { status: statusLabel(network.status), ms: network.latencyMs }) : t('diagnosticNetwork')}>
+      <span className="gtfa-diagnostic-label"><Icon name={result?.egress && result.egress !== 'local' ? 'cloud' : 'plug'} size={15} />{t('diagnosticNetwork')}</span>
+      <span className={`gtfa-diagnostic-network-state ${!testing && network?.ok ? 'positive' : testing || cancelled ? 'pending' : 'negative'}`}>
+        {!testing && !cancelled ? <Icon name={network?.ok ? 'check' : 'alert'} size={13} /> : null}
+        {t(testing ? 'diagnosticPending' : cancelled ? 'diagnosticUnfinished' : network?.ok ? 'diagnosticReachable' : 'diagnosticFailed')}
+      </span>
+      <span className="gtfa-diagnostic-network-meta">{!testing && network ? `HTTP ${statusLabel(network.status)} · ${duration(network.latencyMs)}` : '—'}</span>
+    </div>
+    <div className="gtfa-diagnostic-table-heading"><span>{t('diagnosticKeywords')}</span><span>{t('diagnosticScope')}</span></div>
+    <table className="gtfa-diagnostic-table">
+      <caption className="gtfa-sr-only">{t('testDataTitle')}</caption>
+      <thead><tr><th scope="col">{t('diagnosticTerm')}</th><th scope="col">{t('diagnosticPoints')}</th><th scope="col">{t('diagnosticNonzero')}</th><th scope="col">{t('diagnosticResult')}</th></tr></thead>
+      <tbody>{checks.map(check => {
+        const known = !testing && (check.status === 'ok' || check.status === 'no_data');
+        const state = testing ? 'pending' : check.status === 'ok' ? 'positive' : check.status === 'skipped' ? 'quiet' : check.status === 'no_data' ? 'warning' : 'negative';
+        return <tr key={check.keyword}>
+          <th scope="row">{check.keyword}</th>
+          <td className="gtfa-diagnostic-number">{known ? check.points : <span className="gtfa-diagnostic-empty">—</span>}</td>
+          <td className="gtfa-diagnostic-number muted">{known ? check.nonzeroPoints : <span className="gtfa-diagnostic-empty">—</span>}</td>
+          <td><span className={`gtfa-diagnostic-row-state ${state}`}>
+            {!testing && check.status === 'ok' ? <Icon name="check" size={13} /> : null}
+            {t(testing ? 'diagnosticWaiting' : check.status === 'ok' ? 'diagnosticPass' : check.status === 'skipped' ? 'testSkipped' : check.status === 'no_data' ? 'diagnosticNoData' : 'testDataError')}
+          </span></td>
+        </tr>;
+      })}</tbody>
+    </table>
+    {!testing && line && !line.ok && !cancelled ? <p className="gtfa-diagnostic-note"><Icon name="alert" size={14} /><span>{line.text}</span></p> : null}
+    {cancelled ? <span className="gtfa-sr-only">{t('testCancelled')}</span> : null}
+    <div className="gtfa-diagnostic-footer">
+      <span><Icon name="clock" size={13} />{t('diagnosticDuration')} <strong>{testing || !result ? '—' : duration(result.latencyMs)}</strong></span>
+      {result?.checkedAt && !testing ? <time dateTime={result.checkedAt}>{new Date(result.checkedAt).toLocaleString(locale)}</time> : <span>{t(testing ? 'diagnosticFresh' : 'diagnosticNotComplete')}</span>}
+    </div>
+    {!testing && line?.ok ? <span className="gtfa-sr-only">{line.text}</span> : null}
   </div>;
 }
 
@@ -1305,6 +1373,11 @@ export async function runConnectionTest(egress: EgressMode = 'local', signal?: A
         ...(typeof row.message === 'string' ? { message: row.message } : {}),
         ...(typeof row.actorId === 'string' ? { actorId: row.actorId } : {}),
       };
+      if (row.ok && row.network === undefined && row.data === undefined) {
+        return { ...basic, ok: false, code: 'host-restart-required',
+          network: { ok: true, egress, status: basic.status, latencyMs: basic.latencyMs } };
+      }
+      if ((row.network === undefined) !== (row.data === undefined)) return { ...basic, ok: false, code: 'protocol' };
       if (row.network !== undefined) {
         const net = record(row.network);
         if (typeof net.ok !== 'boolean' || net.egress !== egress) return { ...basic, ok: false, code: 'protocol' };
@@ -2131,13 +2204,13 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
           <div className="gtfa-connection-copy"><div className="gtfa-connection-title">{t('localNetwork')}
             <span style={{ ...styles.pill, color: line?.ok ? 'var(--gtfa-green)' : 'var(--gtfa-muted)', background: line?.ok ? 'var(--gtfa-green-soft)' : 'var(--gtfa-hover)' }}>
-              {testing ? t('testing') : line?.ok ? t('connectionReady') : testResult?.network?.ok ? t('connectionNetworkOnly') : testResult ? t('connectionFailed') : t('connectionUntested')}
+              {testing ? t('testing') : line?.ok ? t('connectionReady') : testResult?.code === 'host-restart-required' ? t('connectionHostRestart') : testResult?.network?.ok ? t('connectionNetworkOnly') : testResult ? t('connectionFailed') : t('connectionUntested')}
             </span></div><p className="gtfa-connection-subtitle">{t('localNetworkHint')}</p></div>
           <div className="gtfa-connection-actions">{testButton}</div>
         </div>}
       </div>
       <p style={styles.hint}>{dirty ? t('testSavedNote') : t('testNote')}{actorEgress ? ` ${t('testActorCost')}` : ''}</p>
-      {testResult ? <ConnectionTestResults result={testResult} t={t} locale={intlLocale} /> : null}
+      {testing || testResult ? <ConnectionTestResults result={testResult ?? undefined} testing={testing} t={t} locale={intlLocale} /> : null}
       {actorEgress ? <>
         <p style={{ ...styles.hint, display: 'flex', alignItems: 'center', gap: 7, margin: 0 }}><Icon name="shield" size={13} />{t('actorAccountHint')}</p>
         {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
