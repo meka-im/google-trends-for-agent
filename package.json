@@ -1,6 +1,6 @@
 {
   "name": "google-trends-for-agent",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Search-interest signals for AI agents \u2014 an unofficial Google Trends client",
   "type": "module",
   "license": "MIT",
@@ -36,6 +36,7 @@
     ".actor/README.md",
     "docs/mcp-api.md",
     "docs/reference.md",
+    "docs/testing.md",
     "LICENSE",
     "CHANGELOG.md",
     "examples/baselines.json",
@@ -46,9 +47,12 @@
     "test": "vitest run",
     "build": "tsc && node scripts/build-client.mjs && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
     "start": "node dist/actor.js",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.interactions.json",
     "trends": "tsx src/cli.ts",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:package": "node scripts/check-package.mjs",
+    "test:compat": "node scripts/test-dsh-compat.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -61,7 +65,7 @@
     "apify"
   ],
   "peerDependencies": {
-    "@deepseek-ai/schemastery": "~3.18.5"
+    "@deepseek-ai/schemastery": "^3.18.5"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/schemastery": {
@@ -75,10 +79,14 @@
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "~3.18.5",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.11",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "esbuild": "^0.28.2",
+    "jsdom": "26.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsx": "^4.20.0",

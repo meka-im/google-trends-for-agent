@@ -199,6 +199,9 @@ Derivation, anchor overrides, baseline files, and null-traffic rules: [Calibrati
 
 Tests use local fixtures and mocked transports; they do not call Google.
 
+See [automated checks and dsh compatibility testing](docs/testing.md) for CI,
+settings interactions, and the real Host baseline checks.
+
 ```sh
 npm install
 npm test

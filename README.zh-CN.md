@@ -201,6 +201,8 @@ Snapshot 的近 7 天工作按顺序执行。主窗口不是 `now 7-d` 时，主
 
 测试使用本地 fixture 和 mock transport，不会调用 Google。
 
+CI、设置页交互和真实 Host 版本验证见[自动化检查与 dsh 兼容测试](docs/testing.md)。
+
 ```sh
 npm install
 npm test
