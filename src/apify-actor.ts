@@ -41,11 +41,15 @@ export interface ApifyActorClientOptions {
   cacheTtlMs?: number;
   /** Per-request Apify API timeout. Default 10 s. */
   timeoutMs?: number;
+  /** Overall Actor listing deadline, including metadata and build status. Default 30 s. */
+  listTimeoutMs?: number;
 }
 
 export interface ApifyActorListOptions {
   refresh?: boolean;
   signal?: AbortSignal;
+  /** The settings picker needs basic metadata and the most recent build, not full Actor/Standby details. */
+  metadata?: 'full' | 'build';
 }
 
 export interface ResolveStandbyUrlOptions {
@@ -91,6 +95,7 @@ function isApifyStandbyUrl(raw: string): boolean {
 
 interface CachedActors {
   tokenHash: string;
+  metadata: 'full' | 'build';
   at: number;
   actors: ApifyActor[];
 }
@@ -113,6 +118,7 @@ export class ApifyActorClient {
   private readonly clock: () => number;
   private readonly cacheTtlMs: number;
   private readonly timeoutMs: number;
+  private readonly listTimeoutMs: number;
   private actorsCache: CachedActors | undefined;
   private standbyCache: CachedStandby | undefined;
 
@@ -121,6 +127,7 @@ export class ApifyActorClient {
     this.clock = options.now ?? Date.now;
     this.cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.listTimeoutMs = options.listTimeoutMs ?? 30_000;
   }
 
   /** List only this package's Actors in the account, with Standby URL and latest build status. */
@@ -128,11 +135,28 @@ export class ApifyActorClient {
     const trimmed = token.trim();
     if (!trimmed) return { ok: false, code: 'no-token', message: 'Add an Apify token (or set APIFY_TOKEN) to list your Actors.' };
     const hash = tokenHash(trimmed);
+    const metadata = options.metadata ?? 'full';
     const now = this.clock();
-    if (!options.refresh && this.actorsCache?.tokenHash === hash && now - this.actorsCache.at < this.cacheTtlMs) {
+    if (!options.refresh && this.actorsCache?.tokenHash === hash && this.actorsCache.metadata === metadata && now - this.actorsCache.at < this.cacheTtlMs) {
       return { ok: true, actors: this.actorsCache.actors };
     }
-    const list = await this.getJson(`${API_BASE}/acts?my=1&limit=1000`, trimmed, options.signal);
+    const deadline = AbortSignal.timeout(this.listTimeoutMs);
+    const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+    try {
+      const result = await raceAbort(this.fetchMyActors(trimmed, signal, metadata), signal);
+      throwIfAborted(signal);
+      if (result.ok) this.actorsCache = { tokenHash: hash, metadata, at: this.clock(), actors: result.actors };
+      return result;
+    } catch {
+      if (options.signal?.aborted) throw abortError(options.signal);
+      return { ok: false, code: 'network', message: deadline.aborted
+        ? `Actor listing timed out after ${Math.round(this.listTimeoutMs / 1000)} seconds. Try again.`
+        : 'Could not load your Actors from Apify. Check connectivity and try again.' };
+    }
+  }
+
+  private async fetchMyActors(token: string, signal: AbortSignal, metadata: 'full' | 'build'): Promise<ApifyActorsResult> {
+    const list = await this.getJson(`${API_BASE}/acts?my=1&limit=1000`, token, signal);
     if (!list.ok) return list;
     const items = record(list.body).data;
     const rows = Array.isArray(record(items).items) ? record(items).items as unknown[] : [];
@@ -142,23 +166,26 @@ export class ApifyActorClient {
       const id = stringOrNull(row.id);
       const name = stringOrNull(row.name);
       if (!id || !name || !actorMatches(name)) continue;
-      const detail = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}`, trimmed, options.signal);
-      if (!detail.ok) return detail;
-      const data = record(record(detail.body).data);
+      let data = row;
+      if (metadata === 'full') {
+        const detail = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}`, token, signal);
+        if (!detail.ok) return detail;
+        data = record(record(detail.body).data);
+      }
       const standby = record(data.actorStandby);
       const tagged = record(data.taggedBuilds);
       const latest = record(tagged.latest);
       const buildId = stringOrNull(latest.buildId);
       let lastBuildId: string | null = buildId;
       let lastBuildStatus: string | null = null;
-      if (buildId) {
-        const build = await this.getJson(`${API_BASE}/actor-builds/${encodeURIComponent(buildId)}`, trimmed, options.signal);
+      if (metadata === 'full' && buildId) {
+        const build = await this.getJson(`${API_BASE}/actor-builds/${encodeURIComponent(buildId)}`, token, signal);
         if (!build.ok) return build;
         lastBuildStatus = stringOrNull(record(record(build.body).data).status);
       } else {
-        // `latest` is tagged only on success, so a running or failed first build
-        // shows up only in the build list.
-        const builds = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}/builds?desc=1&limit=1`, trimmed, options.signal);
+        // The picker needs the newest build, including a running/failed build
+        // that is not tagged `latest`. Full Actor details can be much larger.
+        const builds = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}/builds?desc=1&limit=1`, token, signal);
         if (!builds.ok) return builds;
         const recent = record(record(builds.body).data).items;
         const first = record(Array.isArray(recent) ? recent[0] : undefined);
@@ -176,7 +203,6 @@ export class ApifyActorClient {
         lastBuildStatus,
       });
     }
-    this.actorsCache = { tokenHash: hash, at: this.clock(), actors };
     return { ok: true, actors };
   }
 
@@ -259,6 +285,7 @@ export class ApifyActorClient {
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = signal ? AbortSignal.any([timeout, signal]) : timeout;
     let response: Response;
+    let text: string;
     try {
       response = await raceAbort(this.fetchImpl(url, {
         method,
@@ -270,6 +297,17 @@ export class ApifyActorClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: combined,
       }), combined);
+      if (response.status === 401 || response.status === 403) {
+        return {
+          ok: false,
+          code: 'invalid-token',
+          status: response.status,
+          message: `Apify rejected the token (HTTP ${response.status}). Check it in Apify Console → Settings → API & Integrations.`,
+        };
+      }
+      // Receiving headers is not completion: a stalled/aborted body must also
+      // become a structured network result rather than an uncaught Host error.
+      text = await raceAbort(response.text(), combined);
     } catch (error) {
       if (signal?.aborted) throw abortError(signal);
       const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
@@ -281,16 +319,7 @@ export class ApifyActorClient {
           : 'Could not reach the Apify API. Check connectivity and try again.',
       };
     }
-    if (response.status === 401 || response.status === 403) {
-      return {
-        ok: false,
-        code: 'invalid-token',
-        status: response.status,
-        message: `Apify rejected the token (HTTP ${response.status}). Check it in Apify Console → Settings → API & Integrations.`,
-      };
-    }
     let parsed: unknown;
-    const text = await response.text();
     if (text) {
       try { parsed = JSON.parse(text); }
       catch {

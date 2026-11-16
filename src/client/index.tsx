@@ -1312,14 +1312,20 @@ export async function loadApifyUsage(refresh = false): Promise<ApifyUsageView> {
 }
 
 /** Load the Actor list for the saved token. */
-export async function loadApifyActors(refresh = false): Promise<ApifyActorsView> {
+export async function loadApifyActors(refresh = false, signal?: AbortSignal): Promise<ApifyActorsView> {
+  const deadline = AbortSignal.timeout(45_000);
+  const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
   try {
     const response = await fetch(`${ACTORS_URL}${refresh ? '?refresh=1' : ''}`, {
       headers: { accept: 'application/json' },
       cache: 'no-store',
+      signal: requestSignal,
     });
     let body: unknown;
-    try { body = await response.json(); } catch { body = undefined; }
+    try { body = await response.json(); } catch (error) {
+      if (requestSignal.aborted) throw error;
+      body = undefined;
+    }
     const row = record(body);
     if (row.ok === false) {
       const code = row.code === 'no-token' || row.code === 'invalid-token' || row.code === 'network' || row.code === 'http'
@@ -1493,6 +1499,19 @@ export function ApifyOAuthCard({
   state, t, locale, busy = null, onStart, onCancel, onLogout, onRetry,
   connectionAction, connectionDescription, signInLabel,
 }: ApifyOAuthCardProps) {
+  const accountMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: Event) => {
+      const menu = accountMenu.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    document.addEventListener('focusin', dismiss);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss, true);
+      document.removeEventListener('focusin', dismiss);
+    };
+  }, []);
   const data = state.status === 'ready' ? state.data : undefined;
   const issue = oauthIssueCode(state);
   const verificationUri = normalizeApifyOAuthVerificationUri(data?.verificationUri) ?? APIFY_OAUTH_VERIFICATION_URL;
@@ -1522,8 +1541,10 @@ export function ApifyOAuthCard({
       <div className="gtfa-connection-actions">
         {data?.connected ? <>
           {connectionAction}
-          <details className="gtfa-account-menu" onKeyDown={event => {
+          <details ref={accountMenu} className="gtfa-account-menu" onKeyDown={event => {
             if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
             event.currentTarget.open = false;
             event.currentTarget.querySelector<HTMLElement>('summary')?.focus();
           }}>
@@ -2009,12 +2030,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       setActors({ status: 'idle' });
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     setActors({ status: 'loading' });
-    void loadApifyActors(actorsRequest.refresh).then(next => {
-      if (!cancelled) setActors(next);
+    void loadApifyActors(actorsRequest.refresh, controller.signal).then(next => {
+      if (!controller.signal.aborted) setActors(next);
     });
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [draft.egress, actorsRequest]);
 
   // Auto-select the first matching Actor only before a deploy chooses one.

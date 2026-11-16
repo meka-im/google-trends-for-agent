@@ -377,7 +377,7 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       const settings = getSettings();
       const resolved = await resolveRouteToken(settings.apifyToken);
       if (!resolved.token) return json(tokenFailure(resolved, 'list your Actors'));
-      return json(await actors.listMyActors(resolved.token, { refresh, signal: request.signal }));
+      return json(await actors.listMyActors(resolved.token, { refresh, signal: request.signal, metadata: 'build' }));
     },
   }));
 

@@ -95,6 +95,37 @@ describe('Apify Actor client', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('loads picker choices and the newest build without fetching full Actor details', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url) === ACTS_URL) return json({ data: { items: [{ id: 'a1', name: 'google-trends-for-agent', title: 'My trends' }] } });
+      if (String(url) === `${API}/acts/a1/builds?desc=1&limit=1`) return json({ data: { items: [{ id: 'new-build', status: 'RUNNING' }] } });
+      throw new Error('Full Actor details must not be requested by the picker');
+    });
+    const client = new ApifyActorClient({ fetch: fetchMock });
+    expect(await client.listMyActors(TOKEN, { metadata: 'build' })).toMatchObject({ ok: true, actors: [
+      { id: 'a1', title: 'My trends', lastBuildId: 'new-build', lastBuildStatus: 'RUNNING' },
+    ] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await client.listMyActors(TOKEN, { metadata: 'build' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reuse the picker cache for a caller requesting full Actor metadata', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url) === ACTS_URL) return json({ data: { items: [{ id: 'a1', name: 'google-trends-for-agent' }] } });
+      if (String(url) === `${API}/acts/a1/builds?desc=1&limit=1`) return json({ data: { items: [{ id: 'new-build', status: 'RUNNING' }] } });
+      if (String(url) === `${API}/acts/a1`) return actorDetail('a1', 'google-trends-for-agent', 'published-build');
+      if (String(url) === `${API}/actor-builds/published-build`) return json({ data: { status: 'SUCCEEDED' } });
+      throw new Error(`Unexpected request ${String(url)}`);
+    });
+    const client = new ApifyActorClient({ fetch: fetchMock });
+    await client.listMyActors(TOKEN, { metadata: 'build' });
+    expect(await client.listMyActors(TOKEN)).toMatchObject({ ok: true, actors: [
+      { id: 'a1', standbyEnabled: true, lastBuildId: 'published-build', lastBuildStatus: 'SUCCEEDED' },
+    ] });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
   it('maps invalid tokens and network failures without leaking the token', async () => {
     const unauthorized = new ApifyActorClient({ fetch: (async () => json({ error: { message: `bad ${TOKEN}` } }, 401)) as unknown as typeof fetch });
     const invalid = await unauthorized.listMyActors(TOKEN);
@@ -103,6 +134,49 @@ describe('Apify Actor client', () => {
 
     const down = new ApifyActorClient({ fetch: (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch });
     expect(await down.listMyActors(TOKEN)).toMatchObject({ ok: false, code: 'network' });
+  });
+
+  it('bounds response-body reads after HTTP 200 and does not cache an incomplete list', async () => {
+    const response = json({});
+    vi.spyOn(response, 'text').mockImplementation(() => new Promise(() => {}));
+    const fetchMock = vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(json({ data: { items: [] } }));
+    const client = new ApifyActorClient({ fetch: fetchMock, timeoutMs: 5 });
+    expect(await client.listMyActors(TOKEN)).toMatchObject({ ok: false, code: 'network', message: expect.stringMatching(/timed out/) });
+    expect(await client.listMyActors(TOKEN)).toEqual({ ok: true, actors: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a structured error when a response body aborts after its headers arrive', async () => {
+    const response = json({});
+    vi.spyOn(response, 'text').mockRejectedValue(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+    const client = new ApifyActorClient({ fetch: vi.fn().mockResolvedValue(response) });
+    expect(await client.listMyActors(TOKEN)).toMatchObject({ ok: false, code: 'network', message: expect.stringMatching(/timed out/) });
+  });
+
+  it('bounds the complete list including metadata and aborts the remaining work', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(json({ data: { items: [{ id: 'a1', name: 'google-trends-for-agent' }] } }))
+      .mockImplementation(() => new Promise(() => {}));
+    const client = new ApifyActorClient({ fetch: fetchMock, timeoutMs: 10_000, listTimeoutMs: 5 });
+    expect(await client.listMyActors(TOKEN)).toMatchObject({ ok: false, code: 'network', message: expect.stringMatching(/listing timed out/) });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[1]![1] as RequestInit).signal?.aborted).toBe(true);
+  });
+
+  it('propagates caller cancellation without a retry or a cached result', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    const client = new ApifyActorClient({ fetch: fetchMock });
+    const result = client.listMyActors(TOKEN, { signal: controller.signal });
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a real API HTTP 400 as an HTTP error while redacting its credential', async () => {
+    const client = new ApifyActorClient({ fetch: vi.fn().mockResolvedValue(json({ error: { message: `Invalid request for ${TOKEN}` } }, 400)) });
+    const result = await client.listMyActors(TOKEN);
+    expect(result).toMatchObject({ ok: false, code: 'http', status: 400 });
+    expect(JSON.stringify(result)).not.toContain(TOKEN);
   });
 
   it('reports a running or failed first build that has no latest tag yet', async () => {
