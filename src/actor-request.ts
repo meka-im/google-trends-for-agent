@@ -3,6 +3,7 @@ import { createTools, invalidInputEnvelope, zodRejectionEnvelope, type GtfaTool,
 import { SnapshotStore, type TermSnapshot } from './snapshot.js';
 import { parseBaselines } from './traffic.js';
 import { normalizeGeo } from './options.js';
+import { CONNECTION_PROBE_PROTOCOL } from './connection-check.js';
 
 export const ACTOR_RESPONSE_KEY = 'TOOL_RESPONSE';
 export const ACTOR_REQUEST_PROTOCOL = 1;
@@ -22,7 +23,7 @@ export const storedSnapshotSchema = z.object({
   regions: z.array(z.object({ rank: z.number(), code: z.string(), name: z.string(), value: z.number() })),
 });
 const requestSchema = z.object({
-  protocol: z.literal(ACTOR_REQUEST_PROTOCOL),
+  protocol: z.union([z.literal(ACTOR_REQUEST_PROTOCOL), z.literal(CONNECTION_PROBE_PROTOCOL)]),
   name: z.enum(['trends_ask', 'trends_compare', 'trends_now', 'trends_snapshot']),
   input: z.record(z.string(), z.unknown()),
   settings: z.object({
@@ -30,7 +31,7 @@ const requestSchema = z.object({
     baselines: z.unknown().optional(), cache: z.boolean().optional(), charts: z.boolean().optional(),
   }).default({}),
   history: z.array(storedSnapshotSchema).max(12).default([]),
-});
+}).refine(request => request.protocol !== CONNECTION_PROBE_PROTOCOL || request.name === 'trends_compare', 'Connection probes require trends_compare');
 
 export type ActorToolRequest = z.input<typeof requestSchema>;
 
@@ -58,7 +59,8 @@ export async function runToolRequest(value: unknown, options: {
   for (const snapshot of request.history) await store.save(snapshot as TermSnapshot);
   const tools = options.create?.(settings) ?? createTools({ ...settings, settings: () => settings });
   const tool = tools.find(candidate => candidate.name === request.name)!;
-  const result = await tool.execute(request.input);
+  const result = request.protocol === CONNECTION_PROBE_PROTOCOL
+    ? await tool.execute(request.input, { maxRetries: 0 }) : await tool.execute(request.input);
   const snapshots: TermSnapshot[] = [];
   if (typeof request.input.term === 'string' && result.filter && typeof result.filter === 'object') {
     const filter = { ...result.filter as Record<string, unknown> };
@@ -70,5 +72,5 @@ export async function runToolRequest(value: unknown, options: {
       }
     }
   }
-  return { protocol: ACTOR_REQUEST_PROTOCOL, result, snapshots: snapshots.slice(0, 12) };
+  return { protocol: request.protocol, result, snapshots: snapshots.slice(0, 12) };
 }

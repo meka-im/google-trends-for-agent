@@ -19,6 +19,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { SETTINGS_CSS } from './theme.js';
+import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_PRICING_URL, APIFY_SIGNUP_URL,
   BUILTIN_ANCHOR_TERMS, DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, GTFA_PUBLIC_ACTOR_LABEL, GTFA_SOURCE_URL,
@@ -204,14 +205,10 @@ export type ApifyOAuthView =
 
 export type ApifyOAuthAction = 'start' | 'cancel' | 'logout';
 
-export interface TestConnectionView {
-  ok: boolean;
-  egress: EgressMode;
-  status: number | null;
-  latencyMs: number;
-  code?: 'no-token' | 'no-actor' | 'invalid-token' | 'version-mismatch' | 'network' | 'http' | 'busy';
-  message?: string;
-  actorId?: string;
+export interface TestConnectionView extends ConnectionResult {
+  network?: ConnectionResult;
+  data?: DataCheck;
+  checkedAt?: string;
 }
 
 export interface ApifyActorView {
@@ -255,7 +252,25 @@ export const EN: Record<string, string> = {
   localNetwork: 'Local network',
   localNetworkHint: 'Connect to Google Trends from this dsh host.',
   connectionUntested: 'Not tested',
-  connectionReady: 'Reachable',
+  connectionReady: 'Data verified',
+  connectionNetworkOnly: 'Network only',
+  connectionFailed: 'Check failed',
+  testComplete: 'Network and all three keywords verified · {ms} ms',
+  testIncomplete: 'Network checked; keyword data has not been verified.',
+  testDataTitle: 'Keyword data · US · past 24 hours',
+  testPoints: '{points} points · {nonzero} nonzero',
+  testNoData: 'No usable data for this keyword',
+  testSkipped: 'Not run',
+  testDataError: 'Data request failed',
+  testBlocked: 'Google returned a CAPTCHA or unusual-traffic challenge. The test stopped.',
+  testRateLimited: 'Google rate-limited the request. The test stopped without retrying.',
+  testTimeout: 'The check timed out.',
+  testProtocol: 'The data response could not be validated.',
+  testCancelled: 'Check cancelled.',
+  testNoDataSummary: 'Network is reachable, but some keywords returned no usable data.',
+  testCheckedAt: 'Checked {time}',
+  testCancel: 'Cancel check',
+  testActorCost: 'After preflight, Actor mode starts one usage-billed run and exits when done.',
   actorAccountHint: 'Runs start only for queries and exit when done. Platform usage is billed in your Apify account; credentials stay on the dsh host.',
   oauthActivePublic: 'OAuth authorized · Public Actor ready',
   oauthActiveOwn: 'OAuth authorized · Your own Actor',
@@ -312,12 +327,12 @@ export const EN: Record<string, string> = {
   testConnection: 'Test connection',
   testing: 'Testing…',
   testSavedNote: 'Tests the saved settings — save first.',
-  testNote: 'Actor: check API access and the latest build without starting a run. Local: one reachability probe.',
+  testNote: 'Check connectivity, then query ChatGPT, Gemini and weather together (US, past 24 hours). Up to 2 minutes.',
   testLocalOk: 'Google Trends reachable ({status}, {ms} ms)',
-  testActorOk: 'Apify API and Actor build accessible — {ms} ms; no run started',
+  testActorOk: 'Apify API, credentials and Actor available · {ms} ms',
   testNoToken: 'Sign in with Apify (or use the advanced manual API Token or APIFY_TOKEN) to use an Actor egress.',
   testNoActor: 'Select or deploy your google-trends-for-agent Actor first.',
-  testVersionMismatch: 'This Actor build speaks a different relay version. Update the plugin or rebuild the Actor.',
+  testVersionMismatch: 'This Actor build does not support the connection check. Rebuild the Actor.',
   testInvalidToken: 'Apify rejected the token or OAuth session. Sign in again or check the advanced manual token in Apify Console → Settings → API & Integrations.',
   testNetworkLocal: 'Could not reach Google Trends from this machine.',
   testDetail: ' Details: {detail}',
@@ -448,7 +463,25 @@ export const ZH: Record<string, string> = {
   localNetwork: '本机网络',
   localNetworkHint: '从当前 dsh 主机连接 Google Trends。',
   connectionUntested: '未测试',
-  connectionReady: '可连接',
+  connectionReady: '取数已验证',
+  connectionNetworkOnly: '仅网络可达',
+  connectionFailed: '检查未通过',
+  testComplete: '网络和三个关键词取数均通过 · {ms} ms',
+  testIncomplete: '已检查网络，尚未验证关键词取数。',
+  testDataTitle: '关键词取数 · 美国 · 近 24 小时',
+  testPoints: '{points} 个数据点 · {nonzero} 个非零点',
+  testNoData: '该关键词没有可用数据',
+  testSkipped: '未执行',
+  testDataError: '取数失败',
+  testBlocked: 'Google 返回验证码或异常流量挑战，测试已停止。',
+  testRateLimited: 'Google 限流，测试已停止，没有自动重试。',
+  testTimeout: '检查超时。',
+  testProtocol: '数据响应未通过校验。',
+  testCancelled: '检查已取消。',
+  testNoDataSummary: '网络可达，但部分关键词没有可用数据。',
+  testCheckedAt: '检查于 {time}',
+  testCancel: '取消检查',
+  testActorCost: '网络检查通过后，Actor 模式启动一次按量计费的运行，完成即退出。',
   actorAccountHint: '有查询才启动，完成即退出；计算和代理用量计入你的 Apify 账号，凭据保留在 dsh 主机。',
   oauthActivePublic: 'OAuth 授权 · 公共 Actor 已就绪',
   oauthActiveOwn: 'OAuth 授权 · 使用自己的 Actor',
@@ -505,12 +538,12 @@ export const ZH: Record<string, string> = {
   testConnection: '测试连接',
   testing: '测试中…',
   testSavedNote: '测试的是已保存设置 — 请先保存。',
-  testNote: 'Actor 只检查 API 权限和已有构建，不启动运行；本机直连做一次连通性检查。',
+  testNote: '先检查连接，再合并查询 ChatGPT、Gemini、weather（美国，近 24 小时），最长 2 分钟。',
   testLocalOk: 'Google Trends 可访问（{status}，{ms} ms）',
-  testActorOk: 'Apify API 和 Actor 构建可访问，{ms} ms；未启动运行',
+  testActorOk: 'Apify API、认证和 Actor 可用 · {ms} ms',
   testNoToken: '登录 Apify（或使用高级设置中的手动 API Token 或 APIFY_TOKEN）后可使用 Actor 出口。',
   testNoActor: '请先选择或部署你的 google-trends-for-agent Actor。',
-  testVersionMismatch: '该 Actor 构建的 relay 版本不匹配。请更新插件或重新构建 Actor。',
+  testVersionMismatch: '该 Actor 构建不支持完整连接检查，请重新构建 Actor。',
   testInvalidToken: 'Apify 拒绝了该 Token 或 OAuth 会话。请重新登录，或在 Apify Console → Settings → API & Integrations 中检查高级设置里的手动 Token。',
   testNetworkLocal: '本机无法连接 Google Trends。',
   testDetail: '详情：{detail}',
@@ -1077,11 +1110,15 @@ function usageErrorText(state: Extract<ApifyUsageView, { status: 'error' }>, t: 
 }
 
 function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text: string } {
+  if (result.data?.ok && result.network?.ok && result.ok) return { ok: true, text: template(t('testComplete'), { ms: result.latencyMs }) };
+  const diagnosticKeys: Partial<Record<ConnectionCode, string>> = {
+    blocked: 'testBlocked', 'rate-limited': 'testRateLimited', timeout: 'testTimeout', protocol: 'testProtocol',
+    cancelled: 'testCancelled', 'no-data': 'testNoDataSummary',
+  };
+  if (result.code && diagnosticKeys[result.code]) return { ok: false, text: t(diagnosticKeys[result.code]!) };
+  if (result.network?.ok && result.data && !result.data.ok && (result.code === 'network' || result.code === 'http')) return { ok: false, text: t('testDataError') };
   if (result.ok) {
-    if (result.egress !== 'local') {
-      return { ok: true, text: template(t('testActorOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
-    }
-    return { ok: true, text: template(t('testLocalOk'), { status: statusLabel(result.status), ms: result.latencyMs }) };
+    return { ok: false, text: t('testIncomplete') };
   }
   let key = result.egress !== 'local' ? 'testNetworkActor' : 'testNetworkLocal';
   if (result.code === 'no-token') key = 'testNoToken';
@@ -1095,6 +1132,30 @@ function testLine(result: TestConnectionView, t: Translate): { ok: boolean; text
     ? template(t('testDetail'), { detail: result.message })
     : '';
   return { ok: false, text: base + detail };
+}
+
+export function ConnectionTestResults({ result, t, locale }: { result: TestConnectionView; t: Translate; locale: string }) {
+  const network = result.network ?? result;
+  const line = testLine(result, t);
+  const errorColor = 'var(--dsw-alias-state-error-primary, #c55151)';
+  return <div role="status" aria-live="polite" style={styles.testLine}>
+    <p style={{ margin: '0 0 10px', color: network.ok ? 'var(--gtfa-green)' : errorColor }}>
+      {network.ok ? '✓ ' : '✗ '}{network.ok ? template(t(result.egress === 'local' ? 'testLocalOk' : 'testActorOk'),
+        { status: statusLabel(network.status), ms: network.latencyMs }) : testLine(network, t).text}
+    </p>
+    <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('testDataTitle')}</div>
+    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 7 }}>
+      {(result.data?.keywords ?? CONNECTION_KEYWORDS.map(keyword => ({ keyword, status: 'skipped' as const, points: 0, nonzeroPoints: 0 }))).map(check =>
+        <li key={check.keyword} style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
+          color: check.status === 'ok' ? 'var(--gtfa-green)' : check.status === 'skipped' ? 'var(--gtfa-muted)' : errorColor }}>
+          <span>{check.status === 'ok' ? '✓' : check.status === 'skipped' ? '—' : '✗'} {check.keyword}</span>
+          <span>{check.status === 'ok' ? template(t('testPoints'), { points: check.points, nonzero: check.nonzeroPoints })
+            : t(check.status === 'no_data' ? 'testNoData' : check.status === 'skipped' ? 'testSkipped' : 'testDataError')}</span>
+        </li>)}
+    </ul>
+    <p style={{ margin: '12px 0 0', color: line.ok ? 'var(--gtfa-green)' : errorColor }}>{line.text}</p>
+    {result.checkedAt ? <p style={{ ...styles.hint, margin: '6px 0 0' }}>{template(t('testCheckedAt'), { time: new Date(result.checkedAt).toLocaleString(locale) })}</p> : null}
+  </div>;
 }
 
 function normalizeActor(value: unknown): ApifyActorView | null {
@@ -1221,31 +1282,60 @@ export function resolveDeployBuild(actors: ApifyActorsView, target: DeployTarget
 }
 
 /** Send exactly one owner-authenticated test request for the saved egress. */
-export async function runConnectionTest(egress: EgressMode = 'local'): Promise<TestConnectionView> {
+export async function runConnectionTest(egress: EgressMode = 'local', signal?: AbortSignal): Promise<TestConnectionView> {
+  const deadline = AbortSignal.timeout(135_000);
   try {
     const response = await fetch(TEST_URL, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: '{}',
       cache: 'no-store',
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
     });
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
     const row = record(body);
-    if (typeof row.ok === 'boolean' && (row.egress === 'local' || row.egress === 'actor-public' || row.egress === 'actor-own')) {
-      return {
+    if (typeof row.ok === 'boolean' && row.egress === egress) {
+      const basic: TestConnectionView = {
         ok: row.ok,
-        egress: row.egress,
+        egress,
         status: numberOrNull(row.status),
         latencyMs: numberOrNull(row.latencyMs) ?? 0,
         ...(typeof row.code === 'string' ? { code: row.code as TestConnectionView['code'] } : {}),
         ...(typeof row.message === 'string' ? { message: row.message } : {}),
         ...(typeof row.actorId === 'string' ? { actorId: row.actorId } : {}),
       };
+      if (row.network !== undefined) {
+        const net = record(row.network);
+        if (typeof net.ok !== 'boolean' || net.egress !== egress) return { ...basic, ok: false, code: 'protocol' };
+        basic.network = { ok: net.ok, egress, status: numberOrNull(net.status), latencyMs: numberOrNull(net.latencyMs) ?? 0,
+          ...(typeof net.code === 'string' ? { code: net.code as ConnectionCode } : {}),
+          ...(typeof net.message === 'string' ? { message: net.message } : {}) };
+      }
+      if (row.data !== undefined) {
+        const data = record(row.data);
+        const keywords = Array.isArray(data.keywords) ? data.keywords.map(record) : [];
+        const valid = typeof data.ok === 'boolean' && data.geo === 'US' && data.time === 'now 1-d'
+          && keywords.length === CONNECTION_KEYWORDS.length && keywords.every((check, index) =>
+            check.keyword === CONNECTION_KEYWORDS[index] && ['ok', 'no_data', 'error', 'skipped'].includes(String(check.status))
+            && Number.isInteger(check.points) && Number(check.points) >= 0 && Number(check.points) <= 10000
+            && Number.isInteger(check.nonzeroPoints) && Number(check.nonzeroPoints) >= 0 && Number(check.nonzeroPoints) <= Number(check.points)
+            && (check.status === 'ok' ? Number(check.nonzeroPoints) > 0 : Number(check.nonzeroPoints) === 0))
+          && data.ok === keywords.every(check => check.status === 'ok');
+        if (!valid) return { ...basic, ok: false, code: 'protocol' };
+        basic.data = { ok: data.ok as boolean, geo: 'US', time: 'now 1-d', latencyMs: numberOrNull(data.latencyMs) ?? 0,
+          keywords: keywords.map(check => ({ keyword: String(check.keyword), status: check.status as DataCheck['keywords'][number]['status'],
+            points: Number(check.points), nonzeroPoints: Number(check.nonzeroPoints) })),
+          ...(typeof data.code === 'string' ? { code: data.code as ConnectionCode } : {}),
+          ...(typeof data.fetchedAt === 'string' && Number.isFinite(Date.parse(data.fetchedAt)) ? { fetchedAt: data.fetchedAt } : {}) };
+        if (basic.ok && (!basic.network?.ok || !basic.data.ok)) return { ...basic, ok: false, code: 'protocol' };
+      }
+      if (typeof row.checkedAt === 'string' && Number.isFinite(Date.parse(row.checkedAt))) basic.checkedAt = row.checkedAt;
+      return basic;
     }
     return { ok: false, egress, status: response.status, latencyMs: 0, code: 'http' };
   } catch {
-    return { ok: false, egress, status: null, latencyMs: 0, code: 'network' };
+    return { ok: false, egress, status: null, latencyMs: 0, code: signal?.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'network' };
   }
 }
 
@@ -1620,6 +1710,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
+  const testAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => { testAbort.current?.abort(); testAbort.current = null; }, []);
   const [oauth, setOauth] = useState<ApifyOAuthView>(initialOAuth ?? { status: 'idle' });
   const [oauthBusy, setOauthBusy] = useState<ApifyOAuthAction | null>(null);
   const [oauthPoll, setOauthPoll] = useState({ id: 0, delay: 0, egress: draft.egress });
@@ -1653,6 +1745,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     if (next.status === 'ready') oauthConnectedRef.current = next.data.connected;
     setOauth(next);
     if (next.status === 'ready' && next.data.connected !== wasConnected) {
+      testAbort.current?.abort();
+      testAbort.current = null;
+      setTesting(false);
+      setTestResult(null);
       setUsageRequest(current => ({ id: current.id + 1, refresh: false }));
       if (draft.egress === 'actor-own') {
         setActorsRequest(current => ({ id: current.id + 1, refresh: true }));
@@ -1664,6 +1760,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     if (snapshot.status !== 'ready') return;
     if (lastRevision.current === snapshot.revision) return;
     lastRevision.current = snapshot.revision;
+    testAbort.current?.abort();
+    testAbort.current = null;
+    setTesting(false);
+    setTestResult(null);
     const next = fromSnapshot(snapshot.value);
     setDraft(next);
     setBaseline(draftKey(next));
@@ -1777,7 +1877,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     }
   }, [building, actors, deployTarget, t]);
 
-  const edit = (patch: Partial<Draft>) => setDraft(current => ({ ...current, ...patch }));
+  const edit = (patch: Partial<Draft>) => { setTestResult(null); setDraft(current => ({ ...current, ...patch })); };
   const editAnchor = (index: number, patch: Partial<AnchorDraft>) => setDraft(current => ({
     ...current,
     anchors: current.anchors.map((anchor, i) => i === index ? { ...anchor, ...patch } : anchor),
@@ -1879,12 +1979,16 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   };
 
   const test = async () => {
+    if (testAbort.current) return;
+    const controller = new AbortController();
+    testAbort.current = controller;
     setTesting(true);
     setTestResult(null);
     try {
-      setTestResult(await runConnectionTest(draft.egress));
+      const result = await runConnectionTest(draft.egress, controller.signal);
+      if (testAbort.current === controller) setTestResult(result);
     } finally {
-      setTesting(false);
+      if (testAbort.current === controller) { testAbort.current = null; setTesting(false); }
     }
   };
 
@@ -1965,7 +2069,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
 
   if (snapshot.status === 'loading') return <p style={styles.status}>{t('loading')}</p>;
   if (snapshot.status === 'unavailable') return <p style={styles.status}>{t('unavailable')}</p>;
-  const editable = snapshot.writable && !busy;
+  const editable = snapshot.writable && !busy && !testing;
   const canSave = editable && dirty && !blocking;
   const newAnchorReady = Boolean(draft.newAnchor.term.trim()) && isPositiveNumber(draft.newAnchor.dailySearches) && !validation.newAnchorTerm && !validation.newAnchorDaily;
   const line = testResult ? testLine(testResult, t) : null;
@@ -1979,10 +2083,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     ...(actorEgress ? [{ id: 'token' as const, label: t('advancedToken') }] : []),
     { id: 'files' as const, label: t('advancedFiles') },
   ];
-  const testButton = <button type="button" className="gtfa-button" style={dim(styles.button, !editable || testing || dirty)}
+  const testButton = <><button type="button" className="gtfa-button" style={dim(styles.button, !editable || testing || dirty)}
     disabled={!editable || testing || dirty} title={dirty ? t('testSavedNote') : t('testNote')} onClick={() => { void test(); }}>
     <Icon name="play" size={13} />{dirty ? t('testSaveFirst') : testing ? t('testing') : t('testConnection')}
-  </button>;
+  </button>{testing ? <button type="button" className="gtfa-button" style={styles.button} onClick={() => testAbort.current?.abort()}>{t('testCancel')}</button> : null}</>;
   const walkAdvanced = (event: KeyboardEvent<HTMLDivElement>) => {
     const index = advancedTabs.findIndex(tab => tab.id === activeAdvancedTab);
     const next = event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowLeft' ? index - 1
@@ -2027,14 +2131,13 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
           <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>
           <div className="gtfa-connection-copy"><div className="gtfa-connection-title">{t('localNetwork')}
             <span style={{ ...styles.pill, color: line?.ok ? 'var(--gtfa-green)' : 'var(--gtfa-muted)', background: line?.ok ? 'var(--gtfa-green-soft)' : 'var(--gtfa-hover)' }}>
-              {line?.ok ? t('connectionReady') : t('connectionUntested')}
+              {testing ? t('testing') : line?.ok ? t('connectionReady') : testResult?.network?.ok ? t('connectionNetworkOnly') : testResult ? t('connectionFailed') : t('connectionUntested')}
             </span></div><p className="gtfa-connection-subtitle">{t('localNetworkHint')}</p></div>
           <div className="gtfa-connection-actions">{testButton}</div>
         </div>}
       </div>
-      {line ? <p style={{ ...styles.testLine, color: line.ok ? 'var(--gtfa-green)' : 'var(--dsw-alias-state-error-primary, #c55151)' }} role="status">
-        {line.ok ? '✓ ' : '✗ '}{line.text}
-      </p> : dirty ? <p style={styles.hint}>{t('testSavedNote')}</p> : null}
+      <p style={styles.hint}>{dirty ? t('testSavedNote') : t('testNote')}{actorEgress ? ` ${t('testActorCost')}` : ''}</p>
+      {testResult ? <ConnectionTestResults result={testResult} t={t} locale={intlLocale} /> : null}
       {actorEgress ? <>
         <p style={{ ...styles.hint, display: 'flex', alignItems: 'center', gap: 7, margin: 0 }}><Icon name="shield" size={13} />{t('actorAccountHint')}</p>
         {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}

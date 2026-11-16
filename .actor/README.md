@@ -69,6 +69,8 @@ The dsh plugin submits one complete tool request per run:
 
 `name` accepts the four `trends_*` names. Read `TOOL_RESPONSE` from the run's key-value store: `{ protocol: 1, result, snapshots }`. `result` preserves the full tool envelope, including related-query null fields, calibration warnings and inline SVG. Validated optional history preserves snapshot diffs across runs. The local plugin handles six-hour result reuse and local chart files. Credentials and local filesystem paths are never part of this input. This additive protocol does not change Dataset v1; native requests may have zero Dataset rows.
 
+The dsh connection check uses internal protocol `2` for one comparison of three basic keywords. It returns the same tool envelope, disables upstream retries and exits after the check. Protocol `1` handles ordinary native tool requests.
+
 ## Runtime and cost bounds
 
 Default memory is 256 MB and default timeout is 300 seconds. dsh sends these bounds explicitly for every run. The client starts once, polls the run and reads its result. It does not retry an ambiguous start POST. Cancellation attempts to abort the owned run; if the network is unavailable, the platform timeout remains the bound. Local snapshot-cache hits and API metadata checks start no run. Builds have their own platform cost.

@@ -162,6 +162,18 @@ describe('on-demand Actor execution', () => {
 });
 
 describe('one-off native tool request', () => {
+  it('requires diagnostic protocol v2 for a no-retry comparison and rejects other probe tools', async () => {
+    const execute = vi.fn(async () => ({ ok: true, schemaVersion: 1, status: 'ok' }));
+    const create = vi.fn(() => [{ name: 'trends_compare', execute } as unknown as GtfaTool]);
+    const probe = { protocol: 2, name: 'trends_compare', input: { keywords: ['ChatGPT', 'Gemini', 'weather'] } };
+    expect(await runToolRequest(probe, { snapshotDir: await directory(), chartDir: await directory(), create }))
+      .toMatchObject({ protocol: 2, result: { ok: true }, snapshots: [] });
+    expect(execute).toHaveBeenCalledExactlyOnceWith(probe.input, { maxRetries: 0 });
+    const wrongTool = await runToolRequest({ ...probe, name: 'trends_ask' }, { snapshotDir: await directory(), chartDir: await directory(), create });
+    expect(wrongTool.result).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('validates the protocol and history before executing a tool', async () => {
     const create = vi.fn(() => []);
     const result = await runToolRequest({ ...input, protocol: 9 }, { snapshotDir: await directory(), chartDir: await directory(), create });

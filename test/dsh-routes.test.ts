@@ -16,6 +16,7 @@ import {
   type OAuthCredentialsService,
 } from '../src/apify-oauth.js';
 import { GTrendsError } from '../src/core.js';
+import { CONNECTION_KEYWORDS, CONNECTION_FILTER } from '../src/connection-check.js';
 import type { Transport } from '../src/transport.js';
 
 const TOKEN = 'apify_api_saved_secret';
@@ -66,7 +67,12 @@ function routeHarness(getSettings: () => RouteSettings, overrides: Parameters<ty
       if (names.includes('connection')) injected = callback;
     },
   };
-  registerRoutes(ctx as never, getSettings, overrides);
+  registerRoutes(ctx as never, getSettings, {
+    connectionProbe: async () => ({ ok: true, schemaVersion: 1, status: 'ok', filter: CONNECTION_FILTER,
+      meta: { fetchedAt: new Date().toISOString() },
+      series: CONNECTION_KEYWORDS.map(keyword => ({ keyword, points: [{ t: '2026-11-16T00:00:00.000Z', value: 50 }] })) }),
+    ...overrides,
+  });
   const connect = () => injected?.({
     connection,
     get: (name: string) => name === 'connection' ? connection : undefined,
@@ -415,7 +421,7 @@ describe('dsh host routes', () => {
     expect(deployments).toHaveLength(2);
   });
 
-  it('tests local egress with exactly one request', async () => {
+  it('runs a local preflight before the keyword probe', async () => {
     const transport = vi.fn(async () => ({ status: 200, headers: {}, body: '' }));
     const harness = routeHarness(() => settings({ egress: 'local' }), { localTransport: transport as Transport, now: () => 1_000 });
     harness.connect();
@@ -437,7 +443,7 @@ describe('dsh host routes', () => {
     });
     harness.connect();
     const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       ok: true, egress: 'actor-own', status: 200, latencyMs: 0, actorId: ACTOR,
     });
     expect(seen).toEqual({ token: TOKEN, actorId: ACTOR });
@@ -457,7 +463,7 @@ describe('dsh host routes', () => {
     });
     harness.connect();
     const response = await harness.routes.get(TEST_CONNECTION_PATH)!.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, { method: 'POST' }));
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       ok: true, egress: 'actor-public', status: 200, latencyMs: 0, actorId: 'meka.im~google-trends-for-agent',
     });
     expect(seen).toEqual({ token: TOKEN, actorId: 'meka.im~google-trends-for-agent' });
@@ -539,6 +545,24 @@ describe('dsh host routes', () => {
     release();
     expect(await (await first).json()).toMatchObject({ ok: true });
     expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects cross-site and non-POST diagnostic requests before any paid or Google work', async () => {
+    const transport = vi.fn(async () => ({ status: 200, headers: {}, body: '' }));
+    const probe = vi.fn(async () => ({}));
+    const harness = routeHarness(() => settings({ egress: 'local' }), { localTransport: transport, connectionProbe: probe });
+    harness.connect();
+    const route = harness.routes.get(TEST_CONNECTION_PATH)!;
+    for (const init of [
+      { method: 'GET' },
+      { method: 'POST', headers: { origin: 'https://attacker.test' } },
+      { method: 'POST', headers: { 'sec-fetch-site': 'cross-site' } },
+    ]) {
+      const response = await route.fetch(new Request(`https://dsh.test${TEST_CONNECTION_PATH}`, init));
+      expect(response.status).toBe(init.method === 'GET' ? 405 : 403);
+    }
+    expect(transport).not.toHaveBeenCalled();
+    expect(probe).not.toHaveBeenCalled();
   });
 
   it('resolves the API token from the saved value or APIFY_TOKEN', () => {

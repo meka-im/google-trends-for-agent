@@ -85,7 +85,7 @@ The manual token is an **Advanced / fallback** option. A token entered there is 
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 
-For Actor routes, **Test connection** only reads API metadata and the latest build; it starts no paid run and does not test Google reachability. Local mode performs one HEAD probe and stops on a challenge or HTTP 429.
+**Test connection** checks the saved egress, then makes one fresh `trends_compare` query for ChatGPT, Gemini and weather in the US over the past 24 hours. Local preflight uses HEAD; Actor preflight checks API authentication and the latest build, then starts one usage-billed on-demand run. The page separates network status from each keyword's valid/nonzero data-point counts; only all three successful series verify data access. Challenges, rate limits, malformed data and zero-only series do not pass. Diagnostic queries never retry. The check has a 120 s overall deadline; Cancel check or closing the page aborts the request and attempts to stop its owned Actor run. The platform's 300 s timeout remains the final cloud bound during a network outage.
 
 ## Verify networking first
 

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, EN, type ConfigPageProps } from '../src/client/index.js';
+import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
 
 type PathOp = { op: 'set' | 'unset'; path: string[]; value?: unknown };
 const t = (key: string) => EN[key] ?? key;
@@ -51,12 +52,19 @@ function api() {
     }
     if (path.startsWith('api/gtfa.apify-oauth')) return Response.json(oauth);
     if (path.startsWith('api/gtfa.apify-usage')) return Response.json({ ok: false, code: 'no-token' });
-    if (path === 'api/gtfa.test-connection') return Response.json({ ok: true, egress: 'local', status: 200, latencyMs: 4 });
+    if (path === 'api/gtfa.test-connection') return Response.json(diagnostic());
     throw new Error(`Unexpected request in interaction test: ${path}`);
   });
   vi.stubGlobal('fetch', fetch);
   return { requests, fetch, setOAuth: (value: Record<string, unknown>) => { oauth = value; },
     count: (path: string) => requests.filter(row => row.url === path).length };
+}
+
+function diagnostic() {
+  return { ok: true, egress: 'local', status: 200, latencyMs: 4, checkedAt: '2026-11-16T00:00:00.000Z',
+    network: { ok: true, egress: 'local', status: 200, latencyMs: 1 },
+    data: { ok: true, latencyMs: 3, ...CONNECTION_FILTER,
+      keywords: CONNECTION_KEYWORDS.map(keyword => ({ keyword, status: 'ok', points: 12, nonzeroPoints: 10 })) } };
 }
 
 const button = (key: string) => screen.getByRole('button', { name: t(key) }) as HTMLButtonElement;
@@ -127,6 +135,65 @@ describe('settings interactions', () => {
     await user.click(button('save'));
     expect(backend.mutate).not.toHaveBeenCalled();
     expect(backend.saved().geo).toBe('US');
+  });
+});
+
+describe('connection diagnostic interactions', () => {
+  it('shows real keyword counts only after a click and clears verification after edits', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    expect(network.requests).toHaveLength(0);
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
+    expect(screen.getAllByText('12 points · 10 nonzero')).toHaveLength(3);
+    expect(network.count('api/gtfa.test-connection')).toBe(1);
+    await user.selectOptions(screen.getByRole('combobox', { name: t('geo') }), 'GB');
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('does not display data verification for HTTP success with blocked, missing, or malformed data', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    const blocked = diagnostic();
+    network.fetch.mockResolvedValueOnce(Response.json({ ...blocked, ok: false, code: 'blocked', data: { ...blocked.data, ok: false, code: 'blocked',
+      keywords: blocked.data.keywords.map(check => ({ ...check, status: 'error', points: 0, nonzeroPoints: 0 })) } }));
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('testBlocked'))).toBeTruthy();
+    expect(screen.getByText(t('connectionNetworkOnly'))).toBeTruthy();
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
+    network.fetch.mockResolvedValueOnce(Response.json({ ok: true, egress: 'local', status: 200, latencyMs: 1 }));
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('testIncomplete'))).toBeTruthy();
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
+    network.fetch.mockResolvedValueOnce(Response.json({ ...diagnostic(), data: { ...diagnostic().data, keywords: [] } }));
+    await user.click(button('testConnection'));
+    expect(await screen.findByText(t('testProtocol'))).toBeTruthy();
+    expect(screen.queryByText(t('connectionReady'))).toBeNull();
+  });
+
+  it('aborts the request when cancelled or unmounted and prevents duplicate clicks', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    let signal: AbortSignal | null | undefined;
+    const pending = (_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      signal = init?.signal;
+      signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')), { once: true });
+    });
+    network.fetch.mockImplementation(pending);
+    const page = render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await user.click(button('testConnection'));
+    expect(button('testing').disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLSelectElement).disabled).toBe(true);
+    await user.click(button('testing'));
+    expect(network.fetch).toHaveBeenCalledTimes(1);
+    await user.click(button('testCancel'));
+    expect(await screen.findByText(t('testCancelled'))).toBeTruthy();
+    expect(signal?.aborted).toBe(true);
+    await user.click(button('testConnection'));
+    page.unmount();
+    expect(signal?.aborted).toBe(true);
+    expect(backend.mutate).not.toHaveBeenCalled();
   });
 });
 

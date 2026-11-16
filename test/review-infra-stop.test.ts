@@ -83,7 +83,7 @@ describe('reviewed infrastructure stops', () => {
       expect(result).toMatchObject({
         ok: false,
         egress,
-        code: 'http',
+        code: 'blocked',
         status: response.status,
         message: expect.stringContaining('challenge'),
       });

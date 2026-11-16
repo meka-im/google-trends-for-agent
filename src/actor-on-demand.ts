@@ -74,7 +74,7 @@ export class OnDemandActorClient {
       if (run.status !== 'SUCCEEDED') throw new GTrendsError(run.status === 'TIMED-OUT' ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', `Apify run ended with ${String(run.status)}. Update the Actor if it does not support on-demand tool requests.`);
       if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
       const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
-      if (output.protocol !== ACTOR_REQUEST_PROTOCOL || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', 'This Actor build does not support on-demand protocol v1. Rebuild the Actor.');
+      if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
       return { result: row(output.result), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId };
     } catch (error) {
       if (callerSignal?.aborted) throw abortError(callerSignal);
