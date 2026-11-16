@@ -169,7 +169,7 @@ describe('dsh settings form', () => {
     expect(html).not.toContain('>Actor<');
   });
 
-  it('shows the usage card, token, and Actor select with build status for actor-own', () => {
+  it('shows the usage card, token, and selectable Actor card with build status for actor-own', () => {
     const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
     expect(html).toContain('Apify usage');
     expect(html).toContain('$8.06 / $19.00');
@@ -179,8 +179,10 @@ describe('dsh settings form', () => {
     expect(html).toContain('Residential proxy: 0.006 GB this cycle of 5.000 GB');
     expect(html).toContain('Apify token');
     expect(html).toContain('aria-label="Actor"');
-    expect(html).toContain('alice/google-trends-for-agent — Google Trends for AI Agents');
-    expect(html).toContain('Build: succeeded');
+    expect(html).toContain('alice/google-trends-for-agent');
+    expect(html).toContain('Google Trends for AI Agents');
+    expect(html).toContain('role="radio" aria-checked="true"');
+    expect(html).toContain('Ready');
     expect(html).toContain('Refresh');
   });
 
