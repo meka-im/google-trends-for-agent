@@ -13,7 +13,6 @@ const input = json('../.actor/input_schema.json');
 const dataset = json('../.actor/dataset_schema.json');
 const output = json('../.actor/output_schema.json');
 const kv = json('../.actor/key_value_store_schema.json');
-const web = json('../.actor/web_server_schema.json');
 const readme = readFileSync(new URL('../.actor/README.md', import.meta.url), 'utf8');
 
 const properties = (input.properties ?? {}) as Record<string, Record<string, unknown>>;
@@ -135,11 +134,5 @@ describe('Actor output schemas', () => {
     expect((collections.runSummary!.jsonSchema as { properties: { status: { enum: string[] } } }).properties.status.enum)
       .toEqual(['completed', 'partial', 'failed']);
     expect(collections.charts).toMatchObject({ keyPrefix: 'chart-', contentTypes: ['image/png', 'image/svg+xml'] });
-  });
-
-  it('documents the HTTP API and /mcp in OpenAPI', () => {
-    expect(web.openapi).toMatch(/^3\./);
-    expect(String((web.info as { description: string }).description)).toContain('/mcp');
-    expect(Object.keys(web.paths as object).sort()).toEqual(['/egress/fetch', '/health', '/tools/{name}']);
   });
 });

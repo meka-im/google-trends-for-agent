@@ -30,9 +30,9 @@ Use Apify's managed MCP gateway. It handles OAuth without starting this Actor ju
 }
 ```
 
-The gateway exposes the Actor's input interface plus run, Dataset, key-value-store and abort tools. It does not promise four direct `trends_*` tools. Local MCP and the dsh native plugin retain those four tools. Apify's OAuth scope is account-wide `full_api_access`; authorize through the client's official Apify login. Clients without OAuth can supply a Bearer header from credential storage.
+The gateway exposes the Actor's input interface plus run, Dataset, key-value-store and abort tools. It does not promise four direct `trends_*` tools. Local MCP and the dsh native plugin provide the four `trends_*` tools. Apify's OAuth scope is account-wide `full_api_access`; authorize through the client's official Apify login. Clients without OAuth can supply a Bearer header from credential storage.
 
-The previous `*.apify.actor/mcp` interface was retired in 0.2.7 after long-lived MCP connections prevented idle shutdown. Keep Server / Standby disabled. This Actor rejects Standby startup before opening any listener.
+For self-deployment, keep Server / Standby disabled. This Actor runs queries on demand and rejects Standby startup.
 
 ## Inputs
 
@@ -48,7 +48,7 @@ Ordinary input executes one tool, writes Dataset v1 rows and an `OUTPUT` record,
 
 ## Dataset v1
 
-The existing flat row contract is unchanged: `term`, `tool`, `geo`, `window`, `status`, `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak`, `searchesPerDay`, `verdict`, `anchor`, `topRelated`, `topRising`, `chartKey`, `chartUrl`, `error`, `fetchedAt`. Related fields are string arrays, so there is no per-related-query `estDaily` in Dataset v1. Missing values remain null. Charts are stored under `chart-*` in the run's key-value store; read them through the authenticated API.
+Each flat row contains: `term`, `tool`, `geo`, `window`, `status`, `interestLatest`, `interestSettled`, `interestAverage`, `interestPeak`, `searchesPerDay`, `verdict`, `anchor`, `topRelated`, `topRising`, `chartKey`, `chartUrl`, `error`, `fetchedAt`. Related fields are string arrays, so there is no per-related-query `estDaily` in Dataset v1. Missing values remain null. Charts are stored under `chart-*` in the run's key-value store; read them through the authenticated API.
 
 `OUTPUT` reports completed/partial/failed plus delivered, noData, blocked, skipped, errors and duration. Dataset rows, successful native tool calls and MCP sessions have different denominators: do not divide all Actor costs by Dataset rows to estimate cost per query.
 
@@ -73,7 +73,7 @@ The dsh plugin submits one complete tool request per run:
 
 Default memory is 256 MB and default timeout is 300 seconds. dsh sends these bounds explicitly for every run. The client starts once, polls the run and reads its result. It does not retry an ambiguous start POST. Cancellation attempts to abort the owned run; if the network is unavailable, the platform timeout remains the bound. Local snapshot-cache hits and API metadata checks start no run. Builds have their own platform cost.
 
-Do not reuse the former Standby cost estimate as an on-demand price. Inspect finished runs' `usageTotalUsd`; see [cost details](../docs/reference.md#actor-costs) and [historical measurements](../docs/standby-costs-2026-11-13.md).
+Inspect each finished run's `usageTotalUsd` for its measured cost; see [cost details](../docs/reference.md#actor-costs). There is no fixed per-query price.
 
 ## Data boundaries
 

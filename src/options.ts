@@ -35,8 +35,6 @@ export const GTFA_SOURCE_URL = 'https://github.com/meka-im/google-trends-for-age
 export const GTFA_STORE_URL = 'https://apify.com/meka.im/google-trends-for-agent';
 /** Git repository the one-click deploy and the manual Git-repo deploy build from. */
 export const GTFA_ACTOR_GIT_URL = 'https://github.com/meka-im/google-trends-for-agent';
-/** @deprecated Historical Standby setting; on-demand deployments disable Standby. */
-export const GTFA_ACTOR_STANDBY_IDLE_SECS = 60;
 
 /**
  * Apify sign-up facts, checked 2026-11-12:
@@ -51,22 +49,6 @@ export const GTFA_ACTOR_STANDBY_IDLE_SECS = 60;
 export const APIFY_SIGNUP_URL = 'https://console.apify.com/sign-up';
 export const APIFY_PRICING_URL = 'https://apify.com/pricing';
 export const APIFY_FREE_MONTHLY_CREDIT_USD = 5;
-/**
- * @deprecated Historical Standby measurement, not a current on-demand price.
- * Estimated cost of one isolated `trends_ask` through the Actor, measured on
- * 2026-11-13 at Free-plan rates: ~61 KB residential ($8/GB) plus a 512 MB
- * Standby run that exits after 60 s idle ($0.2/CU). Extra warm calls cost less.
- */
-export const APIFY_EST_COST_PER_CALL_USD = 0.0024;
-
-/** Rough monthly call allowance: credit / cost rounded to the nearest 100. */
-export function apifyEstimatedCalls(
-  creditUsd = APIFY_FREE_MONTHLY_CREDIT_USD,
-  costPerCallUsd = APIFY_EST_COST_PER_CALL_USD,
-): number {
-  if (!(creditUsd > 0) || !(costPerCallUsd > 0)) return 0;
-  return Math.round((creditUsd / costPerCallUsd) / 100) * 100;
-}
 
 /** Built-in calibration anchor terms, shared by the host and the browser form without importing baselines. */
 export const BUILTIN_ANCHOR_TERMS = ['gpts', 'sudoku'] as const;
