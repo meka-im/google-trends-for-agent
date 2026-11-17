@@ -87,7 +87,8 @@ export class OnDemandActorClient {
       if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
       const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
       if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
-      return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId };
+      return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId,
+        ...(typeof run.usageTotalUsd === 'number' && Number.isFinite(run.usageTotalUsd) && run.usageTotalUsd >= 0 ? { usageUsd: run.usageTotalUsd } : {}) };
     } catch (error) {
       if (callerSignal?.aborted) throw abortError(callerSignal);
       if (deadline.aborted) throw new GTrendsError('TRENDS_TIMEOUT', 'On-demand Actor run exceeded its deadline.');
@@ -147,7 +148,8 @@ export async function callActorTool(client: OnDemandActorClient, options: {
       settings: cloudSettings, history: history.slice(0, 12),
     }, options.signal);
     throwIfAborted(options.signal);
-    result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime } };
+    result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime,
+      ...(output.usageUsd !== undefined ? { actorUsageUsd: output.usageUsd } : {}) } };
     const runtimeWarning = !output.runtime ? 'Actor version is unverified; update the Actor before checking version parity.'
       : output.runtime.version !== VERSION || output.runtime.baselineCatalogRevision !== BASELINE_CATALOG_REVISION
         ? `Actor v${output.runtime.version} and client v${VERSION} differ in package or baseline revision; update the older component.` : null;

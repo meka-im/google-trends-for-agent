@@ -155,7 +155,9 @@ Credentials are re-resolved on every operation: a stored OAuth session is used f
 
 Persistence is delegated to the dsh credentials service/provider-managed store, separate from the profile; backend location, record keys, and schema can vary. The current local file-backed provider uses owner-only `0700` directory and `0600` file permissions when applicable; it is not an OS Keychain or encrypted storage and cannot stop other processes under the same OS user from reading it. The manual token remains an **Advanced / fallback** option and is still stored in plaintext in `cordis.patch.yml` (mode `0600`), hidden in the UI, never logged, and absent from browser-visible status and model-visible tool input/output. **Cancel** only stops a pending flow. **Sign out** removes the stored OAuth session but retains reusable client registration according to the provider backend; it does **not** revoke the cloud authorization, so use Apify Console for that. See the [dsh plugin reference](docs/reference.md#dsh-plugin) for routes and lifecycle details.
 
-The tools are called from chat; the plugin page is configuration only.
+Open **Google Trends** from the dsh sidebar (or **More**) for **Overview**, **Query**, and **History**. Single-term snapshots and comparisons support all nine time ranges, from the past hour to all time. **Plugin settings** opens the existing installed-plugin page. Chat still uses the same four native tools.
+
+The Host retains the latest 1,000 manual and Agent calls under `<snapshotDir>/.query-history`, including failures and saved result copies. Viewing or refreshing history never starts a query. Clear individual, selected, or all records with confirmation; statistics follow retained records, while query caches, Apify runs and billing remain separate. Actor costs show only amounts returned by linked runs; missing amounts stay unknown. Opening the dashboard starts no Actor and performs no background data collection.
 
 Relative `snapshotDir` and `chartDir` paths resolve from the directory where `dsh web` was started (cwd); charts default to `<cwd>/.gtfa/charts/`.
 

@@ -21,6 +21,7 @@ import { GTrendsError } from './core.js';
 import { VERSION } from './version.js';
 import type { ActorRuntime } from './actor-runtime.js';
 import { createTools } from './tools.js';
+import { dashboardRoute, type DashboardBoundary } from './dashboard-routes.js';
 import {
   CONNECTION_FILTER, CONNECTION_KEYWORDS, CONNECTION_PROBE_PROTOCOL, connectionErrorCode,
   emptyDataCheck, summarizeConnectionProbe, type ConnectionCode, type ConnectionDiagnostics, type ConnectionResult,
@@ -42,6 +43,7 @@ export interface RouteSettings {
 }
 
 export interface RouteOverrides {
+  dashboard?: DashboardBoundary;
   /** Fetch implementation for the Apify REST API in tests. */
   fetch?: typeof globalThis.fetch;
   /** Local transport used by the local test-connection check in tests. */
@@ -519,6 +521,8 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       },
     }));
   };
+
+  if (overrides.dashboard) disposers.push(service.fetch.register(dashboardRoute(overrides.dashboard, rejectCrossSite)));
 
   if (overrides.oauth) {
     disposers.push(service.fetch.register({

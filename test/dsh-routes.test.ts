@@ -234,7 +234,7 @@ describe('dsh host routes', () => {
       get: (name: string) => name === 'connection' ? { fetch: { register: (route: Route) => { harness.routes.set(route.path, route); return async () => {}; } } } : undefined,
       effect: (callback: () => unknown) => callback(),
     });
-    expect([...harness.routes.keys()].sort()).toEqual(ALL_ROUTES);
+    expect([...harness.routes.keys()].sort()).toEqual([...ALL_ROUTES, '/api/gtfa.dashboard'].sort());
   });
 
   it('registers OAuth status and POST-only lifecycle routes when a manager is mounted', async () => {
