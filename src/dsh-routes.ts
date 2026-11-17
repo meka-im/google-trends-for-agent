@@ -475,7 +475,21 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     const origin = request.headers.get('origin');
     if (origin) {
       try {
-        if (new URL(origin).origin !== new URL(request.url).origin) {
+        const supplied = new URL(origin);
+        const target = new URL(request.url);
+        let expected = target.origin;
+        // dsh's HTTP bridge constructs Fetch URLs under http://dsh.internal
+        // while preserving the real Host header. Its outer browser-trust fence
+        // authenticates that Host before dispatching owner-only plugin routes.
+        // Compare the public authority, including ports, for this bridge only.
+        if (target.origin === 'http://dsh.internal') {
+          const host = request.headers.get('host');
+          if (!host || /[\s/@\\?#]/.test(host) || !['http:', 'https:'].includes(supplied.protocol)) {
+            return json({ error: 'cross-site request rejected' }, 403);
+          }
+          expected = new URL(`${supplied.protocol}//${host}`).origin;
+        }
+        if (supplied.origin === 'null' || supplied.origin !== expected) {
           return json({ error: 'cross-site request rejected' }, 403);
         }
       } catch {
