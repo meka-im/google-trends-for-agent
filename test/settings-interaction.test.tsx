@@ -447,6 +447,56 @@ describe('baseline editor', () => {
     { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
   ], windowAnchors: { short: 'research', long: 'gpts' } });
 
+  it('shows all built-ins alongside existing US rows and preserves edits while browsing', async () => {
+    const anchors = [
+      { term: 'gpts', geo: 'US', dailySearches: 3500, tolerance: 0.5 },
+      { term: 'sudoku', geo: 'US', dailySearches: 63000, tolerance: 0.5 },
+    ];
+    const backend = host({ baselines: { anchors } }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    const catalog = within(screen.getByRole('region', { name: t('baselineBuiltin') }));
+    const table = () => within(catalog.getByRole('table'));
+    expect(table().getAllByRole('row')).toHaveLength(11);
+    for (const geo of ['CA', 'GB', 'AU', 'DE', 'FR', 'JP', 'IN']) {
+      expect(table().getByRole('rowheader', { name: regionLabel(geo, 'en') })).toBeTruthy();
+    }
+    expect(table().getByRole('rowheader', { name: t('geoWorldwide') })).toBeTruthy();
+    expect(table().getByText('220,000')).toBeTruthy();
+    const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} sudoku` });
+    await user.clear(daily); await user.type(daily, '50000');
+    await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'research');
+    await user.type(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` }), '1200');
+    await pick(user, t('baselineBrowseGeo'), t('geoWorldwide'));
+    expect(table().getAllByRole('row')).toHaveLength(2);
+    expect(table().getByText('220,000')).toBeTruthy();
+    await pick(user, t('baselineBrowseGeo'), regionLabel('JP', 'en'));
+    expect(table().getAllByRole('row')).toHaveLength(2);
+    expect(table().getByText('ナンプレ')).toBeTruthy();
+    expect((daily as HTMLInputElement).value).toBe('50000');
+    expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('US', 'en'));
+    expect(backend.saved().baselines).toEqual({ anchors });
+    expect(backend.mutate).not.toHaveBeenCalled();
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
+      anchors[0], { ...anchors[1], dailySearches: 50000 },
+      { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.5 },
+    ] }));
+  });
+
+  it('allows read-only catalog browsing with custom baselines off without writing configuration', async () => {
+    const backend = host({}, false); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    const catalog = within(screen.getByRole('region', { name: t('baselineBuiltin') }));
+    expect(catalog.getAllByRole('row')).toHaveLength(11);
+    await pick(user, t('baselineBrowseGeo'), regionLabel('CA', 'en'));
+    expect(catalog.getAllByRole('row')).toHaveLength(2);
+    expect(catalog.getByText('12,000')).toBeTruthy();
+    expect(screen.queryByRole('spinbutton', { name: `${t('anchorDaily')} gpts` })).toBeNull();
+    expect(button('save').disabled).toBe(true);
+    expect(backend.saved().baselines).toBeUndefined();
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
   it.each([
     { geo: 'CA', anchor: 'sudoku', daily: '12000' },
     { geo: 'JP', anchor: 'ナンプレ', daily: '22000' },

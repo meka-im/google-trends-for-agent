@@ -361,7 +361,7 @@ describe('dsh settings form', () => {
     const local = render();
     const allInputs = [...local.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
     const pickers = allInputs.filter(input => input.includes('role="combobox"'));
-    expect(pickers).toHaveLength(8);
+    expect(pickers).toHaveLength(9);
     expect(pickers.every(input => input.includes('readonly=""'))).toBe(true);
     const localInputs = allInputs.filter(input => !input.includes('role="combobox"'));
     expect(localInputs.filter(input => input.includes('type="text"'))).toHaveLength(3);
