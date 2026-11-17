@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { createTools, invalidInputEnvelope, zodRejectionEnvelope, findDuplicateKeyword } from './tools.js';
+import { createTools, invalidInputEnvelope, zodRejectionEnvelope, findDuplicateKeyword, type GtfaTool } from './tools.js';
 import { OnDemandActorClient, callActorTool, type OnDemandOptions } from './actor-on-demand.js';
 import type { CreateActorRelayTransportOptions } from './apify-actor.js';
 import {
@@ -14,6 +14,7 @@ import { DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, resolveEgre
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
+import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
 // The library and CLI must work without the optional dsh peer dependency.
@@ -316,6 +317,46 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
+  const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source']) => {
+    throwIfAborted(signal);
+    const current = settings(), startedAt = Date.now();
+    const parsed = tool.inputSchema.safeParse(args ?? {});
+    if (!parsed.success) return zodRejectionEnvelope(parsed.error);
+    const input = parsed.data as Record<string, unknown>;
+    if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
+    let result: Record<string, unknown>;
+    try {
+      if (current.egress !== 'local' && !overrides.transport) {
+        const resolved = await oauth.resolveToken(current.apifyToken);
+        if (!resolved.token) {
+          const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
+          result = { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
+        } else {
+          if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
+          result = await callActorTool(onDemand, {
+            token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
+            name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
+              cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal,
+          });
+        }
+      } else result = await tool.execute(input, { signal });
+      throwIfAborted(signal);
+    } catch (error) {
+      result = { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
+        error: { code: signal?.aborted ? 'CANCELLED' : error instanceof GTrendsError ? error.code : 'NETWORK_ERROR',
+          message: signal?.aborted ? 'Query cancelled.' : error instanceof GTrendsError ? error.message : 'Query did not complete.' } };
+    }
+    try {
+      const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, egress: current.egress, defaultGeo: current.geo, startedAt });
+      const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : {};
+      result = { ...result, meta: { ...meta, queryRecordId: record.id } };
+    } catch {
+      const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : {};
+      result = { ...result, meta: { ...meta, warnings: [...(Array.isArray(meta.warnings) ? meta.warnings : []), 'Local query history could not be saved.'] } };
+    }
+    throwIfAborted(signal);
+    return result;
+  };
   for (const tool of tools) {
     ctx.tools.register({
       name: tool.name,
@@ -326,36 +367,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
         render: (_args: unknown, value: unknown) => [{ type: 'text', text: JSON.stringify(value) ?? '{}' }],
       },
       async execute(args: unknown, exec: { signal?: AbortSignal }) {
-        throwIfAborted(exec.signal);
-        const current = settings();
-        if (current.egress !== 'local' && !overrides.transport) {
-          const parsed = tool.inputSchema.safeParse(args ?? {});
-          if (!parsed.success) return zodRejectionEnvelope(parsed.error);
-          const input = parsed.data as Record<string, unknown>;
-          if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
-          const resolved = await oauth.resolveToken(current.apifyToken);
-          if (!resolved.token) {
-            const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
-            return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
-          }
-          if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
-          try {
-            const result = await callActorTool(onDemand, {
-              token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-              name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
-                cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal: exec.signal,
-            });
-            throwIfAborted(exec.signal);
-            return result;
-          } catch (error) {
-            throwIfAborted(exec.signal);
-            return { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
-              error: { code: error instanceof GTrendsError ? error.code : 'NETWORK_ERROR', message: error instanceof GTrendsError ? error.message : 'On-demand Actor request failed.' } };
-          }
-        }
-        const result = await tool.execute(args, { signal: exec.signal });
-        throwIfAborted(exec.signal);
-        return result;
+        return run(tool, args, exec.signal, 'agent');
       },
     });
   }
@@ -363,6 +375,10 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
+    dashboard: { settings, execute: async (name, input, signal) => {
+      const tool = tools.find(tool => tool.name === name)!;
+      return run(tool, input, signal, 'manual');
+    } },
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
     ...(localTransport ? { localTransport } : {}),
     ...(overrides.routes?.relayTransport ? { relayTransport: overrides.routes.relayTransport } : {}),

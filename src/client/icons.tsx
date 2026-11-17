@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 const paths: Record<string, ReactNode> = {
+  chart: <><path d="M4 4v16h16M7 15l4-5 4 3 5-7" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3 12h18" /></>,
   laptop: <><rect x="5" y="4" width="14" height="11" rx="2" /><path d="M3 19h18M5 15l-2 4M19 15l2 4" /></>,
   cloud: <><path d="M7 18a5 5 0 0 1-.7-9.9A6 6 0 0 1 18 7a4.6 4.6 0 0 1-.2 9H15" /><path d="m9 17 3 3 3-3M12 12v8" /></>,

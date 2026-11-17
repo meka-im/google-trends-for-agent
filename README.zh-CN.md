@@ -151,7 +151,9 @@ pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使�
 
 持久化交给 dsh credentials service/provider-managed store，与 profile 分离；后端位置、记录键和 schema 可以不同。当前本地 file-backed provider 在适用时使用 owner-only `0700` 目录与 `0600` 文件权限；它不是 OS Keychain，也不是加密存储，不能阻止同一 OS 用户下的其他进程读取。手动 token 位于**高级 / 备用**区域，仍会明文写入 `cordis.patch.yml`（mode `0600`），UI 中隐藏，不会记录，也不会进入浏览器可见状态或模型可见的 tool input/output。**Cancel（取消）** 只取消 pending flow。**Sign out（注销）** 删除已存储的 OAuth session，但按 provider 后端保留可复用的 client registration；它**不会撤销 Apify 云端授权**，如需撤销请到 Apify Console。路由和生命周期细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 
-工具从对话里调用，插件页只用于配置。
+从 dsh 侧边栏（或「更多」）打开 **Google Trends**，可使用「总览、查询、记录」三页。单词快照和多词对比共用九种时间范围，从过去 1 小时到全部时间。「插件设置」打开已有的已安装插件页面；对话仍使用原来的四个原生工具。
+
+Host 将最近 1,000 次手动和 Agent 调用（包含失败及结果副本）保存在 `<snapshotDir>/.query-history`。回看和刷新记录不会重新查询。可确认清理单条、所选或全部记录，统计随之变化；查询缓存、Apify 运行和账单独立保留。Actor 费用只展示关联运行实际返回的金额，缺失时保持未知。打开页面不会启动 Actor，也不会在后台持续取数。
 
 相对 `snapshotDir` / `chartDir` 路径以启动 `dsh web` 的目录（cwd）为基准；图表默认写入 `<cwd>/.gtfa/charts/`。
 

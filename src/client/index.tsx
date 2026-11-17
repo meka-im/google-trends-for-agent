@@ -23,6 +23,8 @@ import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
 import { BaselineCatalog } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
+import { Dashboard, TrendsMark } from './dashboard.js';
+import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
 import { parseActorRuntime } from '../actor-runtime.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
@@ -106,10 +108,11 @@ interface LocaleService {
 
 interface SlotsService {
   inject(name: string, register: () => unknown): unknown;
-  register(options: Record<string, unknown>, component: (props: PluginConfigViewProps) => ReactNode): unknown;
+  register<P extends object = PluginConfigViewProps>(options: Record<string, unknown>, component: (props: P) => ReactNode): unknown;
 }
 
 interface ClientContext {
+  get?(name: string): unknown;
   effect(callback: () => void | (() => void), label?: string): unknown;
   locale: LocaleService;
   slots: SlotsService;
@@ -2716,7 +2719,7 @@ function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view: 
 
 /** Register the row configuration page while the Plugins page declares its slot. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { en: EN, zh: ZH }), 'gtfa: dictionaries');
+  ctx.effect(() => ctx.locale.register(NS, { en: { ...EN, ...DASHBOARD_EN }, zh: { ...ZH, ...DASHBOARD_ZH } }), 'gtfa: dictionaries');
   const t = ctx.locale.bind(NS);
   ctx.effect(() => {
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
@@ -2725,4 +2728,13 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
     }, (props: PluginConfigViewProps) => <ConfigView ctx={ctx} t={t} view={props.view} />));
   }, 'gtfa: row configuration page');
+  ctx.effect(() => {
+    ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'google-trends', locale: NS },
+      () => <Dashboard t={t} openSettings={() => {
+        const navigation = ctx.get?.('pluginNavigation') as { openBundle?: (name: string) => void } | undefined;
+        navigation?.openBundle?.(PACKAGE);
+      }} />));
+    ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'google-trends', order: 25, label: () => t('dashboardTitle'), locale: NS },
+      (props: { size?: number }) => <TrendsMark size={props.size ?? 20} />));
+  }, 'gtfa: dashboard and sidebar');
 }

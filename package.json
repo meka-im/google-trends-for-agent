@@ -1,6 +1,6 @@
 {
   "name": "google-trends-for-agent",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "description": "Search-interest signals for AI agents \u2014 an unofficial Google Trends client",
   "type": "module",
   "license": "MIT",
@@ -118,6 +118,8 @@
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-plugin-manager"
       ]
     }
