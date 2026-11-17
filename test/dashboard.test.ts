@@ -115,4 +115,9 @@ describe('dsh query history and dashboard', () => {
     expect(await h.store.get(oldest.id)).toBeNull();
     await expect(stat(join(h.store.directory, `${oldest.id}.json`))).rejects.toMatchObject({ code: 'ENOENT' });
   });
+  it('records the actual Trending Now countries rather than the default query region', async () => {
+    const h = await host();
+    const record = await h.store.save({ tool: 'trends_now', input: { geos: ['CA', 'GB'], hours: 48 }, result: { ok: true, status: 'ok', geos: ['CA', 'GB'] }, source: 'agent', egress: 'local', defaultGeo: 'US', startedAt: Date.now() });
+    expect(record).toMatchObject({ geo: 'CA, GB', time: '48h', terms: ['CA', 'GB'] });
+  });
 });

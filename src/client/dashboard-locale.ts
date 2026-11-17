@@ -1,4 +1,5 @@
 export const DASHBOARD_EN: Record<string, string> = {
+  dashNow: 'Trending now',
   dashboardTitle: 'Google Trends', dashboardSubtitle: 'Search trends. Keep every exploration.',
   dashOverview: 'Overview', dashQuery: 'Query', dashRecords: 'History', dashSettings: 'Plugin settings',
   dashRefresh: 'Refresh', dashLoading: 'Loading…', dashFailed: 'Could not load. Try again.',
@@ -34,6 +35,7 @@ export const DASHBOARD_EN: Record<string, string> = {
   dashTime1m: 'Past month', dashTime3m: 'Past 3 months', dashTime1y: 'Past year', dashTime5y: 'Past 5 years', dashTimeAll: 'All time',
 };
 export const DASHBOARD_ZH: Record<string, string> = {
+  dashNow: '实时热榜',
   dashboardTitle: 'Google Trends', dashboardSubtitle: '查询趋势，保留每一次探索。',
   dashOverview: '总览', dashQuery: '查询', dashRecords: '记录', dashSettings: '插件设置',
   dashRefresh: '刷新', dashLoading: '正在加载…', dashFailed: '加载失败，请重试。',

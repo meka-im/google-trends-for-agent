@@ -22,7 +22,7 @@ const array = (value: unknown): Record<string, unknown>[] => Array.isArray(value
 const duration = (ms: number) => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
 const percent = (part: number, total: number) => total ? `${(part / total * 100).toFixed(1)}%` : '—';
 const formatNumber = (value: unknown) => number(value)?.toLocaleString(undefined, { maximumFractionDigits: 1 }) ?? '—';
-const timeLabel = (time: string, t: Translate) => t(TIME_KEYS.find(row => row[0] === time)?.[1] ?? time);
+const timeLabel = (time: string, t: Translate) => { const key = TIME_KEYS.find(row => row[0] === time)?.[1]; return key ? t(key) : time; };
 const egressLabel = (egress: EgressMode, t: Translate) => t(egress === 'local' ? 'dashLocal' : egress === 'actor-public' ? 'dashPublic' : 'dashOwn');
 const statusKey: Record<string, string> = { ok: 'dashOk', error: 'dashError', blocked: 'dashBlocked', no_data: 'dashNoData', partial: 'dashPartial' };
 const dateText = (raw: string | null, full = false) => raw && Number.isFinite(Date.parse(raw)) ? new Date(raw).toLocaleString(undefined,
@@ -110,9 +110,13 @@ export function Dashboard({ t, openSettings }: { t: Translate; openSettings?: ()
     try {
       const saved = await request<SavedQuery>(`?id=${encodeURIComponent(id)}`, undefined, operation.signal);
       if (!alive.current) return;
-      setResult(saved); setText(saved.record.terms.join(', ')); setGeo(saved.record.geo);
-      if (TIME_KEYS.some(row => row[0] === saved.record.time)) setTime(saved.record.time);
-      setMode(saved.record.tool === 'trends_compare' ? 'compare' : 'single'); setMetric('interest'); setError(''); setTab('query');
+      setResult(saved);
+      if (saved.record.tool !== 'trends_now') {
+        setText(saved.record.terms.join(', ')); setGeo(saved.record.geo);
+        if (TIME_KEYS.some(row => row[0] === saved.record.time)) setTime(saved.record.time);
+        setMode(saved.record.tool === 'trends_compare' ? 'compare' : 'single');
+      }
+      setMetric('interest'); setError(''); setTab('query');
     } catch { if (alive.current && !operation.signal.aborted) setError(t('dashFailed')); }
   };
   const clear = async () => {
@@ -212,6 +216,7 @@ function Result({ saved, metric, setMetric, t }: { saved: SavedQuery; metric: st
   const series = resultSeries(saved, metric === 'traffic' && hasTraffic), meta = object(result.meta);
   const warnings = [...(Array.isArray(meta.warnings) ? meta.warnings : []), ...(Array.isArray(result.warnings) ? result.warnings : [])].filter((v): v is string => typeof v === 'string');
   const error = object(result.error), tables = object(result.tables);
+  if (record.tool === 'trends_now') return <div className="gd-results"><div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), t('dashGeo') === '地区' ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}</div>;
   return <div className="gd-results"><div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div><div className="gd-result-grid"><article className="gd-card"><div className="gd-result-head"><h3>{t('dashTrend')}</h3><div className="gd-actions"><Button primary={metric === 'interest'} onClick={() => setMetric('interest')}>{t('dashInterest')}</Button><Button disabled={!hasTraffic} primary={metric === 'traffic'} onClick={() => setMetric('traffic')}>{t('dashTraffic')}</Button></div></div>
     <TrendChart series={series} traffic={metric === 'traffic' && hasTraffic} label={t('dashTrend')} empty={t('dashUnavailable')} />
     <div className="gd-legend">{series.map((row, i) => <span key={row.term}><i style={{ background: colors[i] }} />{row.term}</span>)}</div><table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th><th>{t('dashAverage')}</th><th>{t('dashLatest')}</th><th>{t('dashPeak')}</th></tr></thead><tbody>{series.map(row => <tr key={row.term}><td>{row.term}</td><td>{formatNumber(row.average)}</td><td>{formatNumber(row.latest)}</td><td>{formatNumber(row.peak)}</td></tr>)}</tbody></table></article>

@@ -59,7 +59,7 @@ export class QueryHistoryStore {
     const cached = meta.cached === true;
     const record: QueryRecord = {
       id: randomUUID(), tool, terms, source: options.source, egress: options.egress,
-      geo: String(filter.geo ?? input.geo ?? options.defaultGeo),
+      geo: tool === 'trends_now' ? (Array.isArray(result.geos) ? result.geos.join(', ') : Array.isArray(input.geos) ? input.geos.join(', ') : String(input.geos ?? 'default')) : String(filter.geo ?? input.geo ?? options.defaultGeo),
       time: String(filter.time ?? input.time ?? (tool === 'trends_now' ? `${input.hours ?? 24}h` : 'now 1-d')),
       status: typeof result.status === 'string' ? result.status : 'error', cached,
       createdAt: new Date(options.startedAt).toISOString(), fetchedAt: typeof meta.fetchedAt === 'string' ? meta.fetchedAt : null,
