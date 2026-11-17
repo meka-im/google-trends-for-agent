@@ -70,11 +70,18 @@ The stdio server exposes exactly four tools. HTTP and Actor tool calls share the
 
 ### Remote MCP authentication
 
-Remote-only MCP clients connect to Apify's managed gateway:
+Muse, GrokBot and Dots should use Apify on demand by default, selecting either
+the public Actor or a self-deployment. Use an authenticated Apify connector/API
+if native remote MCP registration is unavailable. The
+[client guide](clients.md) covers setup and result reading. Remote MCP connects
+to Apify's managed gateway:
 
 ```json
 { "mcpServers": { "google-trends": { "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent" } } }
 ```
+
+For a self-deployment, replace the Actor in `tools=` with the accessible
+`<username>/<actor-name>` from the signed-in account.
 
 The gateway handles client OAuth and exposes the Actor's input interface, run state, Dataset, key-value-store, and abort tools. Each query starts an on-demand Actor run. Local MCP and dsh provide the four native `trends_*` tools. Apify's account-wide `full_api_access` scope must be disclosed before authorization. Use the client's credential storage for Bearer fallback if OAuth is unavailable.
 

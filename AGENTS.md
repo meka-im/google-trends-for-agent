@@ -2,6 +2,20 @@
 
 Guidance for AI agents using `google-trends-for-agent` (`gtfa`). It queries undocumented Google Trends web endpoints. Use it for light, interactive research only—not bulk scraping or continuous polling. It is unofficial and not affiliated with Google.
 
+## Recommended setup for Muse, GrokBot and Dots
+
+Prefer **Apify on-demand execution** for all three clients, using either the
+public `meka.im/google-trends-for-agent` Actor or the user's own deployment.
+Use `https://mcp.apify.com?tools=meka.im/google-trends-for-agent` with the client's
+MCP OAuth, replacing the Actor name in `tools=` for a self-deployment. If the Host
+does not expose native remote MCP registration, use its authenticated Apify
+connector/API and describe the integration accurately. Keep Server / Standby
+disabled. See [client setup and result reading](docs/clients.md).
+
+Local CLI/stdio is an explicit direct-access or development option for these
+clients. An Apify route can still be blocked or rate-limited; stop that path and
+report the result rather than switching deployments to get around it.
+
 ## Install from GitHub
 
 The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
@@ -29,7 +43,9 @@ The packed tarball bundles the audited `apify` dependency subtree from the root 
 
 ## MCP client config
 
-Use this generic stdio configuration, which follows the repository's `main` branch:
+For explicitly selected local access, use this generic stdio configuration,
+which follows the repository's `main` branch. Muse, GrokBot and Dots should start
+with the [Apify setup](docs/clients.md).
 
 ```json
 {
@@ -50,9 +66,9 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 }
 ```
 
-Remote-only clients use Apify's managed gateway at `https://mcp.apify.com?tools=meka.im/google-trends-for-agent`, with OAuth handled by the client. The gateway exposes the Actor's input interface and result-reading/abort tools, not necessarily the four direct `trends_*` tool names. Use `tool` / `terms`, then read the returned Dataset. Local MCP and dsh provide the four native tools. Apify requests the account-wide `full_api_access` scope.
+The recommended remote route uses Apify's managed gateway at `https://mcp.apify.com?tools=meka.im/google-trends-for-agent`, with OAuth handled by the client. Replace the Actor in `tools=` for a self-deployment. The gateway exposes the Actor's input interface and result-reading/abort tools, not four direct `trends_*` tool names. Use `tool` / `terms`, then read the returned Dataset; for full native envelopes, use `toolRequest` and read `TOOL_RESPONSE` as described in the [client guide](docs/clients.md). Local MCP and dsh provide the four native tools. Apify requests the account-wide `full_api_access` scope.
 
-Restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h; explicit lists are deduped and capped at 30. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
+For local MCP, restart the client, then call `trends_ask` with a single term. `trends_ask` and `trends_compare` default to US, past 24 hours, web search, all categories; `trends_now` defaults to 30 countries at 24h; explicit lists are deduped and capped at 30. `trends_snapshot` and `trends_ask` with `validate: true` pick a calibration anchor by window (see below).
 
 ## dsh plugin
 
@@ -89,9 +105,10 @@ After installing or upgrading this plugin, fully stop and restart dsh to load it
 
 **Test connection** checks the current connection without saving changes, then makes one fresh `trends_compare` query for ChatGPT, Gemini and weather in the US over the past 24 hours. Only egress, own-Actor selection and a newly entered or cleared manual token are submitted as temporary overrides; unchanged saved tokens remain on the Host, and OAuth keeps priority. Local preflight uses HEAD; Actor preflight checks API authentication and the latest build, then starts one usage-billed on-demand run. The page separates network status from each keyword's valid/nonzero data-point counts; only all three successful series verify data access. Challenges, rate limits, malformed data and zero-only series do not pass. Diagnostic queries never retry. The check has a 120 s overall deadline; Cancel check or closing the page aborts the request and attempts to stop its owned Actor run. The platform's 300 s timeout remains the final cloud bound during a network outage.
 
-## Verify networking first
+## Diagnose local access
 
-Run the doctor once after install, or whenever a call fails unexpectedly:
+For explicitly selected local CLI/MCP access, run doctor after install or when
+a call fails unexpectedly. It checks that machine's route, not the Apify Actor:
 
 ```sh
 npx -y -p github:meka-im/google-trends-for-agent gtfa doctor
@@ -102,25 +119,28 @@ It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and 
 
 `gtfa doctor --timeout MS` accepts an integer from 1000 through 60000 and defaults to 8000 ms per network check. If reachability sees a challenge or HTTP 429, doctor skips the live `gpts` fetch.
 
-Networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY` (preferred) or `HTTP_PROXY` to `http://host:port`; no other configuration is required. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most. On `BLOCKED`, stop and report—do not loop, rotate requests, or invent results.
+Local CLI/MCP networking is direct by default. If this machine needs a proxy, set `HTTPS_PROXY` (preferred) or `HTTP_PROXY` to `http://host:port`; no other configuration is required. On `BLOCKED` or `RATE_LIMITED`, stop this validation path and preserve `retryAfterSec` when present; do not loop, switch routes, or invent results.
 
 ## Network egress: pick the right path
 
-Google Trends answers the same IPs it sees as ordinary browsers more often than data-center ranges. Choose egress in this order:
+Choose the execution route before querying:
 
-1. **Your own machine IP (preferred).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`. This is the least likely path to trigger a challenge.
-2. **The platform cloud VM.** Run the client and server on the same machine when that machine is allowed to make outbound HTTPS requests. Data-center IPs are challenged more often, so keep calls sparse and run `gtfa doctor` when a call fails.
-3. **Apify Actor.** Use on-demand execution for remote agents or dsh Actor routes. Remote MCP connects to Apify's managed gateway; dsh uses the API to start one bounded run per tool call. Runs use the on-platform residential proxy and exit after completing the result. Successful local snapshot-cache hits start no cloud run. Keep Server / Standby disabled. Compute and proxy usage apply only to actual runs; there is no fixed per-call price. A call is capped at 300 seconds of Actor runtime. Caller cancellation attempts to abort its owned run, with the platform timeout as a final bound.
+1. **Apify Actor (recommended for Muse, GrokBot and Dots).** Choose the public Actor or the user's own deployment, with on-demand execution. Remote MCP connects to Apify's managed gateway; a connector/API or dsh starts the Actor through the platform API. Runs use the on-platform residential proxy and exit after completing the result. Successful local dsh snapshot-cache hits start no cloud run. Keep Server / Standby disabled. Compute, proxy and storage usage apply; there is no fixed per-call price. A call is capped at 300 seconds of Actor runtime. Caller cancellation should abort its owned run, with the platform timeout as a final bound.
+2. **Your own machine IP (explicit direct access or development).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`.
+3. **The platform cloud VM (explicit direct access).** Run the client and server on that VM only when deliberately selected and outbound HTTPS is available. Installing `gtfa-mcp` there does not route traffic through Apify.
 
 | Client capability | Connection |
 | --- | --- |
-| Can run local commands | CLI or stdio MCP on that machine |
-| Supports remote MCP | Apify's managed MCP gateway with client-managed authentication |
+| Muse, GrokBot or Dots with remote MCP registration | Apify's managed MCP gateway and the selected public or self-deployed Actor |
+| Host without native remote MCP registration | Authenticated Apify connector/API, reported as a connector rather than native MCP |
+| Explicit local access or development | CLI or stdio MCP on that machine |
 | dsh native plugin | Select Local, Public Actor, or My own Actor in the plugin settings |
 
 Check the actual Host's connection capabilities before configuring it. A cloud VM's loopback address refers to that VM, not the user's computer.
 
-Do not route around a block by looping requests. On `RATE_LIMITED`, wait `retryAfterSec` and retry once at most; on `BLOCKED`, stop and report.
+On `BLOCKED` or `RATE_LIMITED`, stop this validation path and report the error,
+including `retryAfterSec` when present. Do not switch deployments or routes to
+get around it.
 
 ## Tools and when to use them
 
@@ -165,6 +185,9 @@ Use this four-step check before calling a term a real, rising trend:
 3. **Current corroboration** — `trends_now` with `{ "geos": ["US"], "hours": 24 }`. Look for the term or its close variants in `items` / `relatedQueries`; absence is evidence, not failure.
 4. **Second window** — repeat step 1 with `time: "now 7-d"` (or re-run after 24h). Require the same direction across both windows before reporting a trend. Include the geo, window, and `fetchedAt` in your answer.
 
-If any step returns `RATE_LIMITED`, wait `retryAfterSec` and retry once. If it returns `BLOCKED`, `NETWORK_ERROR`, or `TRENDS_PROTOCOL_CHANGED`, run `gtfa doctor`, report the error code, and do not substitute guessed numbers.
+If any step returns `BLOCKED` or `RATE_LIMITED`, stop this validation run and
+report the code and `retryAfterSec` when present. Report `NETWORK_ERROR` or
+`TRENDS_PROTOCOL_CHANGED` without guessed numbers; use `gtfa doctor` only to
+diagnose an explicitly selected local route.
 
 During one validation run, a `BLOCKED` or `RATE_LIMITED` response stops later upstream requests by default and preserves that code and `retryAfterSec` for the affected terms. In a `--from` batch, correlate diagnostics by each result's `snapshotId`; JSON output also preserves the source lead under `input`.

@@ -1,4 +1,6 @@
 > 本文的四工具字段用于本机 MCP 和 dsh 原生插件。云端使用 Apify 官方 MCP gateway，提供 Actor 输入与结果读取工具。每次查询启动一个有时限的运行，完成即退出。
+>
+> Muse、GrokBot、Dots 统一推荐 Apify 按需执行，公共 Actor 和自建 Actor 均可。原生远程 MCP 不可注册时，使用已认证的 Apify 连接器/API。接入、工具发现和完整信封读取见[客户端指南](clients.md)。
 
 # google-trends-for-agent · Agent API
 
@@ -17,6 +19,7 @@
 
 - **dsh 原生工具：** 每次操作重新解析凭据：已存储的 OAuth session 优先；只有在没有存储 session 时，才依次使用已保存的 `apifyToken` 和环境变量 `APIFY_TOKEN`。解析来源为 `oauth` / `config` / `env`，usage API 的 `source` 也包含 `oauth`。已存储的 session 若过期或损坏且无法 refresh，应重新登录，不能静默回退或当作成功。OAuth 凭据不进入浏览器可见状态或模型可见的 tool input/output；Host 内部代码必须通过 credentials service 解析后调用 Apify。
 - **远程 Actor MCP：** 支持 OAuth 的客户端只配置 `https://mcp.apify.com?tools=meka.im/google-trends-for-agent`，再在客户端内完成 Apify 登录。不要手工构造 token URL 或 authorization URL。客户端管理自己的 OAuth 授权与续期流程；Actor 不处理 OAuth token refresh。
+- **自建 Actor：** 把 `tools=` 中的公共 Actor 名替换为自己的 `<username>/<actor-name>`，并使用有权访问该 Actor 的账号。两种部署都按次运行，保持 Server / Standby 关闭。
 - **Bearer 回退：** 不支持 MCP OAuth 的客户端可通过安全凭据配置，为 Apify 官方 MCP gateway 添加 `Authorization: Bearer <APIFY_TOKEN>` 请求头。运行与存储结果可通过 Apify 平台 API 读取。
 - **dsh device flow token 生命周期：** 当前 access token 是长效 token，且没有 refresh token。不要承诺当前会定期刷新、轮换或过期自动续期；若 Apify 未来返回标准过期/刷新信息，dsh 插件可处理兼容响应。
 

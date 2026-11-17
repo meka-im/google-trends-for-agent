@@ -18,7 +18,12 @@ Use the Input tab, then Start:
 
 ### MCP client
 
-Use Apify's managed MCP gateway. It handles OAuth without starting this Actor just to keep an MCP connection open:
+Muse, GrokBot and Dots should use this Actor on demand, either the public version
+or a self-deployment. Prefer Apify's managed MCP gateway with client OAuth; use an
+authenticated Apify connector/API when native registration is unavailable. See
+the [client guide](https://github.com/meka-im/google-trends-for-agent/blob/main/docs/clients.md).
+
+The gateway handles OAuth without starting this Actor just to keep an MCP connection open:
 
 ```json
 {
@@ -29,6 +34,9 @@ Use Apify's managed MCP gateway. It handles OAuth without starting this Actor ju
   }
 }
 ```
+
+For a self-deployment, replace `meka.im/google-trends-for-agent` in `tools=` with
+your own accessible `<username>/<actor-name>`.
 
 The gateway exposes the Actor's input interface plus run, Dataset, key-value-store and abort tools. It does not promise four direct `trends_*` tools. Local MCP and the dsh native plugin provide the four `trends_*` tools. Apify's OAuth scope is account-wide `full_api_access`; authorize through the client's official Apify login. Clients without OAuth can supply a Bearer header from credential storage.
 

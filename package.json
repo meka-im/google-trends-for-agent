@@ -39,6 +39,7 @@
     "docs/baselines.md",
     "docs/testing.md",
     "docs/releasing.md",
+    "docs/clients.md",
     "LICENSE",
     "CHANGELOG.md",
     "examples/baselines.json",
