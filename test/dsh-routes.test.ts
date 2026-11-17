@@ -121,6 +121,7 @@ function actorFetch() {
     }
     if (target === 'https://api.apify.com/v2/actor-builds/build-1') return json({ data: { status: 'SUCCEEDED' } });
     if (target === `https://api.apify.com/v2/acts/${ACTOR}/builds?desc=1&limit=1`) return json({ data: { items: [{ id: 'build-1', status: 'SUCCEEDED' }] } });
+    if (target === `https://api.apify.com/v2/acts/${ACTOR}/builds/default`) return json({ data: { id: 'build-1' } });
     if (target === 'https://api.apify.com/v2/acts' && init?.method === 'POST') return json({ data: { id: 'new-actor' } }, 201);
     if (target === 'https://api.apify.com/v2/acts/new-actor/builds?version=0.1&tag=latest') return json({ data: { id: 'new-build' } }, 201);
     throw new Error(`unexpected URL ${target}`);

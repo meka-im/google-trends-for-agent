@@ -49,8 +49,16 @@ export class OnDemandActorClient {
 
   async check(token: string, actorId: string, signal = new AbortController().signal) {
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
-    const data = row((await this.request(`/acts/${encodeURIComponent(actorId)}`, token, signal)).data);
-    if (!row(row(data.taggedBuilds).latest).buildId) throw new GTrendsError('INVALID_INPUT', 'Build this Actor before running a query.');
+    // Existence/authentication is enough here. Actor/default-build details can
+    // include megabytes of source and readme; do not download that body.
+    const response = await this.fetch(`${API}/acts/${encodeURIComponent(actorId)}/builds/default`, {
+      method: 'GET', redirect: 'error', headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    });
+    await response.body?.cancel();
+    if (response.status === 401 || response.status === 403) throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token or OAuth session. Sign in again.');
+    if (response.status === 404) throw new GTrendsError('INVALID_INPUT', 'Build this Actor before running a query (HTTP 404).');
+    if (!response.ok) throw new GTrendsError('NETWORK_ERROR', `Apify API returned HTTP ${response.status}.`);
   }
 
   async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal) {

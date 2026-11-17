@@ -49,6 +49,12 @@ describe('own Actor updates', () => {
 });
 
 describe('actual Actor runtime metadata', () => {
+  it('preflights a default build without waiting for its large metadata body', async () => {
+    let cancelled = false;
+    const fetch = vi.fn(async () => new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+    await new OnDemandActorClient({ fetch: fetch as typeof globalThis.fetch }).check('secret', 'mine');
+    expect(cancelled).toBe(true);
+  });
   it('reports the code version from a completed native tool request', async () => {
     const result = await runToolRequest({ protocol: 1, name: 'trends_compare', input: {} }, {
       snapshotDir: '/unused', chartDir: '/unused',

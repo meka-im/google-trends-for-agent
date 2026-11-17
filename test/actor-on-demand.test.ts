@@ -74,7 +74,7 @@ describe('on-demand Actor execution', () => {
 
   it('checks only Actor metadata and never starts a run', async () => {
     const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe('https://api.apify.com/v2/acts/actor');
+      expect(String(url)).toBe('https://api.apify.com/v2/acts/actor/builds/default');
       expect(init!.method).toBe('GET');
       return json({ data: { taggedBuilds: { latest: { buildId: 'build' } } } });
     });
@@ -84,7 +84,7 @@ describe('on-demand Actor execution', () => {
 
   it('the production connection check uses metadata and cannot create paid work', async () => {
     const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe('https://api.apify.com/v2/acts/meka.im~google-trends-for-agent');
+      expect(String(url)).toBe('https://api.apify.com/v2/acts/meka.im~google-trends-for-agent/builds/default');
       expect(init!.method).toBe('GET');
       return json({ data: { taggedBuilds: { latest: { buildId: 'built' } } } });
     });
