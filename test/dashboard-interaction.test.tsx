@@ -44,31 +44,28 @@ describe('dashboard interactions', () => {
     await user.click(screen.getByRole('button', { name: 'Plugin settings' }));
     expect(openSettings).toHaveBeenCalledOnce(); expect(h.queries()).toHaveLength(0);
   });
-  it('preserves all nine time ranges in single and comparison submissions, records and replay', async () => {
+  it.each(['single', 'compare'].flatMap(mode => times.map((time, index) => ({ mode, time, index }))))('preserves $time in $mode queries, records and replay', async ({ mode, time, index }) => {
     const h = api(), user = userEvent.setup(); const { container } = render(<Dashboard t={t} />);
     await screen.findByText('v0.2.25');
     await user.click(screen.getByRole('tab', { name: 'Query' }));
-    for (const mode of ['single', 'compare']) {
-      await user.click(screen.getByRole('button', { name: mode === 'single' ? 'Single term' : 'Compare terms' }));
-      const input = screen.getByRole('textbox', { name: mode === 'single' ? 'Keyword' : /Keywords/ });
-      await user.clear(input); await user.type(input, mode === 'single' ? 'ChatGPT' : 'ChatGPT, Gemini');
-      for (const [index, time] of times.entries()) {
-        await user.click(screen.getByRole('combobox', { name: 'Time range' }));
-        const options = screen.getAllByRole('option');
-        expect(options).toHaveLength(9); await user.click(options[index]!);
-        await user.click(screen.getByRole('button', { name: 'Query trends' }));
-        await waitFor(() => expect(h.rows()[0]?.time).toBe(time));
-        await waitFor(() => expect((screen.getByRole('button', { name: 'Query trends' }) as HTMLButtonElement).disabled).toBe(false));
-      }
-    }
-    expect(h.queries()).toHaveLength(18);
+    await user.click(screen.getByRole('button', { name: mode === 'single' ? 'Single term' : 'Compare terms' }));
+    const input = screen.getByRole('textbox', { name: mode === 'single' ? 'Keyword' : /Keywords/ });
+    await user.clear(input); await user.type(input, mode === 'single' ? 'ChatGPT' : 'ChatGPT, Gemini');
+    await user.click(screen.getByRole('combobox', { name: 'Time range' }));
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(9); await user.click(options[index]!);
+    const selectedLabel = (screen.getByRole('combobox', { name: 'Time range' }) as HTMLInputElement).value;
+    await user.click(screen.getByRole('button', { name: 'Query trends' }));
+    await waitFor(() => expect(h.rows()[0]?.time).toBe(time));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Query trends' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(h.queries()).toHaveLength(1);
     await user.click(screen.getByRole('tab', { name: /History/ }));
     const before = h.queries().length;
     await user.click(screen.getAllByRole('button', { name: 'View' })[0]!);
-    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Time range' }) as HTMLInputElement).value).toBe('All time'));
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Time range' }) as HTMLInputElement).value).toBe(selectedLabel));
     expect(h.queries()).toHaveLength(before);
     await user.click(screen.getByRole('tab', { name: 'Overview' }));
-    expect(container.querySelector('.gd-metric strong')!.textContent).toBe('18');
+    expect(container.querySelector('.gd-metric strong')!.textContent).toBe('1');
   });
   it('cancels deletion, then clears a selected result and updates totals without a query', async () => {
     const h = api(), user = userEvent.setup(), { container } = render(<Dashboard t={t} />);
