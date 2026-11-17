@@ -10,7 +10,7 @@ const CACHE_TTL_MS = 60_000;
 /** The first relay call may wait for a cold Standby start. */
 const COLD_START_TIMEOUT_MS = 120_000;
 
-export type ApifyActorErrorCode = 'no-token' | 'invalid-token' | 'network' | 'http' | 'exists';
+export type ApifyActorErrorCode = 'no-token' | 'invalid-token' | 'network' | 'http' | 'exists' | 'unsupported-source';
 export type ApifyTokenSource = 'config' | 'env';
 
 export interface ApifyActor {
@@ -262,6 +262,29 @@ export class ApifyActorClient {
     const buildId = stringOrNull(record(record(built.body).data).id);
     if (!buildId) return { ok: false, code: 'http', message: 'Apify started the build but returned no build id.' };
     return { ok: true, actorId, buildId };
+  }
+
+  /** Rebuild an owned, official main-branch deployment without replacing user source/config. */
+  async updateActor(token: string, actorId: string, signal?: AbortSignal): Promise<ApifyDeployResult> {
+    const id = actorId.trim();
+    if (!token.trim()) return { ok: false, code: 'no-token', message: 'Sign in with Apify before updating your Actor.' };
+    if (!id || id.length > 256) return { ok: false, code: 'http', message: 'Select your Actor first.' };
+    const owned = await this.listMyActors(token, { refresh: true, metadata: 'build', signal });
+    if (!owned.ok) return owned;
+    if (!owned.actors.some(actor => actor.id === id)) return { ok: false, code: 'unsupported-source', message: 'Select an Actor owned by this Apify account.' };
+    const version = await this.getJson(`${API_BASE}/acts/${encodeURIComponent(id)}/versions/0.1`, token, signal);
+    if (!version.ok) return version;
+    const source = record(record(version.body).data);
+    const official = new Set([GTFA_ACTOR_GIT_URL, `${GTFA_ACTOR_GIT_URL}.git`, `${GTFA_ACTOR_GIT_URL}#main`, `${GTFA_ACTOR_GIT_URL}.git#main`]);
+    if (source.sourceType !== 'GIT_REPO' || !official.has(String(source.gitRepoUrl))) {
+      return { ok: false, code: 'unsupported-source', message: 'This Actor uses custom or pinned source. Update it in Apify Console.' };
+    }
+    // Exactly one build POST. Never retry a possibly billable mutation.
+    const built = await this.requestJson(`${API_BASE}/acts/${encodeURIComponent(id)}/builds?version=0.1&tag=latest`, token, 'POST', undefined, signal);
+    if (!built.ok) return built;
+    this.actorsCache = undefined;
+    const buildId = stringOrNull(record(record(built.body).data).id);
+    return buildId ? { ok: true, actorId: id, buildId } : { ok: false, code: 'http', message: 'Apify returned no build id.' };
   }
 
   private standbyError(error: Extract<ApiResult, { ok: false }>): GTrendsError {

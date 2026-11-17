@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConfigPage, EN, type ConfigPageProps } from '../src/client/index.js';
+import { ConfigPage, ConnectionTestResults, EN, type ConfigPageProps } from '../src/client/index.js';
 import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
 import { regionLabel } from '../src/options.js';
 
@@ -627,6 +627,32 @@ describe('baseline editor', () => {
 });
 
 describe('Actor creation and selection', () => {
+  it.each([null, { version: '0.2.22', baselineCatalogRevision: '2026-11-16' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-16' }])('separates actual runtime version from successful keyword checks: %j', runtime => {
+    const base = diagnostic();
+    render(<ConnectionTestResults result={{ ...base, egress: 'actor-own', network: { ...base.network, egress: 'actor-own' },
+      data: { ...base.data, keywords: base.data.keywords.map(item => ({ ...item, status: 'ok' as const })) },
+      actorRuntime: runtime, pluginVersion: '0.2.23' }} t={t} locale="en" />);
+    expect(screen.getByText(t('diagnosticPassed'))).toBeTruthy();
+    expect(screen.getByText(runtime === null ? t('actorRuntimeUnknown') : runtime.version === '0.2.23'
+      ? 'Actor v0.2.23 · Plugin v0.2.23' : 'Actor v0.2.22 · Plugin v0.2.23 — versions differ. Update the older component.')).toBeTruthy();
+  });
+  it('updates the unsaved selected Actor and watches the returned build without saving configuration', async () => {
+    const backend = host({ egress: 'actor-own', apifyActor: 'actor-one' });
+    const network = api(); const user = userEvent.setup();
+    network.setOAuth({ available: true, connected: true, pending: false });
+    const original = network.fetch.getMockImplementation()!;
+    network.fetch.mockImplementation((url, init) => String(url) === 'api/gtfa.apify-update'
+      ? Promise.resolve(Response.json({ ok: true, actorId: 'actor-two', buildId: 'updating-build' })) : original(url, init));
+    render(<ConfigPage ctx={backend.ctx} t={t} />);
+    await user.click(await screen.findByRole('radio', { name: /actor-two/ }));
+    await user.click(button('actorUpdate'));
+    expect(await screen.findByText(t('actorUpdatingTitle'))).toBeTruthy();
+    const call = network.fetch.mock.calls.find(([url]) => String(url) === 'api/gtfa.apify-update')!;
+    expect(JSON.parse(String(call[1]!.body))).toEqual({ apifyActor: 'actor-two' });
+    expect(button('save').disabled).toBe(true);
+    expect(backend.saved().apifyActor).toBe('actor-one');
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
   function deployment() {
     const backend = host({ egress: 'actor-own', apifyActor: 'previous-account-actor' });
     const network = api();

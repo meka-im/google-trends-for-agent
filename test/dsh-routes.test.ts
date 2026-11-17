@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { register } from '../src/dsh.js';
 import {
-  APIFY_ACTORS_PATH, APIFY_DEPLOY_PATH, APIFY_USAGE_PATH, TEST_CONNECTION_PATH, registerRoutes, scrubSecrets, testConnection,
+  APIFY_ACTORS_PATH, APIFY_DEPLOY_PATH, APIFY_UPDATE_PATH, APIFY_USAGE_PATH, TEST_CONNECTION_PATH, registerRoutes, scrubSecrets, testConnection,
   type RouteSettings,
 } from '../src/dsh-routes.js';
 import { resolveApifyApiToken } from '../src/apify-actor.js';
@@ -27,6 +27,7 @@ const ACTS_URL = 'https://api.apify.com/v2/acts?my=1&limit=1000';
 const ALL_ROUTES = [
   APIFY_ACTORS_PATH,
   APIFY_DEPLOY_PATH,
+  APIFY_UPDATE_PATH,
   APIFY_OAUTH_STATUS_PATH,
   APIFY_OAUTH_START_PATH,
   APIFY_OAUTH_CANCEL_PATH,
@@ -151,11 +152,34 @@ afterEach(() => {
 });
 
 describe('dsh host routes', () => {
+  it('rejects cross-site Actor build mutations before resolving credentials or contacting Apify', async () => {
+    const fetchMock = vi.fn();
+    const harness = routeHarness(() => settings(), { fetch: fetchMock as typeof fetch });
+    harness.connect();
+    for (const path of [APIFY_DEPLOY_PATH, APIFY_UPDATE_PATH]) {
+      const response = await harness.routes.get(path)!.fetch(new Request(`https://dsh.test${path}`, {
+        method: 'POST', headers: { 'sec-fetch-site': 'cross-site' }, body: '{}',
+      }));
+      expect(response.status).toBe(403);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid update bodies before any billable work', async () => {
+    const fetchMock = vi.fn();
+    const harness = routeHarness(() => settings(), { fetch: fetchMock as typeof fetch });
+    harness.connect();
+    for (const body of ['invalid-json', '{"apifyActor":null}', '{"apifyActor":"mine","unexpected":true}']) {
+      const response = await harness.routes.get(APIFY_UPDATE_PATH)!.fetch(new Request(`https://dsh.test${APIFY_UPDATE_PATH}`, { method: 'POST', body }));
+      expect(response.status).toBe(400);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it('registers all exact routes only after connection is injected', () => {
     const harness = routeHarness(() => settings());
     expect(harness.routes.size).toBe(0);
     harness.connect();
-    expect([...harness.routes.keys()].sort()).toEqual([APIFY_ACTORS_PATH, APIFY_DEPLOY_PATH, APIFY_USAGE_PATH, TEST_CONNECTION_PATH]);
+    expect([...harness.routes.keys()].sort()).toEqual([APIFY_ACTORS_PATH, APIFY_DEPLOY_PATH, APIFY_UPDATE_PATH, APIFY_USAGE_PATH, TEST_CONNECTION_PATH]);
     expect(harness.routes.get(APIFY_USAGE_PATH)!.methods).toEqual(['GET']);
     expect(harness.routes.get(APIFY_ACTORS_PATH)!.methods).toEqual(['GET']);
     expect(harness.routes.get(APIFY_DEPLOY_PATH)!.methods).toEqual(['POST']);

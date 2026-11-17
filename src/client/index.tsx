@@ -23,7 +23,8 @@ import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
 import { BaselineCatalog } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
-import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL } from '../baseline-catalog.js';
+import { parseActorRuntime } from '../actor-runtime.js';
+import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -40,6 +41,7 @@ const ENTRY = 'gtfa';
 const USAGE_URL = 'api/gtfa.apify-usage';
 const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
+const UPDATE_URL = 'api/gtfa.apify-update';
 const TEST_URL = 'api/gtfa.test-connection';
 export const APIFY_OAUTH_STATUS_URL = 'api/gtfa.apify-oauth';
 export const APIFY_OAUTH_START_URL = 'api/gtfa.apify-oauth-start';
@@ -250,6 +252,16 @@ export interface DeployBuildResolution {
 }
 
 export const EN: Record<string, string> = {
+  actorUpdate: 'Update selected Actor',
+  actorUpdatingTitle: 'Updating your Actor',
+  actorUpdatingHint: 'Rebuilding official main. Build usage applies to your Apify account.',
+  actorUpdateSource: 'Custom or pinned source: update this Actor in Apify Console.',
+  actorBuildWatchExpired: 'Build status is taking longer than expected. Check Builds in Apify Console, then refresh.',
+  actorRuntimeAligned: 'Actor v{actor} · Plugin v{plugin}',
+  actorRuntimeDifferent: 'Actor v{actor} · Plugin v{plugin} — versions differ. Update the older component.',
+  actorRuntimeUnknown: 'Actor version unverified. Update the Actor and run the check again.',
+  actorRuntimeCatalogDifferent: 'Actor calibration catalog differs. Update the Actor and run the check again.',
+  actorUpdateStep: 'Prepare update',
   recommended: 'Recommended',
   routeLocalDescription: 'Use this machine · No account needed',
   routePublicDescription: 'Apify network · Nothing to deploy',
@@ -523,6 +535,16 @@ export const EN: Record<string, string> = {
 };
 
 export const ZH: Record<string, string> = {
+  actorUpdate: '更新选中的 Actor',
+  actorUpdatingTitle: '正在更新你的 Actor',
+  actorUpdatingHint: '重新构建官方 main，构建用量计入你的 Apify 账号。',
+  actorUpdateSource: '此 Actor 使用自定义或固定版本源码，请在 Apify Console 更新。',
+  actorBuildWatchExpired: '构建状态等待较久，请在 Apify Console 的 Builds 中查看，再刷新。',
+  actorRuntimeAligned: 'Actor v{actor} · 插件 v{plugin}',
+  actorRuntimeDifferent: 'Actor v{actor} · 插件 v{plugin}，版本不同，请更新较旧的一端。',
+  actorRuntimeUnknown: '尚未核验 Actor 版本，请更新 Actor 后重新测试。',
+  actorRuntimeCatalogDifferent: 'Actor 的校准基准版本不同，请更新后重新测试。',
+  actorUpdateStep: '准备更新',
   recommended: '推荐',
   routeLocalDescription: '使用本机网络 · 无需账号',
   routePublicDescription: '使用 Apify 网络 · 无需部署',
@@ -1297,6 +1319,11 @@ export function ConnectionTestResults({ result, t, locale, testing = false }: {
     </table>
     {!testing && line && !line.ok && !cancelled ? <p className="gtfa-diagnostic-note"><Icon name="alert" size={14} /><span>{line.text}</span></p> : null}
     {cancelled ? <span className="gtfa-sr-only">{t('testCancelled')}</span> : null}
+    {!testing && result?.egress !== 'local' && result?.data ? <p className="gtfa-runtime-note">
+      <Icon name={result.actorRuntime && result.actorRuntime.version === result.pluginVersion && result.actorRuntime.baselineCatalogRevision === BASELINE_CATALOG_REVISION ? 'check' : 'alert'} size={13} />
+      {result.actorRuntime && result.actorRuntime.baselineCatalogRevision !== BASELINE_CATALOG_REVISION ? t('actorRuntimeCatalogDifferent') : result.actorRuntime && result.pluginVersion ? template(t(result.actorRuntime.version === result.pluginVersion ? 'actorRuntimeAligned' : 'actorRuntimeDifferent'),
+        { actor: result.actorRuntime.version, plugin: result.pluginVersion }) : t('actorRuntimeUnknown')}
+    </p> : null}
     <div className="gtfa-diagnostic-footer">
       <span><Icon name="clock" size={13} />{t('diagnosticDuration')} <strong>{testing || !result ? '—' : duration(result.latencyMs)}</strong></span>
       {result?.checkedAt && !testing ? <time dateTime={result.checkedAt}>{new Date(result.checkedAt).toLocaleString(locale)}</time> : <span>{t(testing ? 'diagnosticFresh' : 'diagnosticNotComplete')}</span>}
@@ -1399,14 +1426,14 @@ export async function loadApifyActors(refresh = false, signal?: AbortSignal): Pr
 }
 
 /** Deploy this package's Actor into the user's account. */
-export async function deployApifyActor(signal?: AbortSignal): Promise<DeployActorView> {
+export async function deployApifyActor(signal?: AbortSignal, update?: { actorId: string; apifyToken?: string }): Promise<DeployActorView> {
   try {
-    const response = await fetch(DEPLOY_URL, {
+    const response = await fetch(update ? UPDATE_URL : DEPLOY_URL, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify(update ? { apifyActor: update.actorId, ...(update.apifyToken !== undefined ? { apifyToken: update.apifyToken } : {}) } : {}),
       cache: 'no-store',
-      ...(signal ? { signal } : {}),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
     });
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
@@ -1467,6 +1494,8 @@ export async function runConnectionTest(settings: {
         ...(typeof row.code === 'string' ? { code: row.code as TestConnectionView['code'] } : {}),
         ...(typeof row.message === 'string' ? { message: row.message } : {}),
         ...(typeof row.actorId === 'string' ? { actorId: row.actorId } : {}),
+        ...('actorRuntime' in row ? { actorRuntime: parseActorRuntime(row.actorRuntime) } : {}),
+        ...(typeof row.pluginVersion === 'string' && /^\d+\.\d+\.\d+$/.test(row.pluginVersion) ? { pluginVersion: row.pluginVersion } : {}),
       };
       if (row.ok && row.network === undefined && row.data === undefined) return { ...basic, ok: false, code: 'host-restart-required' };
       if ((row.network === undefined) !== (row.data === undefined)) return { ...basic, ok: false, code: 'protocol' };
@@ -1694,11 +1723,13 @@ function actorBuildState(status: string | null, buildId: string | null): { label
 
 /** Keep deployment progress and available Actor choices in one consistent panel. */
 export function ActorSelection({ state, value, t, disabled, pending = false, refreshing = false,
-  deployment = null, notice, onChange, onRefresh, onManual, onDeploy }: {
+  deployment = null, updating = false, notice, onChange, onRefresh, onManual, onDeploy, onUpdate }: {
   state: ApifyActorsView; value: string; t: Translate; disabled: boolean; pending?: boolean;
   refreshing?: boolean; deployment?: 'creating' | 'building' | null; notice?: string | null;
+  updating?: boolean;
   onChange: (value: string) => void; onRefresh: () => void; onManual: () => void;
   onDeploy: () => void;
+  onUpdate?: () => void;
 }) {
   const loading = state.status === 'idle' || state.status === 'loading';
   const needsLogin = state.status === 'error' && (state.code === 'no-token' || state.code === 'invalid-token');
@@ -1725,10 +1756,10 @@ export function ActorSelection({ state, value, t, disabled, pending = false, ref
     </div>
     {deployment ? <div className="gtfa-deployment-card" role="status">
       <div className="gtfa-deployment-intro"><span className="gtfa-deployment-icon gtfa-spin"><Icon name="refresh" size={20} /></span>
-        <div><strong>{t(deployment === 'creating' ? 'actorCreatingTitle' : 'actorBuildingTitle')}</strong>
-          <p>{t(deployment === 'creating' ? 'actorCreatingHint' : 'actorBuildingHint')}</p></div></div>
+        <div><strong>{t(updating ? 'actorUpdatingTitle' : deployment === 'creating' ? 'actorCreatingTitle' : 'actorBuildingTitle')}</strong>
+          <p>{t(updating ? 'actorUpdatingHint' : deployment === 'creating' ? 'actorCreatingHint' : 'actorBuildingHint')}</p></div></div>
       <ol className="gtfa-deployment-steps">
-        {['actorCreateStep', 'actorBuildStep', 'actorReadyStep'].map((step, index) => {
+        {[updating ? 'actorUpdateStep' : 'actorCreateStep', 'actorBuildStep', 'actorReadyStep'].map((step, index) => {
           const active = index === (deployment === 'creating' ? 0 : 1);
           const done = deployment === 'building' && index === 0;
           return <li key={step} className={done ? 'done' : active ? 'active' : ''} aria-current={active ? 'step' : undefined}>
@@ -1752,7 +1783,10 @@ export function ActorSelection({ state, value, t, disabled, pending = false, ref
           </button>;
         })}
       </div>
-      <p className="gtfa-picker-meta">{t('actorSelectionHint')}</p>
+      <div className="gtfa-actor-update-row"><p className="gtfa-picker-meta">{t('actorSelectionHint')}</p>
+        {selected && onUpdate ? <button type="button" className="gtfa-button gtfa-quiet-button" style={styles.buttonSmall}
+          disabled={disabled || refreshing || ['RUNNING', 'READY'].includes(selected.lastBuildStatus ?? '')} onClick={onUpdate}>
+          <Icon name="refresh" size={12} />{t('actorUpdate')}</button> : null}</div>
     </> : <div className={`gtfa-picker-state${needsLogin ? ' login' : ''}`} role={state.status === 'error' && !needsLogin ? 'alert' : 'status'}>
       <span className="gtfa-picker-state-icon"><Icon name={loading ? 'refresh' : needsLogin ? 'plug' : state.status === 'error' ? 'alert' : 'server'} size={19} /></span>
       <div className="gtfa-picker-state-copy"><strong>{loading ? t('actorLoading') : needsLogin ? t(pending ? 'actorLoginPending' : state.code === 'invalid-token' ? 'oauthReauthRequired' : 'actorLoginRequired') : state.status === 'error' ? actorErrorText(state, t) : t('actorEmpty')}</strong>
@@ -2007,6 +2041,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [actorsRequest, setActorsRequest] = useState({ id: 0, refresh: false });
   const [actorsRefreshing, setActorsRefreshing] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [updatingActor, setUpdatingActor] = useState(false);
   const [building, setBuilding] = useState(false);
   const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
@@ -2041,6 +2076,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     deployAbort.current?.abort();
     deployAbort.current = null;
     setDeploying(false);
+    setUpdatingActor(false);
     setBuilding(false);
     setDeployTarget(null);
     setDeployNotice(null);
@@ -2181,7 +2217,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   useEffect(() => {
     if (!building || !deployTarget) return;
     const timer = setInterval(() => setActorsRequest(current => ({ id: current.id + 1, refresh: true })), 15_000);
-    return () => clearInterval(timer);
+    const deadline = setTimeout(() => { setBuilding(false); setDeployNotice(t('actorBuildWatchExpired')); }, 10 * 60_000);
+    return () => { clearInterval(timer); clearTimeout(deadline); };
   }, [building, deployTarget]);
 
   useEffect(() => {
@@ -2324,7 +2361,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     }
   };
 
-  const deploy = async () => {
+  const deploy = async (update = false) => {
     if (deployAbort.current || building) return;
     const controller = new AbortController();
     const generation = ++deployGeneration.current;
@@ -2334,10 +2371,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     setTesting(false);
     setTestResult(null);
     setDeploying(true);
+    setUpdatingActor(update);
     setDeployTarget(null);
     setDeployNotice(null);
     try {
-      const result = await deployApifyActor(controller.signal);
+      const result = await deployApifyActor(controller.signal, update ? { actorId: draft.actor,
+        ...(draft.token.trim() || draft.clearToken ? { apifyToken: draft.clearToken ? '' : draft.token.trim() } : {}) } : undefined);
       if (controller.signal.aborted || generation !== deployGeneration.current) return;
       if (result.ok) {
         setDeployTarget({ actorId: result.actorId, buildId: result.buildId });
@@ -2350,6 +2389,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         setDeployNotice(t('testNoToken'));
       } else if (result.code === 'invalid-token') {
         setDeployNotice(t('testInvalidToken'));
+      } else if (result.code === 'unsupported-source') {
+        setDeployNotice(t('actorUpdateSource'));
       } else {
         setDeployNotice(t('deployFailed'));
       }
@@ -2482,9 +2523,9 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
           {ownEgress ? <ActorSelection state={actors} value={draft.actor} t={t} disabled={!editable || oauthBusy !== null}
             pending={oauth.status === 'ready' && oauth.data.pending}
-            refreshing={actorsRefreshing} deployment={deploying ? 'creating' : building ? 'building' : null} notice={deployNotice}
+            refreshing={actorsRefreshing} deployment={deploying ? 'creating' : building ? 'building' : null} updating={updatingActor} notice={deployNotice}
             onChange={value => edit({ actor: value })} onRefresh={() => requestActors(true)}
-            onManual={openManualToken} onDeploy={() => { void deploy(); }} /> : null}
+            onManual={openManualToken} onDeploy={() => { void deploy(); }} onUpdate={() => { void deploy(true); }} /> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}
         </> : <div className="gtfa-connection-top">
           <span className="gtfa-status-icon neutral"><Icon name="laptop" size={18} /></span>

@@ -18,6 +18,8 @@ import {
 import { abortError, createDefaultTransport, isChallengeResponse, raceAbort, type Transport } from './transport.js';
 import { GTFA_PUBLIC_ACTOR_ID, type EgressMode } from './options.js';
 import { GTrendsError } from './core.js';
+import { VERSION } from './version.js';
+import type { ActorRuntime } from './actor-runtime.js';
 import { createTools } from './tools.js';
 import {
   CONNECTION_FILTER, CONNECTION_KEYWORDS, CONNECTION_PROBE_PROTOCOL, connectionErrorCode,
@@ -27,6 +29,7 @@ import {
 export const APIFY_USAGE_PATH = '/api/gtfa.apify-usage';
 export const APIFY_ACTORS_PATH = '/api/gtfa.apify-actors';
 export const APIFY_DEPLOY_PATH = '/api/gtfa.apify-deploy';
+export const APIFY_UPDATE_PATH = '/api/gtfa.apify-update';
 export const TEST_CONNECTION_PATH = '/api/gtfa.test-connection';
 
 const TRENDS_URL = 'https://trends.google.com/trends/';
@@ -288,6 +291,7 @@ export async function diagnoseConnection(options: Parameters<typeof testConnecti
   }
   if (!network.ok) return { ...network, network, data: emptyDataCheck(network.code ?? 'network', 0, true), checkedAt: new Date().toISOString() };
   const dataStarted = clock();
+  let actorRuntime: ActorRuntime | null | undefined;
   let data;
   try {
     const input = { keywords: [...CONNECTION_KEYWORDS], ...CONNECTION_FILTER, timeoutMs: 30_000 };
@@ -300,9 +304,11 @@ export async function diagnoseConnection(options: Parameters<typeof testConnecti
       const resolved = options.oauth ? await raceAbort(options.oauth.resolveToken(options.apifyToken), signal) : resolveApifyApiToken(options.apifyToken);
       if (!resolved.token) return { ...network, ok: false, code: 'invalid-token', network,
         data: emptyDataCheck('invalid-token'), latencyMs: elapsed(clock, startedAt), checkedAt: new Date().toISOString() };
-      result = (await new OnDemandActorClient(options.fetch ? { fetch: options.fetch } : {}).call(resolved.token, network.actorId!, {
+      const output = await new OnDemandActorClient(options.fetch ? { fetch: options.fetch } : {}).call(resolved.token, network.actorId!, {
         protocol: CONNECTION_PROBE_PROTOCOL, name: 'trends_compare', input, settings: { cache: false, charts: false },
-      }, signal)).result;
+      }, signal);
+      result = output.result;
+      actorRuntime = output.runtime;
     }
     data = summarizeConnectionProbe(result, elapsed(clock, dataStarted));
   } catch (error) {
@@ -312,6 +318,7 @@ export async function diagnoseConnection(options: Parameters<typeof testConnecti
     data = emptyDataCheck(code, elapsed(clock, dataStarted));
   }
   return { ...network, ok: data.ok, ...(data.code ? { code: data.code } : {}), latencyMs: elapsed(clock, startedAt),
+    ...(actorRuntime !== undefined ? { actorRuntime, pluginVersion: VERSION } : {}),
     network, data, checkedAt: new Date().toISOString() };
 }
 
@@ -385,7 +392,10 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
     path: APIFY_DEPLOY_PATH,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: async () => {
+    fetch: async request => {
+      if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+      const rejected = rejectCrossSite(request);
+      if (rejected) return rejected;
       if (deploying) {
         return json({ ok: false, code: 'busy', message: 'A deploy is already running. Try again in a moment.' }, 429);
       }
@@ -397,6 +407,28 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       } finally {
         deploying = false;
       }
+    },
+  }));
+
+  disposers.push(service.fetch.register({
+    path: APIFY_UPDATE_PATH,
+    methods: ['POST'],
+    requestBody: 'buffered',
+    fetch: async request => {
+      if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+      const rejected = rejectCrossSite(request);
+      if (rejected) return rejected;
+      const input = await readTestSettings(request, getSettings());
+      if (!input || !input.settings.apifyActor || !/^[a-zA-Z0-9_~./-]{1,256}$/.test(input.settings.apifyActor)) {
+        return json({ ok: false, code: 'http', message: 'Select your Actor first.' }, 400);
+      }
+      if (deploying) return json({ ok: false, code: 'busy', message: 'An Actor build is already starting.' }, 429);
+      deploying = true;
+      try {
+        const resolved = await resolveRouteToken(input.settings.apifyToken);
+        if (!resolved.token) return json(tokenFailure(resolved, 'update the Actor'));
+        return json(await actors.updateActor(resolved.token, input.settings.apifyActor, request.signal));
+      } finally { deploying = false; }
     },
   }));
 

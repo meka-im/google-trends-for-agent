@@ -38,6 +38,8 @@
 
 Fork 仓库，在 Apify Console 用 Link Git repository 构建，或运行 `apify push`。保持 Server / Standby 关闭。dsh 中选择“我自己的 Actor”，登录 Apify，再选择已构建的 Actor。
 
+已从官方 main 部署的 Actor，可在 dsh 点击**更新选中的 Actor**。构建完成后，**测试连接**分别显示关键词取数与 Actor/插件的实际版本。自定义或固定版本源码请在 Apify Console 更新。详见[发布与验收清单](docs/releasing.md)。
+
 ### 远程 MCP
 
 仅支持远程 MCP 的客户端使用 Apify 官方托管入口，在客户端内完成 OAuth 登录：
