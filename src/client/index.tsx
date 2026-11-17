@@ -21,6 +21,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
+import { BaselineCatalog } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL } from '../baseline-catalog.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
@@ -462,8 +463,14 @@ export const EN: Record<string, string> = {
   cache: 'Reuse saved snapshots',
   cacheHint: 'Reuse saved results for up to 6 hours to avoid repeated requests.',
   baselines: 'Anchors & baselines',
-  baselinesDescription: 'Set daily searches for each anchor to calibrate traffic estimates.',
+  baselinesDescription: 'Custom rows override the same term and region; other built-ins still apply.',
   baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
+  baselineBuiltin: 'Built-in baselines',
+  baselineBuiltinHint: 'Used automatically by query region. No need to add each one.',
+  baselineAllRegions: 'All regions',
+  baselineBrowseGeo: 'Browse baseline region',
+  baselineDailyEstimate: 'Searches/day (estimate)',
+  baselineCustomRows: 'Custom overrides',
   overrideBaselines: 'Custom baselines',
   anchorTerm: 'Anchor term',
   newAnchorTerm: 'New anchor term',
@@ -729,8 +736,14 @@ export const ZH: Record<string, string> = {
   cache: '复用近期快照',
   cacheHint: '6 小时内复用结果，减少重复请求。',
   baselines: '锚点与基线',
-  baselinesDescription: '设置锚点词的每日搜索量，用于估算流量。',
+  baselinesDescription: '自定义项覆盖相同词和地区，其余内置基准继续使用。',
   baselinesHint: '当前使用内置地区基线，开启后可自定义。',
+  baselineBuiltin: '内置基准',
+  baselineBuiltinHint: '按查询地区自动使用，无需逐个添加。',
+  baselineAllRegions: '全部地区',
+  baselineBrowseGeo: '查看基准地区',
+  baselineDailyEstimate: '每日搜索量（估算）',
+  baselineCustomRows: '自定义覆盖',
   overrideBaselines: '自定义基线',
   anchorTerm: '锚点词',
   newAnchorTerm: '新锚点词',
@@ -2534,8 +2547,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
             <Switch label={t('overrideBaselines')} checked={draft.baselineOverride} disabled={!editable}
               onChange={checked => edit(setBaselineOverride(draft, checked))} /></div>
         </div>
+        <BaselineCatalog t={t} locale={intlLocale} />
         {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
         {draft.baselineOverride ? <>
+          <h4 className="gtfa-custom-baseline-title">{t('baselineCustomRows')}</h4>
           <div className="gtfa-baseline-editor">
             <div className="gtfa-anchor-head gtfa-anchor-grid" aria-hidden="true">
               <span>{t('anchorTerm')}</span><span>{t('anchorGeo')}</span><span>{t('anchorDaily')}</span><span>{t('anchorTolerance')}</span><span />

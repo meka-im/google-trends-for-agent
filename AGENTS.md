@@ -25,7 +25,7 @@ npm install -g "$(npm pack | tail -1)"
 
 The clone tracks the repository's default `main` branch. Add your own immutable commit pin only when a review process requires one.
 
-The packed tarball bundles the audited `apify` dependency subtree from the root lock. Scoped npm `overrides` are not inherited when this package is installed as a dependency, so the bundle—not the root override alone—protects consumer installs from re-resolving older Apify transitives. The root explicitly overrides `@crawlee/core` → `minimatch` to `^11.0.1` (lock: `11.0.8`), outside Crawlee's declared `^9` range; consumer `npm ls` may therefore show a range warning even though the override is intentional. Audits cover both the root tree and a clean consumer install of the packed artifact. The bundled tree materially increases package size.
+The packed tarball bundles the audited `apify` dependency subtree from the root lock. Scoped npm `overrides` are not inherited when this package is installed as a dependency, so the bundle—not the root override alone—protects consumer installs from re-resolving older Apify transitives. The root pins `@crawlee/core` → `minimatch` to `11.0.8`, outside Crawlee's declared `^9` range; the exact override keeps clean installs aligned with the audited lock when newer releases appear. Consumer `npm ls` may show a range warning even though the override is intentional. Audits cover both the root tree and a clean consumer install of the packed artifact. The bundled tree materially increases package size.
 
 ## MCP client config
 
