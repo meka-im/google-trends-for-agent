@@ -153,6 +153,33 @@ afterEach(() => {
 });
 
 describe('dsh host routes', () => {
+  it('accepts authenticated browser origins through the dsh HTTP bridge while still rejecting cross-site sources', async () => {
+    const cancel = vi.fn(async () => ({ available: true, connected: false, pending: false }));
+    const oauth = { cancel } as unknown as ApifyOAuthManager;
+    const harness = routeHarness(() => settings(), { oauth }); harness.connect();
+    const route = harness.routes.get(APIFY_OAUTH_CANCEL_PATH)!;
+    for (const [origin, host] of [['http://127.0.0.1:18823', '127.0.0.1:18823'], ['https://harness.example', 'harness.example:443']]) {
+      const response = await route.fetch(new Request('http://dsh.internal/api/gtfa.apify-oauth-cancel', {
+        method: 'POST', headers: { origin, host, 'sec-fetch-site': 'same-origin' }, body: '{}',
+      }));
+      expect(response.status).toBe(200);
+    }
+    expect(cancel).toHaveBeenCalledTimes(2);
+    for (const headers of [
+      { origin: 'https://evil.test', host: '127.0.0.1:18823' },
+      { origin: 'http://127.0.0.1:18824', host: '127.0.0.1:18823' },
+      { origin: 'null', host: '127.0.0.1:18823' },
+      { origin: 'https://harness.example', host: 'harness.example@evil.test' },
+      { origin: 'https://harness.example', host: 'harness.example/path' },
+      { origin: 'https://harness.example' },
+      { origin: 'http://127.0.0.1:18823', host: '127.0.0.1:18823', 'sec-fetch-site': 'cross-site' },
+    ]) {
+      expect((await route.fetch(new Request('http://dsh.internal/api/gtfa.apify-oauth-cancel', {
+        method: 'POST', headers: headers as Record<string, string>, body: '{}',
+      }))).status).toBe(403);
+    }
+    expect(cancel).toHaveBeenCalledTimes(2);
+  });
   it('rejects cross-site Actor build mutations before resolving credentials or contacting Apify', async () => {
     const fetchMock = vi.fn();
     const harness = routeHarness(() => settings(), { fetch: fetchMock as typeof fetch });
