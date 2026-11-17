@@ -4,6 +4,10 @@
 
 Initial release in preparation.
 
+- Unify the dsh query form for 1–5 terms, retain its draft/result across panel navigation, and show actual Actor progress with elapsed time.
+- Estimate multi-term traffic from one shared term-and-anchor batch. Five selected terms remain one batch; missing anchor space or weak baselines produce explicit null estimates.
+- Fix clipped dashboard select labels and show input errors beside the field.
+
 - Add a native Google Trends sidebar panel with Overview, Query and History tabs. Single-term and comparison queries share all nine supported time ranges.
 - Retain up to 1,000 local manual and Agent calls, including failures. View, filter and clear saved records without starting an Actor; statistics follow retained records.
 

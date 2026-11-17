@@ -10,6 +10,7 @@ import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
 import type { GtfaTool, ToolLiveSettings } from './tools.js';
 import { parseActorRuntime } from './actor-runtime.js';
 import { VERSION } from './version.js';
+import type { QueryPhase } from './query-progress.js';
 
 const API = 'https://api.apify.com/v2';
 export const ACTOR_RUN_TIMEOUT_SECS = 300;
@@ -61,18 +62,20 @@ export class OnDemandActorClient {
     if (!response.ok) throw new GTrendsError('NETWORK_ERROR', `Apify API returned HTTP ${response.status}.`);
   }
 
-  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal) {
+  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void) {
     throwIfAborted(callerSignal);
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
     const deadline = AbortSignal.timeout(this.options.deadlineMs ?? 330_000);
     const signal = callerSignal ? AbortSignal.any([callerSignal, deadline]) : deadline;
     let runId: string | undefined, terminal = false;
     try {
+      progress?.('starting');
       // Never retry this POST: an ambiguous response must not duplicate paid work.
       let run = row((await this.request(`/acts/${encodeURIComponent(actorId)}/runs?timeout=${ACTOR_RUN_TIMEOUT_SECS}&memory=${ACTOR_RUN_MEMORY_MB}&waitForFinish=0`, token, signal, 'POST', { toolRequest: input })).data);
       if (typeof run.id !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no run id.');
       runId = run.id;
       while (ACTIVE.has(String(run.status))) {
+        progress?.(run.status === 'READY' ? 'queued' : 'running');
         await new Promise<void>((done, reject) => {
           const onAbort = () => { clearTimeout(timer); reject(abortError(signal)); };
           const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); done(); }, this.options.pollIntervalMs ?? 1500);
@@ -85,6 +88,7 @@ export class OnDemandActorClient {
       terminal = true;
       if (run.status !== 'SUCCEEDED') throw new GTrendsError(run.status === 'TIMED-OUT' ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', `Apify run ended with ${String(run.status)}. Update the Actor if it does not support on-demand tool requests.`);
       if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
+      progress?.('reading');
       const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
       if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
       return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId,
@@ -107,7 +111,7 @@ export class OnDemandActorClient {
 /** Local result reuse avoids starting an Actor at all on a snapshot cache hit. */
 export async function callActorTool(client: OnDemandActorClient, options: {
   token: string; actorId: string; name: GtfaTool['name']; input: Record<string, unknown>;
-  settings: ToolLiveSettings; signal?: AbortSignal;
+  settings: ToolLiveSettings; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
 }) {
   throwIfAborted(options.signal);
   const { input, settings, name } = options;
@@ -128,6 +132,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
       const envelope = row(cached.result), meta = row(envelope.meta);
       const age = Date.now() - Date.parse(String(meta.fetchedAt));
       if (age >= 0 && age < 360 * 60_000 && ['ok', 'no_data'].includes(String(envelope.status)) && !envelope.error) {
+        options.progress?.('cache');
         result = { ...envelope, meta: { ...meta, cached: true, ageMin: Math.round(age / 6000) / 10 } };
       }
     } catch { /* A missing or damaged local cache is fetched again. */ }
@@ -146,7 +151,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
     const output = await client.call(options.token, options.actorId, {
       protocol: ACTOR_REQUEST_PROTOCOL, name, input: name === 'trends_snapshot' ? { ...input, svg: true } : input,
       settings: cloudSettings, history: history.slice(0, 12),
-    }, options.signal);
+    }, options.signal, options.progress);
     throwIfAborted(options.signal);
     result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime,
       ...(output.usageUsd !== undefined ? { actorUsageUsd: output.usageUsd } : {}) } };

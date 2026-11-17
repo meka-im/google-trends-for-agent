@@ -7,6 +7,7 @@ import { register } from '../src/dsh.js';
 import { QueryHistoryStore } from '../src/query-history.js';
 import { TIME_RANGES } from '../src/core.js';
 import type { GtfaTool } from '../src/tools.js';
+import { dashboardRoute } from '../src/dashboard-routes.js';
 
 const directories: string[] = [];
 afterEach(async () => { for (const path of directories.splice(0)) await rm(path, { recursive: true, force: true }); });
@@ -14,13 +15,24 @@ type Route = { fetch(request: Request): Promise<Response> };
 async function host(blocked = false) {
   const directory = await mkdtemp(join(tmpdir(), 'gtfa-dashboard-')); directories.push(directory);
   const fixture = async (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+  let keywords: string[] = [];
   const transport = vi.fn(async (request: { url: string; method?: string }) => {
     if (blocked) return { status: 429, headers: {}, body: '' };
     const path = new URL(request.url).pathname;
     let body = request.method === 'HEAD' ? '' : path.endsWith('/explore') ? await fixture('explore-multi.txt') : path.endsWith('/multiline') ? await fixture('multiline-multi.txt') : await fixture('relatedsearches-single.txt');
     if (path.endsWith('/explore')) {
       const input = JSON.parse(new URL(request.url).searchParams.get('req')!);
-      body = body.replaceAll('"chatgpt"', JSON.stringify(input.comparisonItem[0].keyword)).replaceAll('"claude"', JSON.stringify(input.comparisonItem[1].keyword));
+      keywords = input.comparisonItem.map((item: { keyword: string }) => item.keyword);
+      const document = JSON.parse(body.replace(/^\)\]}'[,]?\s*/, ''));
+      const widget = document.widgets.find((widget: { id: string }) => widget.id === 'TIMESERIES');
+      widget.request.comparisonItem = keywords.map(keyword => ({ ...widget.request.comparisonItem[0], complexKeywordsRestriction: { keyword: [{ type: 'BROAD', value: keyword }] } }));
+      body = ")]}'\n" + JSON.stringify(document);
+    }
+    if (path.endsWith('/multiline')) {
+      const document = JSON.parse(body.replace(/^\)\]}'[,]?\s*/, ''));
+      document.default.timelineData.forEach((point: Record<string, unknown>) => { point.value = keywords.map((_, i) => 80 - i * 15); point.formattedValue = keywords.map((_, i) => String(80 - i * 15)); point.hasData = keywords.map(() => true); });
+      if (document.default.averages) document.default.averages = keywords.map((_, i) => 80 - i * 15);
+      body = "\u0029]}'\n" + JSON.stringify(document);
     }
     return { status: 200, headers: {}, body };
   });
@@ -119,5 +131,50 @@ describe('dsh query history and dashboard', () => {
     const h = await host();
     const record = await h.store.save({ tool: 'trends_now', input: { geos: ['CA', 'GB'], hours: 48 }, result: { ok: true, status: 'ok', geos: ['CA', 'GB'] }, source: 'agent', egress: 'local', defaultGeo: 'US', startedAt: Date.now() });
     expect(record).toMatchObject({ geo: 'CA, GB', time: '48h', terms: ['CA', 'GB'] });
+  });
+  it('uses exactly one Actor run and one journal record for a calibrated multi-term UI query', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'gtfa-dashboard-actor-')); directories.push(directory);
+    const routes = new Map<string, Route>();
+    let keywords: string[] = [];
+    const actorFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('/runs?')) {
+        keywords = JSON.parse(String(init!.body)).toolRequest.input.keywords;
+        return Response.json({ data: { id: 'one-run', status: 'SUCCEEDED', defaultKeyValueStoreId: 'one-store', usageTotalUsd: 0.001 } });
+      }
+      if (String(url).endsWith('/records/TOOL_RESPONSE')) return Response.json({ protocol: 1, snapshots: [], result: { ok: true, status: 'ok', schemaVersion: 1,
+        filter: { geo: 'US', time: 'now 1-d' }, meta: { fetchedAt: new Date().toISOString() },
+        series: keywords.map((keyword, index) => ({ keyword, average: 50 - index * 10, latest: 50 - index * 10, peak: 50 - index * 10,
+          points: Array.from({ length: 24 }, (_, hour) => ({ t: new Date(Date.UTC(2026, 10, 1, hour)).toISOString(), value: 50 - index * 10 })) })) } });
+      throw new Error('Unexpected Actor request');
+    });
+    await register({ tools: { register() {} }, get: name => name === 'connection' ? { fetch: { register(route: Route & { path: string }) { routes.set(route.path, route); return async () => {}; } } } : undefined },
+      { egress: 'actor-public', apifyToken: 'apify_api_test_placeholder', snapshotDir: directory, chartDir: null }, { onDemand: { fetch: actorFetch } });
+    const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'] } }) }));
+    const output = (await reply.json()).result;
+    expect(output.ok).toBe(true); expect(output.calibration.status).toBe('ok');
+    expect(keywords).toEqual(['Alpha', 'Beta', 'sudoku']);
+    expect(actorFetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
+    const records = await new QueryHistoryStore(directory).list();
+    expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'one-run', costUsd: 0.001 });
+  });
+  it('reports only the active request progress without starting work, and clears it after cancellation', async () => {
+    let started!: () => void;
+    const active = new Promise<void>(resolve => { started = resolve; });
+    const execute = vi.fn(async (_name, _input, signal, progress) => {
+      progress?.('queued'); started();
+      await new Promise<void>((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+      return { ok: true };
+    });
+    const route = dashboardRoute({ settings: () => ({ egress: 'actor-public', geo: 'US', cache: true, snapshotDir: '/unused' }), execute }, () => undefined);
+    const controller = new AbortController(), requestId = randomUUID();
+    const pending = route.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', signal: controller.signal,
+      body: JSON.stringify({ action: 'query', name: 'trends_compare', requestId, input: { keywords: ['A', 'B'] } }) }));
+    await active;
+    const poll = (id: string) => route.fetch(new Request(`http://localhost/api/gtfa.dashboard?progress=${id}`));
+    expect((await (await poll(requestId)).json()).progress).toMatchObject({ requestId, phase: 'queued' });
+    expect((await (await poll(randomUUID())).json()).progress).toBeNull();
+    expect(execute).toHaveBeenCalledOnce();
+    controller.abort(); expect((await pending).status).toBe(502);
+    expect((await (await poll(requestId)).json()).progress).toBeNull();
   });
 });

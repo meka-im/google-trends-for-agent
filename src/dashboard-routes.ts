@@ -3,19 +3,21 @@ import { QueryHistoryStore, HISTORY_LIMIT } from './query-history.js';
 import type { GtfaTool } from './tools.js';
 import type { EgressMode } from './options.js';
 import { VERSION } from './version.js';
+import type { QueryPhase, QueryProgress } from './query-progress.js';
 
 export const DASHBOARD_PATH = '/api/gtfa.dashboard';
 export interface DashboardBoundary {
   settings(): { egress: EgressMode; geo: string; cache: boolean; snapshotDir: string };
-  execute(name: GtfaTool['name'], input: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  execute(name: GtfaTool['name'], input: unknown, signal?: AbortSignal, progress?: (phase: QueryPhase) => void): Promise<Record<string, unknown>>;
 }
-const query = z.object({ action: z.literal('query'), name: z.enum(['trends_snapshot', 'trends_compare']), input: z.record(z.string(), z.unknown()) }).strict();
+const query = z.object({ action: z.literal('query'), name: z.enum(['trends_snapshot', 'trends_compare']), input: z.record(z.string(), z.unknown()), requestId: z.uuid().optional() }).strict();
 const clear = z.object({ action: z.literal('clear'), ids: z.array(z.uuid()).min(1).max(HISTORY_LIMIT) }).strict();
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'no-store' } });
 
 /** Owner-only dsh HTTP routes; opening/refreshing the panel never starts an Actor. */
 export function dashboardRoute(boundary: DashboardBoundary, reject: (request: Request) => Response | undefined) {
   let querying = false;
+  let progress: QueryProgress | null = null;
   return {
     path: DASHBOARD_PATH, methods: ['GET', 'POST'] as const, requestBody: 'buffered' as const,
     async fetch(request: Request): Promise<Response> {
@@ -23,6 +25,8 @@ export function dashboardRoute(boundary: DashboardBoundary, reject: (request: Re
       if (denied) return denied;
       const settings = boundary.settings(), history = new QueryHistoryStore(settings.snapshotDir);
       if (request.method === 'GET') {
+        const requestId = new URL(request.url).searchParams.get('progress');
+        if (requestId !== null) return json({ ok: true, progress: progress?.requestId === requestId ? progress : null });
         const id = new URL(request.url).searchParams.get('id');
         if (id !== null) {
           try {
@@ -49,13 +53,14 @@ export function dashboardRoute(boundary: DashboardBoundary, reject: (request: Re
       if (!parsed.success) return json({ ok: false, error: 'Invalid dashboard request.' }, 400);
       if (querying) return json({ ok: false, error: 'A query is already running.' }, 409);
       querying = true;
+      progress = parsed.data.requestId ? { requestId: parsed.data.requestId, phase: 'requesting', startedAt: Date.now() } : null;
       try {
         const signal = AbortSignal.any([request.signal, AbortSignal.timeout(120_000)]);
-        const result = await boundary.execute(parsed.data.name, parsed.data.input, signal);
+        const result = await boundary.execute(parsed.data.name, parsed.data.input, signal, phase => { if (progress) progress = { ...progress, phase }; });
         return json({ ok: true, result });
       } catch {
         return json({ ok: false, error: request.signal.aborted ? 'Query cancelled.' : 'Query did not complete.' }, 502);
-      } finally { querying = false; }
+      } finally { querying = false; progress = null; }
     },
   };
 }
