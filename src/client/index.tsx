@@ -24,6 +24,7 @@ import { ChoicePicker } from './choice-picker.js';
 import { BaselineCatalog } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
 import { Dashboard, TrendsMark } from './dashboard.js';
+import { DashboardController } from './dashboard-state.js';
 import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
 import { parseActorRuntime } from '../actor-runtime.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
@@ -2721,6 +2722,8 @@ function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view: 
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { en: { ...EN, ...DASHBOARD_EN }, zh: { ...ZH, ...DASHBOARD_ZH } }), 'gtfa: dictionaries');
   const t = ctx.locale.bind(NS);
+  const dashboard = new DashboardController();
+  ctx.effect(() => () => dashboard.dispose(), 'gtfa: dashboard query lifecycle');
   ctx.effect(() => {
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
       name: 'plugins.row.config',
@@ -2730,7 +2733,7 @@ export function apply(ctx: ClientContext): void {
   }, 'gtfa: row configuration page');
   ctx.effect(() => {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'google-trends', locale: NS },
-      () => <Dashboard t={t} openSettings={() => {
+      () => <Dashboard t={t} controller={dashboard} openSettings={() => {
         const navigation = ctx.get?.('pluginNavigation') as { openBundle?: (name: string) => void } | undefined;
         navigation?.openBundle?.(PACKAGE);
       }} />));

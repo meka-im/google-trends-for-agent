@@ -15,6 +15,8 @@ import { createDefaultTransport, throwIfAborted, type Transport } from './transp
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
+import { calibratedComparison } from './dashboard-comparison.js';
+import type { QueryPhase } from './query-progress.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
 // The library and CLI must work without the optional dsh peer dependency.
@@ -317,7 +319,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
-  const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source']) => {
+  const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source'], progress?: (phase: QueryPhase) => void) => {
     throwIfAborted(signal);
     const current = settings(), startedAt = Date.now();
     const parsed = tool.inputSchema.safeParse(args ?? {});
@@ -326,20 +328,26 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
     let result: Record<string, unknown>;
     try {
-      if (current.egress !== 'local' && !overrides.transport) {
-        const resolved = await oauth.resolveToken(current.apifyToken);
-        if (!resolved.token) {
-          const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
-          result = { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
-        } else {
+      const execute = async (input: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        progress?.('requesting');
+        if (current.egress !== 'local' && !overrides.transport) {
+          const resolved = await oauth.resolveToken(current.apifyToken);
+          if (!resolved.token) {
+            const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
+            return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
+          }
           if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
-          result = await callActorTool(onDemand, {
+          return callActorTool(onDemand, {
             token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
             name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
-              cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal,
+              cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
           });
         }
-      } else result = await tool.execute(input, { signal });
+        return tool.execute(input, { signal });
+      };
+      result = source === 'manual' && tool.name === 'trends_compare'
+        ? await calibratedComparison(input, current, execute, () => progress?.('calibrating'))
+        : await execute(input);
       throwIfAborted(signal);
     } catch (error) {
       result = { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
@@ -347,6 +355,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
           message: signal?.aborted ? 'Query cancelled.' : error instanceof GTrendsError ? error.message : 'Query did not complete.' } };
     }
     try {
+      progress?.('saving');
       const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, egress: current.egress, defaultGeo: current.geo, startedAt });
       const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : {};
       result = { ...result, meta: { ...meta, queryRecordId: record.id } };
@@ -375,9 +384,9 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
-    dashboard: { settings, execute: async (name, input, signal) => {
+    dashboard: { settings, execute: async (name, input, signal, progress) => {
       const tool = tools.find(tool => tool.name === name)!;
-      return run(tool, input, signal, 'manual');
+      return run(tool, input, signal, 'manual', progress);
     } },
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
     ...(localTransport ? { localTransport } : {}),

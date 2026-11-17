@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { ChoicePicker } from './choice-picker.js';
 import { Icon } from './icons.js';
@@ -6,13 +6,10 @@ import { SETTINGS_CSS } from './theme.js';
 import { DASHBOARD_CSS } from './dashboard-theme.js';
 import { GEO_CODES, regionLabel, type EgressMode } from '../options.js';
 import type { QueryRecord, SavedQuery } from '../query-history-types.js';
+import { DashboardController, dashboardRequest, queryKeywords } from './dashboard-state.js';
+import type { QueryProgress } from '../query-progress.js';
 
 type Translate = (key: string) => string;
-interface DashboardState {
-  version: string; records: QueryRecord[];
-  settings: { egress: EgressMode; geo: string; cache: boolean };
-}
-const URL = 'api/gtfa.dashboard';
 const TIME_KEYS = [['now 1-H', 'dashTime1h'], ['now 4-H', 'dashTime4h'], ['now 1-d', 'dashTime24h'], ['now 7-d', 'dashTime7d'],
   ['today 1-m', 'dashTime1m'], ['today 3-m', 'dashTime3m'], ['today 12-m', 'dashTime1y'], ['today 5-y', 'dashTime5y'], ['all', 'dashTimeAll']] as const;
 const colors = ['#7297ec', '#b39cdb', '#79b9b4', '#daae84', '#9eb389'];
@@ -27,14 +24,6 @@ const egressLabel = (egress: EgressMode, t: Translate) => t(egress === 'local' ?
 const statusKey: Record<string, string> = { ok: 'dashOk', error: 'dashError', blocked: 'dashBlocked', no_data: 'dashNoData', partial: 'dashPartial' };
 const dateText = (raw: string | null, full = false) => raw && Number.isFinite(Date.parse(raw)) ? new Date(raw).toLocaleString(undefined,
   full ? { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-async function request<T>(suffix = '', body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${URL}${suffix}`, { method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
-    headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  const value = await response.json() as T & { ok?: boolean };
-  if (!response.ok || value.ok !== true) throw new Error('Dashboard request failed');
-  return value;
-}
 export function TrendsMark({ size = 36 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="17" fill="#2e61e9" /><path d="m14 42 10-13a3 3 0 0 1 4.7 0l5.1 6.6a2.9 2.9 0 0 0 4.9-.5L49 17" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" /><circle cx="49" cy="17" r="4.4" fill="#a9efdf" /></svg>;
 }
@@ -48,87 +37,52 @@ function Badge({ record, t }: { record: Pick<QueryRecord, 'status' | 'cached'>; 
   return <span className="gd-badges"><span className={`gd-badge ${record.status}`}>{t(statusKey[record.status] ?? 'dashError')}</span>{record.cached ? <span className="gd-badge cache">{t('dashCached')}</span> : null}</span>;
 }
 
-export function Dashboard({ t, openSettings }: { t: Translate; openSettings?: () => void }) {
-  const [tab, setTab] = useState<'overview' | 'query' | 'records'>('overview');
-  const [state, setState] = useState<DashboardState | null>(null);
-  const [loading, setLoading] = useState(false), [error, setError] = useState('');
-  const [days, setDays] = useState(30), [mode, setMode] = useState('single');
-  const [text, setText] = useState(''), [geo, setGeo] = useState('US'), [time, setTime] = useState('now 1-d');
-  const [reuse, setReuse] = useState(true), [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<SavedQuery | null>(null), [metric, setMetric] = useState('interest');
-  const [search, setSearch] = useState(''), [status, setStatus] = useState('all'), [source, setSource] = useState('all'), [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]), [clearing, setClearing] = useState<string[] | null>(null), [deleting, setDeleting] = useState(false);
-  const initialized = useRef(false), alive = useRef(true), controller = useRef<AbortController | null>(null);
-  const viewController = useRef<AbortController | null>(null), loadController = useRef<AbortController | null>(null);
-  const refresh = useCallback(async () => {
-    loadController.current?.abort();
-    const operation = new AbortController(); loadController.current = operation;
-    setLoading(true);
-    try {
-      const next = await request<DashboardState>('', undefined, operation.signal);
-      if (!alive.current) return null;
-      setState(next);
-      if (!initialized.current) { setGeo(next.settings.geo); setReuse(next.settings.cache); initialized.current = true; }
-      setError('');
-      return next;
-    } catch { if (alive.current && !operation.signal.aborted) setError(t('dashFailed')); return null; }
-    finally { if (alive.current && !operation.signal.aborted) setLoading(false); }
-  }, [t]);
+function QueryProgressCard({ operation, t, cancel }: { operation: QueryProgress & { terms: string[] }; t: Translate; cancel: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [operation.requestId]);
+  const elapsed = Math.max(0, Math.floor((now - operation.startedAt) / 1000));
+  const phase = t(`dashPhase${operation.phase[0]!.toUpperCase()}${operation.phase.slice(1)}`);
+  return <div className="gd-progress" role="status" aria-live="polite"><div className="gd-progress-top"><div className="gd-progress-copy"><span className="gd-spinner"><Icon name="refresh" size={20} /></span><div><strong>{phase}</strong><p>{operation.terms.join(' · ')} · {t('dashElapsed')} {elapsed} s</p></div></div><Button onClick={cancel}>{t('dashCancel')}</Button></div><div className="gd-progress-track" role="progressbar" aria-label={phase} aria-valuetext={`${t('dashElapsed')} ${elapsed} s`}><i /></div></div>;
+}
+
+export function Dashboard({ t, openSettings, controller: supplied }: { t: Translate; openSettings?: () => void; controller?: DashboardController }) {
+  const own = useRef<DashboardController | null>(null);
+  if (!supplied && !own.current) own.current = new DashboardController();
+  const controller = supplied ?? own.current!;
+  const stateView = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  const { tab, state, loading, error, fieldError, days, text, geo, time, reuse, result, metric, search, status, source, page, selected, operation } = stateView;
+  const setTab = (value: typeof tab) => controller.set('tab', value);
+  const setDays = (value: number) => controller.set('days', value);
+  const setText = (value: string) => controller.set('text', value);
+  const setGeo = (value: string) => controller.set('geo', value);
+  const setTime = (value: string) => controller.set('time', value);
+  const setReuse = (value: boolean) => controller.set('reuse', value);
+  const setMetric = (value: string) => controller.set('metric', value);
+  const setSearch = (value: string) => controller.set('search', value);
+  const setStatus = (value: string) => controller.set('status', value);
+  const setSource = (value: string) => controller.set('source', value);
+  const setPage = (value: number) => controller.set('page', value);
+  const setSelected = (value: string[]) => controller.set('selected', value);
+  const [clearing, setClearing] = useState<string[] | null>(null), [deleting, setDeleting] = useState(false);
+  const keywordInput = useRef<HTMLInputElement>(null);
+  const busy = operation !== null, terms = queryKeywords(text);
+  const refresh = () => controller.refresh();
   useEffect(() => {
-    alive.current = true;
-    void refresh();
-    const onFocus = () => { void refresh(); };
-    window.addEventListener('focus', onFocus);
-    return () => { alive.current = false; controller.current?.abort(); viewController.current?.abort(); loadController.current?.abort(); window.removeEventListener('focus', onFocus); };
-  }, [refresh]);
-  const records = state?.records ?? [];
-  const run = async () => {
-    if (controller.current) return;
-    const terms = (mode === 'single' ? [text] : text.split(/[,，]/)).map(s => s.trim()).filter(Boolean), distinct = new Set(terms.map(s => s.toLowerCase().replace(/\s+/g, ' ')));
-    if (!terms.length || terms.some(term => term.length > 100) || distinct.size !== terms.length || (mode === 'single' ? terms.length !== 1 : terms.length < 2 || terms.length > 5)) { setError(t('dashInputError')); return; }
-    setBusy(true); setError('');
-    viewController.current?.abort();
-    const operation = new AbortController(); controller.current = operation;
-    const name = mode === 'single' ? 'trends_snapshot' : 'trends_compare';
-    try {
-      const output = await request<{ result: Record<string, unknown> }>('', { action: 'query', name,
-        input: { ...(mode === 'single' ? { term: terms[0], svg: false, fresh: !reuse } : { keywords: terms }), geo, time, timeoutMs: 60000 } }, operation.signal);
-      if (!alive.current) return;
-      const next = await refresh();
-      const record = next?.records.find(record => record.id === object(output.result.meta).queryRecordId);
-      if (record) setResult({ record, result: output.result });
-      else setResult({ record: { id: '', tool: name, terms, geo, time, source: 'manual', egress: state?.settings.egress ?? 'local', status: String(output.result.status ?? 'error'), cached: object(output.result.meta).cached === true,
-        createdAt: new Date().toISOString(), fetchedAt: String(object(output.result.meta).fetchedAt ?? ''), durationMs: 0, actorRunId: null, costUsd: null, errorCode: null }, result: output.result });
-      setMetric('interest');
-    } catch { if (alive.current) { await refresh(); if (alive.current) setError(t(operation.signal.aborted ? 'dashCancel' : 'dashFailed')); } }
-    finally { if (alive.current) setBusy(false); controller.current = null; }
-  };
-  const view = async (id: string) => {
-    if (busy) return;
-    viewController.current?.abort();
-    const operation = new AbortController(); viewController.current = operation;
-    try {
-      const saved = await request<SavedQuery>(`?id=${encodeURIComponent(id)}`, undefined, operation.signal);
-      if (!alive.current) return;
-      setResult(saved);
-      if (saved.record.tool !== 'trends_now') {
-        setText(saved.record.terms.join(', ')); setGeo(saved.record.geo);
-        if (TIME_KEYS.some(row => row[0] === saved.record.time)) setTime(saved.record.time);
-        setMode(saved.record.tool === 'trends_compare' ? 'compare' : 'single');
-      }
-      setMetric('interest'); setError(''); setTab('query');
-    } catch { if (alive.current && !operation.signal.aborted) setError(t('dashFailed')); }
-  };
+    void controller.refresh();
+    const focus = () => { void controller.refresh(); };
+    window.addEventListener('focus', focus);
+    return () => { window.removeEventListener('focus', focus); if (!supplied) controller.dispose(); };
+  }, [controller, supplied]);
+  const run = async () => { if (!await controller.run()) keywordInput.current?.focus(); };
+  const view = (id: string) => controller.view(id);
   const clear = async () => {
     if (!clearing || deleting) return;
     setDeleting(true);
-    try {
-      await request('', { action: 'clear', ids: clearing });
-      if (result && clearing.includes(result.record.id)) setResult(null);
-      setSelected([]); setClearing(null); await refresh();
-    } catch { setError(t('dashFailed')); }
+    try { await dashboardRequest('', { action: 'clear', ids: clearing }); controller.clearResult(clearing); setClearing(null); await refresh(); }
+    catch { controller.set('error', 'dashFailed'); }
     finally { setDeleting(false); }
   };
+  const records = state?.records ?? [];
   const filtered = records.filter(record => (!search || record.terms.join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && (source === 'all' || source === record.source) && (status === 'all' || (status === 'failed' ? ['blocked', 'error'].includes(record.status) : status === record.status)));
   const pages = Math.max(1, Math.ceil(filtered.length / 8)), currentPage = Math.min(page, pages), rows = filtered.slice((currentPage - 1) * 8, currentPage * 8);
   return <div className="gtfa-settings gtfa-dashboard"><style>{SETTINGS_CSS + DASHBOARD_CSS}</style><div className="gd-workspace">
@@ -139,22 +93,25 @@ export function Dashboard({ t, openSettings }: { t: Translate; openSettings?: ()
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
       setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
     }}>{(['overview', 'query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} key={key} onClick={() => { setTab(key); void refresh(); }}>{t(key === 'overview' ? 'dashOverview' : key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
-    {error ? <div className="gd-error" role="alert">{error}<Button disabled={loading} onClick={() => { void refresh(); }}>{t('dashRefresh')}</Button></div> : null}
-    {busy && tab !== 'query' ? <p className="gd-running" role="status">{t('dashRunning')}<Button onClick={() => controller.current?.abort()}>{t('dashCancel')}</Button></p> : null}
+    {error ? <div className="gd-error" role="alert">{t(error)}<Button disabled={loading} onClick={() => { void refresh(); }}>{t('dashRefresh')}</Button></div> : null}
+    {operation && tab !== 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
     <section id="gd-panel-overview" role="tabpanel" aria-labelledby="gd-tab-overview" hidden={tab !== 'overview'}>
       <div className="gd-toolbar"><div><h2>{t('dashUsage')}</h2><p>{t('dashStatsHint')}</p></div><div className="gd-actions"><Picker label={t('dashWindow')} value={String(days)} options={[{ value: '7', label: t('dash7') }, { value: '30', label: t('dash30') }]} onChange={value => setDays(Number(value))} /><Button disabled={loading} onClick={() => { void refresh(); }}><Icon name="refresh" size={15} />{t('dashRefresh')}</Button></div></div>
       <Overview records={records} days={days} t={t} />
     </section>
     <section id="gd-panel-query" role="tabpanel" aria-labelledby="gd-tab-query" hidden={tab !== 'query'}>
       <div className="gd-toolbar"><div><h2>{t('dashQuery')}</h2><p>{t('dashOnDemand')}</p></div></div>
-      <div className="gd-card gd-query-card"><div className="gd-mode" role="group" aria-label={t('dashQuery')}>{['single', 'compare'].map(value => <Button key={value} disabled={busy} primary={mode === value} onClick={() => setMode(value)}>{t(value === 'single' ? 'dashSingle' : 'dashCompare')}</Button>)}</div>
+      <div className="gd-card gd-query-card">
         <form className="gd-query-form" onSubmit={event => { event.preventDefault(); void run(); }}>
-          <label className="gd-keyword"><span>{t(mode === 'single' ? 'dashKeyword' : 'dashKeywords')}</span><input className="gd-input" value={text} maxLength={520} disabled={busy} autoComplete="off" placeholder={mode === 'single' ? 'ChatGPT' : 'ChatGPT, Gemini'} onChange={event => setText(event.target.value)} /></label>
+          <label className="gd-keyword"><span>{t('dashKeywords')}</span><input ref={keywordInput} className="gd-input" value={text} maxLength={520} disabled={busy} autoComplete="off" placeholder="ChatGPT, Gemini" aria-invalid={Boolean(fieldError)} aria-describedby={fieldError ? 'gd-keyword-error' : 'gd-keyword-hint'} onChange={event => setText(event.target.value)} /></label>
           <div className="gd-query-field"><span>{t('dashGeo')}</span><Picker label={t('dashGeo')} value={geo} options={GEO_CODES.map(value => ({ value, label: regionLabel(value, t('dashGeo') === '地区' ? 'zh' : 'en') }))} onChange={setGeo} disabled={busy} /></div>
           <div className="gd-query-field"><span>{t('dashWindow')}</span><Picker label={t('dashWindow')} value={time} options={TIME_KEYS.map(([value, key]) => ({ value, label: t(key) }))} onChange={setTime} disabled={busy} /></div>
           <button className="gd-button primary" type="submit" disabled={busy || !state}>{busy ? t('dashRunning') : t('dashRun')}<Icon name="play" size={14} /></button>
-        </form><div className="gd-query-hint"><label><input type="checkbox" checked={reuse && state?.settings.cache !== false} disabled={busy || mode === 'compare' || state?.settings.cache === false} onChange={event => setReuse(event.target.checked)} />{t('dashReuse')}</label>{busy ? <Button onClick={() => controller.current?.abort()}>{t('dashCancel')}</Button> : <span>{state ? egressLabel(state.settings.egress, t) : t('dashLoading')}</span>}</div>
+          {fieldError ? <p className="gd-field-error" id="gd-keyword-error" role="alert">{t(fieldError)}</p> : null}
+        </form><div className="gd-query-hint" id="gd-keyword-hint"><label><input type="checkbox" checked={reuse && state?.settings.cache !== false} disabled={busy || terms.length > 1 || state?.settings.cache === false} onChange={event => setReuse(event.target.checked)} />{t('dashReuse')}</label><span>{terms.length ? `${terms.length} / 5 · ` : ''}{state ? egressLabel(state.settings.egress, t) : t('dashLoading')}</span></div>
       </div>
+      {terms.length === 5 ? <p className="gd-limit-hint">{t('dashFiveTerms')}</p> : null}
+      {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
       {result ? <Result saved={result} metric={metric} setMetric={setMetric} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={32} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
     </section>
     <section id="gd-panel-records" role="tabpanel" aria-labelledby="gd-tab-records" hidden={tab !== 'records'}>
@@ -205,6 +162,11 @@ function DailyChart({ records, days, t }: { records: QueryRecord[]; days: number
 interface Series { term: string; points: { t: string; value: number | null }[]; average: number | null; latest: number | null; peak: number | null }
 export function resultSeries(saved: SavedQuery, traffic = false): Series[] {
   const data = saved.result;
+  if (traffic && Array.isArray(object(data.calibration).series)) return array(object(data.calibration).series).map(row => {
+    const stats = object(row.traffic);
+    return { term: String(row.keyword), points: array(row.points).map(point => ({ t: String(point.t), value: point.gap ? null : number(point.value) })),
+      average: number(stats.average), latest: number(stats.settledLatest ?? stats.latest), peak: number(stats.peak) };
+  });
   if (Array.isArray(data.series)) return array(data.series).map(row => ({ term: String(row.keyword), points: array(row.points).map(point => ({ t: String(point.t), value: point.gap ? null : number(point.value) })), average: number(row.average), latest: number(row.latest), peak: number(row.peak) }));
   const points = array(object(data.series).points ?? object(data.interest).points).map(row => ({ t: String(row.t), value: row.gap ? null : number(traffic ? row.traffic : row.score ?? row.value) }));
   const usable = points.flatMap(point => point.value === null ? [] : [point.value]);
@@ -212,18 +174,22 @@ export function resultSeries(saved: SavedQuery, traffic = false): Series[] {
   return [{ term: saved.record.terms.join(', '), points, average: number(stats.average) ?? (usable.length ? usable.reduce((a, b) => a + b, 0) / usable.length : null), latest: number(stats.settledLatest ?? stats.latest) ?? usable.at(-1) ?? null, peak: number(stats.peak) ?? (usable.length ? Math.max(...usable) : null) }];
 }
 function Result({ saved, metric, setMetric, t }: { saved: SavedQuery; metric: string; setMetric: (v: string) => void; t: Translate }) {
-  const { record, result } = saved, traffic = object(result.traffic), hasTraffic = number(traffic.average) !== null;
-  const series = resultSeries(saved, metric === 'traffic' && hasTraffic), meta = object(result.meta);
+  const { record, result } = saved, traffic = object(result.traffic), calibrated = array(object(result.calibration).series);
+  const hasTraffic = number(traffic.average) !== null || calibrated.some(row => number(object(row.traffic).average) !== null);
+  const currentMetric = metric === 'traffic' && hasTraffic ? 'traffic' : 'interest';
+  const series = resultSeries(saved, currentMetric === 'traffic'), meta = object(result.meta);
+  const comparison = record.tool === 'trends_compare';
+  const volumeNote = comparison && !result.calibration ? 'dashCompareLegacy' : object(result.calibration).reasonCode === 'capacity' ? 'dashFiveTerms' : object(result.calibration).reasonCode === 'baseline' ? 'dashVolumeNoBaseline' : 'dashVolumeUnavailable';
   const warnings = [...(Array.isArray(meta.warnings) ? meta.warnings : []), ...(Array.isArray(result.warnings) ? result.warnings : [])].filter((v): v is string => typeof v === 'string');
   const error = object(result.error), tables = object(result.tables);
   if (record.tool === 'trends_now') return <div className="gd-results"><div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), t('dashGeo') === '地区' ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}</div>;
-  return <div className="gd-results"><div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div><div className="gd-result-grid"><article className="gd-card"><div className="gd-result-head"><h3>{t('dashTrend')}</h3><div className="gd-actions"><Button primary={metric === 'interest'} onClick={() => setMetric('interest')}>{t('dashInterest')}</Button><Button disabled={!hasTraffic} primary={metric === 'traffic'} onClick={() => setMetric('traffic')}>{t('dashTraffic')}</Button></div></div>
-    <TrendChart series={series} traffic={metric === 'traffic' && hasTraffic} label={t('dashTrend')} empty={t('dashUnavailable')} />
+  return <div className="gd-results"><div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div><div className="gd-result-grid"><article className="gd-card"><div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')}</h3><div className="gd-actions"><Button primary={currentMetric === 'interest'} onClick={() => setMetric('interest')}>{t('dashInterest')}</Button><Button disabled={!hasTraffic} primary={currentMetric === 'traffic'} onClick={() => setMetric('traffic')}>{t('dashTraffic')}</Button></div></div>
+    <TrendChart series={series} traffic={currentMetric === 'traffic'} label={t('dashTrend')} empty={t('dashUnavailable')} />
     <div className="gd-legend">{series.map((row, i) => <span key={row.term}><i style={{ background: colors[i] }} />{row.term}</span>)}</div><table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th><th>{t('dashAverage')}</th><th>{t('dashLatest')}</th><th>{t('dashPeak')}</th></tr></thead><tbody>{series.map(row => <tr key={row.term}><td>{row.term}</td><td>{formatNumber(row.average)}</td><td>{formatNumber(row.latest)}</td><td>{formatNumber(row.peak)}</td></tr>)}</tbody></table></article>
-    <aside className="gd-card gd-result-info"><h3>{t('dashResultInfo')}</h3><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><div className="gd-traffic"><span>{t('dashTraffic')} / day</span><strong>{hasTraffic ? formatNumber(traffic.average) : t('dashNoTraffic')}</strong><small>{t('dashEstimateNote')}</small></div>{typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}</aside></div>
+    <aside className="gd-card gd-result-info"><h3>{t('dashResultInfo')}</h3><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{comparison && calibrated.length ? <div className="gd-volume-list"><span>{t('dashCompareVolume')}</span>{calibrated.map((row, index) => <div key={index}><span>{String(row.keyword)}</span><strong>{number(object(row.traffic).average) === null ? '—' : formatNumber(object(row.traffic).average)}</strong></div>)}<small>{t('dashEstimateNote')}</small></div> : <div className="gd-traffic"><span>{t('dashTraffic')} / day</span><strong>{hasTraffic ? formatNumber(traffic.average) : t('dashNoTraffic')}</strong><small>{t('dashEstimateNote')}</small></div>}{!hasTraffic ? <p className="gd-volume-note">{t(volumeNote)}</p> : null}{typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}</aside></div>
     {typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}
     {warnings.length ? <details className="gd-warnings"><summary>{t('dashResultInfo')} · {warnings.length}</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}
-    <div className="gd-related">{['popular', 'rising'].map(key => <article className="gd-card" key={key}><h3>{t(key === 'popular' ? 'dashPopular' : 'dashRising')}</h3>{array(tables[key]).slice(0, 10).map((row, i) => <p key={i}><span>{String(row.query ?? '')}</span><strong>{String(row.formattedValue ?? row.value ?? '—')}</strong></p>)}{!array(tables[key]).length ? <p className="gd-muted">{t('dashNoRelated')}</p> : null}</article>)}</div></div>;
+    {!comparison ? <div className="gd-related">{['popular', 'rising'].map(key => <article className="gd-card" key={key}><h3>{t(key === 'popular' ? 'dashPopular' : 'dashRising')}</h3>{array(tables[key]).slice(0, 10).map((row, i) => <p key={i}><span>{String(row.query ?? '')}</span><strong>{String(row.formattedValue ?? row.value ?? '—')}</strong></p>)}{!array(tables[key]).length ? <p className="gd-muted">{t('dashNoRelated')}</p> : null}</article>)}</div> : null}</div>;
 }
 function TrendChart({ series, traffic, label, empty }: { series: Series[]; traffic: boolean; label: string; empty: string }) {
   const timestamps = series.flatMap(row => row.points.map(point => Date.parse(point.t))).filter(Number.isFinite), values = series.flatMap(row => row.points.flatMap(point => point.value === null ? [] : [point.value]));
