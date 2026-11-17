@@ -296,6 +296,9 @@ export const SETTINGS_CSS = `
 .gtfa-diagnostic-row-state.quiet,.gtfa-diagnostic-row-state.pending { color:var(--gtfa-quiet); }
 .gtfa-diagnostic-note { display:flex; gap:7px; align-items:flex-start; margin:0; padding:12px 20px; border-top:1px solid var(--gtfa-line); color:var(--diag-tone); font-size:11px; line-height:1.6; background:color-mix(in srgb,var(--diag-tone) 3%,var(--gtfa-surface)); }
 .gtfa-diagnostic-note>svg { margin-top:2px; }
+.gtfa-actor-update-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.gtfa-runtime-note { display:flex; align-items:center; gap:8px; margin:0; padding:12px 20px; color:var(--gtfa-muted); font-size:11px; border-top:1px solid var(--gtfa-line); }
+.gtfa-runtime-note svg { flex:none; }
 .gtfa-diagnostic-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; border-top:1px solid var(--gtfa-line); font-size:10px; color:var(--gtfa-muted); }
 .gtfa-diagnostic-footer>span { display:flex; gap:6px; align-items:center; }
 .gtfa-diagnostic-footer strong { color:var(--gtfa-muted); font-weight:500; font-variant-numeric:tabular-nums; }

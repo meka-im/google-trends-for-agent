@@ -8,6 +8,8 @@ import { ACTOR_REQUEST_PROTOCOL, ACTOR_RESPONSE_KEY, storedSnapshotSchema, type 
 import { baselinesForActor, defaultAnchorFor } from './traffic.js';
 import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
 import type { GtfaTool, ToolLiveSettings } from './tools.js';
+import { parseActorRuntime } from './actor-runtime.js';
+import { VERSION } from './version.js';
 
 const API = 'https://api.apify.com/v2';
 export const ACTOR_RUN_TIMEOUT_SECS = 300;
@@ -47,8 +49,16 @@ export class OnDemandActorClient {
 
   async check(token: string, actorId: string, signal = new AbortController().signal) {
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
-    const data = row((await this.request(`/acts/${encodeURIComponent(actorId)}`, token, signal)).data);
-    if (!row(row(data.taggedBuilds).latest).buildId) throw new GTrendsError('INVALID_INPUT', 'Build this Actor before running a query.');
+    // Existence/authentication is enough here. Actor/default-build details can
+    // include megabytes of source and readme; do not download that body.
+    const response = await this.fetch(`${API}/acts/${encodeURIComponent(actorId)}/builds/default`, {
+      method: 'GET', redirect: 'error', headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    });
+    await response.body?.cancel();
+    if (response.status === 401 || response.status === 403) throw new GTrendsError('INVALID_INPUT', 'Apify rejected the token or OAuth session. Sign in again.');
+    if (response.status === 404) throw new GTrendsError('INVALID_INPUT', 'Build this Actor before running a query (HTTP 404).');
+    if (!response.ok) throw new GTrendsError('NETWORK_ERROR', `Apify API returned HTTP ${response.status}.`);
   }
 
   async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal) {
@@ -77,7 +87,7 @@ export class OnDemandActorClient {
       if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
       const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
       if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
-      return { result: row(output.result), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId };
+      return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId };
     } catch (error) {
       if (callerSignal?.aborted) throw abortError(callerSignal);
       if (deadline.aborted) throw new GTrendsError('TRENDS_TIMEOUT', 'On-demand Actor run exceeded its deadline.');
@@ -108,7 +118,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
     cache: settings.cache, charts: settings.chartDir !== null };
   const { fresh: _fresh, ...cacheInput } = input;
   const cacheable = name === 'trends_ask' || name === 'trends_snapshot';
-  const key = createHash('sha256').update(JSON.stringify([BASELINE_CATALOG_REVISION, options.actorId, createHash('sha256').update(options.token).digest('hex'), name, cacheInput, cloudSettings])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([VERSION, BASELINE_CATALOG_REVISION, options.actorId, createHash('sha256').update(options.token).digest('hex'), name, cacheInput, cloudSettings])).digest('hex');
   const cachePath = join(store.dir, '.actor-results', `${key}.json`);
   let result: Record<string, unknown> | undefined;
   if (cacheable && settings.cache !== false && !input.fresh) {
@@ -137,7 +147,11 @@ export async function callActorTool(client: OnDemandActorClient, options: {
       settings: cloudSettings, history: history.slice(0, 12),
     }, options.signal);
     throwIfAborted(options.signal);
-    result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand' } };
+    result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime } };
+    const runtimeWarning = !output.runtime ? 'Actor version is unverified; update the Actor before checking version parity.'
+      : output.runtime.version !== VERSION || output.runtime.baselineCatalogRevision !== BASELINE_CATALOG_REVISION
+        ? `Actor v${output.runtime.version} and client v${VERSION} differ in package or baseline revision; update the older component.` : null;
+    if (runtimeWarning) result.warnings = [...(Array.isArray(result.warnings) ? result.warnings : []), runtimeWarning];
     for (const snapshot of output.snapshots) {
       const parsed = storedSnapshotSchema.safeParse(snapshot);
       if (parsed.success) await store.save(parsed.data as never);

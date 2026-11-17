@@ -88,7 +88,7 @@ describe('connection diagnostics', () => {
     const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       expect(init!.headers).toMatchObject({ authorization: 'Bearer test-secret' });
-      if (path.endsWith('/acts/meka.im~google-trends-for-agent')) return Response.json({ data: { taggedBuilds: { latest: { buildId: 'build' } } } });
+      if (path.endsWith('/acts/meka.im~google-trends-for-agent/builds/default')) return Response.json({ data: { id: 'build' } });
       if (path.includes('/runs?')) {
         expect(path).toContain('timeout=300&memory=256');
         expect(JSON.parse(String(init!.body))).toMatchObject({ toolRequest: { protocol: 2, name: 'trends_compare',

@@ -36,6 +36,8 @@
 
 Fork the repository and build it with Link Git repository in Apify Console, or run `apify push`. Keep Server / Standby disabled. In dsh, select My own Actor, sign in with Apify, and select the built Actor.
 
+For an existing deployment from official main, use **Update selected Actor** in dsh. After the build finishes, **Test connection** shows keyword access and the actual Actor/plugin versions separately. Custom or pinned source is updated in Apify Console. See the [release and acceptance checklist](docs/releasing.md).
+
 ### Remote MCP
 
 Remote-only clients use Apify's hosted gateway and complete OAuth in the client:

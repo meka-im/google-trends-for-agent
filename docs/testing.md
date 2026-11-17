@@ -1,5 +1,7 @@
 # Automated checks
 
+For live client and cloud acceptance, use the [release checklist](releasing.md).
+
 Install with `npm ci`, which also builds the package. The PR workflow runs the
 following checks on Node 20 and Node 24:
 

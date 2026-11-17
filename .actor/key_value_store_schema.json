@@ -3,6 +3,12 @@
   "title": "Google Trends key-value store",
   "description": "Run summaries, full native tool responses and chart images.",
   "collections": {
+    "runtime": {
+      "title": "Actual runtime version",
+      "description": "Package version and calibration catalog revision from the running code, independent of the Apify build number.",
+      "key": "GTFA_RUNTIME",
+      "contentTypes": ["application/json"]
+    },
     "runSummary": {
       "title": "Run summary",
       "description": "One OUTPUT record per run.",

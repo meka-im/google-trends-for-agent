@@ -1,4 +1,5 @@
 import type { EgressMode } from './options.js';
+import type { ActorRuntime } from './actor-runtime.js';
 
 export const CONNECTION_KEYWORDS = ['ChatGPT', 'Gemini', 'weather'] as const;
 export const CONNECTION_FILTER = { geo: 'US', time: 'now 1-d' } as const;
@@ -15,6 +16,9 @@ export interface ConnectionResult {
   code?: ConnectionCode;
   message?: string;
   actorId?: string;
+  /** From the actual tool run, never inferred from an Apify build number. */
+  actorRuntime?: ActorRuntime | null;
+  pluginVersion?: string;
 }
 export interface KeywordCheck {
   keyword: string;
