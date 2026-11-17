@@ -26,11 +26,15 @@
 
 ## 选择路线
 
+**Muse、GrokBot、Dots 统一优先使用 Apify 按需运行**，可选公共 Actor 或自己部署的
+Actor。支持远程 MCP 时接入官方托管入口；否则使用客户端已有的 Apify 连接器/API。
+详见[客户端接入指南](docs/clients.md)。本机直连继续用于开发或用户明确选择的场景。
+
 | 路线 | 执行位置 | 运行方式 |
 | --- | --- | --- |
-| 本机直连 | 本机 | CLI、stdio MCP 或 dsh 原生工具 |
 | 公共 Actor | 你的 Apify 账号 | 有查询才启动，完成即退出，无需部署 |
 | 自己的 Actor | 你的 Apify 账号 | 部署一次，随后按次运行 |
+| 本机直连 | 本机 | CLI、stdio MCP 或 dsh 原生工具 |
 
 <a id="deploy-it-yourself"></a>
 
@@ -42,7 +46,7 @@ Fork 仓库，在 Apify Console 用 Link Git repository 构建，或运行 `apif
 
 ### 远程 MCP
 
-仅支持远程 MCP 的客户端使用 Apify 官方托管入口，在客户端内完成 OAuth 登录：
+Muse、GrokBot、Dots 支持远程 MCP 时，使用 Apify 官方托管入口，在客户端内完成 OAuth 登录：
 
 ```json
 {
@@ -53,6 +57,9 @@ Fork 仓库，在 Apify Console 用 Link Git repository 构建，或运行 `apif
   }
 }
 ```
+
+使用自建 Actor 时，把 `tools=` 后的 `meka.im/google-trends-for-agent` 替换为自己账号的
+`<username>/<actor-name>`；登录账号需要有该 Actor 的访问权限。
 
 该入口将本项目暴露为 Actor 工具，按次启动运行，并提供读取 Dataset、读取 key-value store 和停止运行的工具。它不承诺四个 `trends_*` 同名工具；本机 MCP 和 dsh 原生插件提供四个 `trends_*` 工具。通过官方入口调用普通 `tool` / `terms` 输入后，用返回的 Dataset id 读取结果。
 
@@ -83,7 +90,8 @@ clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源
 
 打包后的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
 
-CLI 命令是 `gtfa`，MCP 服务器由 `gtfa-mcp` 启动。本地 stdio 配置：
+CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。下面的 stdio 配置使用运行机器的
+网络；Muse、GrokBot、Dots 优先按[Apify 接入指南](docs/clients.md)配置：
 
 ```json
 {
@@ -203,7 +211,7 @@ Snapshot 的近 7 天工作按顺序执行。主窗口不是 `now 7-d` 时，主
 
 ## 文档
 
-[参考文档](docs/reference.md) · [MCP 字段指南（中文）](docs/mcp-api.md) · [架构图](docs/assets/architecture.svg) · [更新日志](CHANGELOG.md) · [基线](examples/baselines.json)
+[客户端接入](docs/clients.md) · [参考文档](docs/reference.md) · [MCP 字段指南（中文）](docs/mcp-api.md) · [架构图](docs/assets/architecture.svg) · [更新日志](CHANGELOG.md) · [基线](examples/baselines.json)
 
 ## 开发
 

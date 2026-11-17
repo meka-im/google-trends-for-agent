@@ -26,11 +26,19 @@
 
 ## Choose a route
 
+**Muse, GrokBot and Dots: use Apify on demand by default**, with either the public
+Actor or your own deployment. Use the managed remote MCP gateway where supported,
+or the client's authenticated Apify connector/API. See the
+[client setup guide](docs/clients.md). Local access remains available for
+development and explicit direct-use setups.
+
 | Route | Where it runs | Execution |
 | --- | --- | --- |
-| Local | This machine | CLI, stdio MCP, or native dsh tools |
 | Public Actor | Your Apify account | One run per query; exits when done, no deployment |
 | My own Actor | Your Apify account | Deploy once, then run on demand |
+| Local | This machine | CLI, stdio MCP, or native dsh tools |
+
+<a id="deploy-it-yourself"></a>
 
 ### Deploy it yourself
 
@@ -40,7 +48,8 @@ For an existing deployment from official main, use **Update selected Actor** in 
 
 ### Remote MCP
 
-Remote-only clients use Apify's hosted gateway and complete OAuth in the client:
+For Muse, GrokBot and Dots with remote MCP support, use Apify's hosted gateway
+and complete OAuth in the client:
 
 ```json
 {
@@ -51,6 +60,9 @@ Remote-only clients use Apify's hosted gateway and complete OAuth in the client:
   }
 }
 ```
+
+For your own deployment, replace `meka.im/google-trends-for-agent` in `tools=`
+with your account's `<username>/<actor-name>`. The account must have access to it.
 
 The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin provide the four `trends_*` tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
 
@@ -81,7 +93,9 @@ The clone tracks the repository's default `main` branch. If your review process 
 
 The packed tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
 
-The CLI is `gtfa`; `gtfa-mcp` runs the MCP server. Local stdio config:
+The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. The following stdio config
+uses this machine's network; Muse, GrokBot and Dots should start with the
+[Apify setup](docs/clients.md):
 
 ```json
 {
@@ -201,7 +215,7 @@ Derivation, anchor overrides, baseline files, and null-traffic rules: [Calibrati
 
 ## Docs
 
-[Reference](docs/reference.md) · [MCP field guide (中文)](docs/mcp-api.md) · [Architecture](docs/assets/architecture.svg) · [Changelog](CHANGELOG.md) · [Baselines](examples/baselines.json)
+[Client setup](docs/clients.md) · [Reference](docs/reference.md) · [MCP field guide (中文)](docs/mcp-api.md) · [Architecture](docs/assets/architecture.svg) · [Changelog](CHANGELOG.md) · [Baselines](examples/baselines.json)
 
 ## Development
 

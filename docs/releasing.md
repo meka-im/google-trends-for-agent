@@ -17,8 +17,11 @@ for `CI required` before merging. A merge does not install or deploy anything.
 | CLI | Install the tarball in a clean consumer, then ask, compare, now and snapshot with inline SVG. |
 | Local MCP | Initialize a fresh stdio session, list the four tools, call each once, then close the transport. |
 | dsh | Install the same tarball; fully restart the backend. Verify Local, Public Actor and My own Actor, testing drafts before Save. |
-| Muse / GrokBot | Exercise the client's available integration. Record whether it is a native registered tool, a connector subprocess or an independent protocol client. |
-| Dots | Exercise its installed MCP integration in a fresh session; CLI output alone does not establish GUI acceptance. |
+| Muse / GrokBot | Prefer on-demand Apify through the public or a self-deployed Actor. Verify native managed MCP when available, otherwise the authenticated connector/API. Record the actual integration; an independent protocol client does not establish native acceptance. |
+| Dots | Prefer the managed Apify MCP route with the public or a self-deployed Actor in a fresh session; CLI output alone does not establish GUI acceptance. |
+
+Follow the [client setup guide](clients.md). Record the Actor that actually ran
+and distinguish ordinary Dataset results from native `TOOL_RESPONSE` envelopes.
 
 Use ChatGPT and Gemini (US, `now 1-d`), and `geos: ["US"], hours: 24, limit: 3`
 for the hot list. A snapshot should have valid inline SVG and null related-query
