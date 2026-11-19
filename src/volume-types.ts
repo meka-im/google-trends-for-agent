@@ -18,6 +18,8 @@ export interface VolumeSeries {
   points: { t: string; value: number | null }[];
   reason?: VolumeReason;
   anchor?: { term: string; dailySearches: number | null; tolerance: number };
+  /** Approximate tier for a follow-up when the first batch's anchors were too weak. */
+  anchorTargetDaily?: number;
   range?: { low: number; high: number; anchors: string[]; points?: VolumeBandPoint[] };
   period?: { from: string; to: string };
 }

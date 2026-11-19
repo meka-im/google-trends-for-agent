@@ -3,7 +3,7 @@
   "name": "google-trends-for-agent",
   "title": "Google Trends for AI Agents \u2014 On-demand",
   "description": "Google Trends search interest, comparisons, calibrated estimates and trending searches. Each query runs once and exits; no idle server. Open source (MIT), no Actor fee; platform compute and proxy usage apply.",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "buildTag": "latest",
   "minMemoryMbytes": 256,
   "maxMemoryMbytes": 1024,

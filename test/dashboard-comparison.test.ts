@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calibratedComparison } from '../src/dashboard-comparison.js';
+import { estimateRequest } from '../src/dashboard-estimate.js';
+import { calibratedSnapshot } from '../src/dashboard-volume.js';
+import type { QueryRecord } from '../src/query-history-types.js';
 
 function source(anchorValue?: number, scores: Record<string, number> = {}) {
   const anchors: Record<string, number> = {
@@ -39,6 +42,29 @@ describe('one-batch dashboard comparison', () => {
     expect(result.calibration.series.map(row => [row.keyword, row.anchor?.term, row.traffic.average])).toEqual([
       ['DSH', undefined, null], ['GTA 6', 'instagram', 1980000],
     ]);
+  });
+  it('uses the first batch to guide a follow-up for a visible term with weak anchors', async () => {
+    const keywords = ['Alpha', 'Beta'], time = 'today 1-m', geo = 'US';
+    const execute = source(undefined, { Alpha: 0, Beta: 14, 'word search': 2, 'oz to ml': 1, 'kph to mph': 0 });
+    const result = await calibratedComparison({ keywords, time, geo }, { geo }, execute, () => {});
+    const record: QueryRecord = {
+      id: 'first-batch', tool: 'trends_compare', terms: keywords, source: 'manual', egress: 'actor-own',
+      geo, time, status: 'ok', cached: false, createdAt: '2026-11-02T00:00:00Z', fetchedAt: null,
+      durationMs: 100, actorRunId: 'one-run', costUsd: null, errorCode: null,
+    };
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.calibration.series[1]).toMatchObject({ reason: 'anchor', traffic: { average: null } });
+    expect(estimateRequest({ record, result }, 'Beta', { geo })?.references.map(anchor => anchor.term))
+      .toEqual(['sudoku', 'youtube music']);
+    expect(estimateRequest({ record, result }, 'Alpha', { geo })?.references.map(anchor => anchor.term))
+      .toEqual(['psi to bar', 'kph to mph']);
+  });
+  it('calibrates sustained low scores from a single-term snapshot with a strong reference', () => {
+    const points = Array.from({ length: 32 }, (_, i) => ({ t: new Date(Date.UTC(2026, 9, 19 + i)).toISOString(), score: 5 }));
+    const result = calibratedSnapshot({
+      ok: true, anchor: { term: 'sudoku' }, series: { points, anchorPoints: points.map(point => ({ ...point, score: 88 })) },
+    }, { term: 'Alpha', geo: 'US', time: 'today 1-m' }, { geo: 'US' });
+    expect(result).toMatchObject({ calibration: { status: 'ok', series: [{ traffic: { average: 5000, peak: 5000 } }] } });
   });
   it('reports the anchor spread when compatible samples imply materially different volumes', async () => {
     const execute = source(undefined, { 'word search': 0, 'oz to ml': 20, 'kph to mph': 60 });

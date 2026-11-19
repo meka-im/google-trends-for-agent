@@ -4,6 +4,7 @@
 
 Initial release in preparation.
 
+- Use weak comparison signals to pick closer anchors for a manual follow-up. Keep estimates from sustained low keyword scores when the reference is strong.
 - Sync 59 published MEKA anchors. Use nearby tiers for the first dsh comparison and include daily-only anchors in eligible follow-up estimates.
 - Plot anchor disagreement as a per-sample range in the dsh search-volume chart. Restore missing samples from retained Actor results.
 

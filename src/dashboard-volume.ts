@@ -50,7 +50,7 @@ const positive = (points: readonly CalibrationPoint[]) => points.filter(point =>
 const peak = (points: readonly CalibrationPoint[]) => Math.max(0, ...points.map(point => point.value));
 
 export function hasVolumeSignal(points: readonly CalibrationPoint[]): boolean {
-  return positive(points) >= Math.max(3, points.length / 4) && peak(points) >= 10 && mean(points) >= 3;
+  return positive(points) >= Math.max(3, points.length / 4) && mean(points) >= 3;
 }
 
 function estimateAgainst(
@@ -68,10 +68,13 @@ function estimateAgainst(
   const terms = pairs.map(pair => pair.term), references = pairs.map(pair => pair.reference);
   const daily = anchorDailySearches(anchor);
   const anchorMean = mean(references);
-  if (daily === null || terms.length < points.length * .75 || !hasVolumeSignal(terms) ||
-    positive(references) < points.length * .5 || peak(references) < 10 || !(anchorMean >= 3)) return undefined;
+  if (daily === null || terms.length < points.length * .75 || !hasVolumeSignal(terms)) return undefined;
   const ratio = mean(terms) / anchorMean, factor = daily / anchorMean;
-  const average = Math.round(daily * ratio);
+  const anchorTargetDaily = daily * ratio;
+  // Small nonzero scores can guide the next anchor selection even when
+  // rounding makes this reference too weak to report a volume estimate.
+  if (peak(references) < 10 || anchorMean < 3) return { anchorTargetDaily };
+  const average = Math.round(anchorTargetDaily);
   const latest = Math.round([...terms].reverse().find(point => point.value > 0)!.value * factor);
   const tolerance = anchor.tolerance ?? .5;
   const traffic: TrafficEstimate = {
@@ -81,10 +84,13 @@ function estimateAgainst(
   };
   const pairedTimes = new Set(terms.map(point => point.time));
   return {
-    anchor: describeAnchor(anchor), traffic, distance: Math.abs(Math.log(ratio)),
-    points: points.map(point => ({
-      t: point.time, value: point.value > 0 && pairedTimes.has(point.time) ? Math.round(point.value * factor) : null,
-    })),
+    anchorTargetDaily,
+    estimate: {
+      anchor: describeAnchor(anchor), traffic, distance: Math.abs(Math.log(ratio)),
+      points: points.map(point => ({
+        t: point.time, value: point.value > 0 && pairedTimes.has(point.time) ? Math.round(point.value * factor) : null,
+      })),
+    },
   };
 }
 
@@ -100,12 +106,18 @@ export function estimateVolume(
   if (!supportsVolumeWindow(filter.time)) return { ...unavailable, reason: 'window' };
   if (!references.length) return { ...unavailable, reason: missingReference };
   if (!hasVolumeSignal(settled)) return { ...unavailable, reason: 'samples' };
-  const estimates = references.flatMap(({ anchor, points }) => {
-    const estimate = estimateAgainst(settled, points, anchor, filter);
-    return estimate ? [estimate] : [];
-  }).sort((left, right) => left.distance - right.distance);
+  const comparisons = references.flatMap(({ anchor, points }) => {
+    const comparison = estimateAgainst(settled, points, anchor, filter);
+    return comparison ? [comparison] : [];
+  });
+  const estimates = comparisons.flatMap(({ estimate }) => estimate ? [estimate] : [])
+    .sort((left, right) => left.distance - right.distance);
   const best = estimates[0];
-  if (!best) return { ...unavailable, reason: 'anchor' };
+  if (!best) {
+    const hints = comparisons.map(({ anchorTargetDaily }) => Math.log(anchorTargetDaily));
+    const anchorTargetDaily = hints.length ? Math.round(Math.exp(hints.reduce((sum, hint) => sum + hint, 0) / hints.length)) : undefined;
+    return { ...unavailable, reason: 'anchor', ...(anchorTargetDaily ? { anchorTargetDaily } : {}) };
+  }
   const averages = estimates.map(estimate => estimate.traffic.average!);
   const low = Math.min(...averages), high = Math.max(...averages);
   if (high > 2 * low) {

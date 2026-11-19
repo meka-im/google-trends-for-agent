@@ -26,10 +26,10 @@ export function estimateRequest(saved: SavedQuery, term: string, settings: Volum
   const available = refs.available.filter(differentTerm);
   const pinned = refs.pinned ? refs.lookup(refs.pinned) : undefined;
   const lowSignal = previous?.reason === 'samples' || !hasVolumeSignal(settledPoints(series, filter));
-  const priorAverage = previousTraffic.average;
-  const near = typeof priorAverage === 'number' && priorAverage > 0 ? [...available].sort((a, b) =>
-    Math.abs(Math.log(anchorDailySearches(a)! / priorAverage)) - Math.abs(Math.log(anchorDailySearches(b)! / priorAverage)),
-  ).slice(0, 3) : undefined;
+  const expected = previousTraffic.average ?? previous?.anchorTargetDaily;
+  const near = typeof expected === 'number' && Number.isFinite(expected) && expected > 0 ? [...available].sort((a, b) =>
+    Math.abs(Math.log(anchorDailySearches(a)! / expected)) - Math.abs(Math.log(anchorDailySearches(b)! / expected)),
+  ).slice(0, 2) : undefined;
   const spread = near ?? (lowSignal ? available.slice(0, 2) : [0, .33, .66, .85].flatMap(fraction => {
     const anchor = available[Math.floor((available.length - 1) * fraction)];
     return anchor ? [anchor] : [];
