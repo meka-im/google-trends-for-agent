@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { normalizeTerm, row, rows } from './dashboard-volume.js';
 import type { EgressMode } from './options.js';
 import type { QueryRecord, QueryToolName, SavedQuery, VolumeCheck } from './query-history-types.js';
 export type { QueryRecord, SavedQuery } from './query-history-types.js';
@@ -48,7 +49,7 @@ export class QueryHistoryStore {
           if (!includeVolume || !files.has(record.id + VOLUME_SUFFIX)) return record;
           const checks = await this.volumeChecks(record.id);
           const volumeRuns = checks.filter(check => check.actorRunId).map(({ actorRunId, costUsd, createdAt }) => ({ actorRunId, costUsd, createdAt }));
-          return { ...record, volumeRuns };
+          return { ...record, volumeRuns: [...(record.volumeRuns ?? []), ...volumeRuns] };
         } catch { return null; }
       })));
     }
@@ -79,6 +80,18 @@ export class QueryHistoryStore {
   async get(id: string): Promise<SavedQuery | null> {
     return ID.test(id) ? this.serial(() => this.read(id)) : null;
   }
+  async previousCalibration(term: string, geo: string, time: string): Promise<SavedQuery | null> {
+    return this.serial(async () => {
+      for (const record of await this.entries()) {
+        if (record.geo !== geo || record.time !== time || !record.terms.some(t => normalizeTerm(t) === normalizeTerm(term))) continue;
+        const saved = await this.read(record.id);
+        const estimate = rows(row(saved?.result.calibration).series).find(s => normalizeTerm(String(s.keyword)) === normalizeTerm(term));
+        if (estimate?.anchor || estimate?.range || saved?.volumeChecks?.some(c =>
+          normalizeTerm(c.keyword) === normalizeTerm(term) && (c.estimate?.anchor || c.estimate?.range))) return saved;
+      }
+      return null;
+    });
+  }
   async saveVolumeCheck(id: string, check: VolumeCheck): Promise<SavedQuery | null> {
     if (!ID.test(id)) return null;
     return this.serial(async () => {
@@ -94,13 +107,15 @@ export class QueryHistoryStore {
   }
   async save(options: {
     tool: QueryToolName; input: Record<string, unknown>; result: Record<string, unknown>;
-    source: QueryRecord['source']; egress: EgressMode; defaultGeo: string; startedAt: number;
+    source: QueryRecord['source']; egress: EgressMode; singleVolume?: QueryRecord['singleVolume']; volumeRuns?: QueryRecord['volumeRuns']; defaultGeo: string; startedAt: number;
   }): Promise<QueryRecord> {
     const { tool, input, result } = options;
     const meta = object(result.meta), filter = object(result.filter), error = object(result.error);
     const terms = typeof input.term === 'string' ? [input.term] : Array.isArray(input.keywords) ? input.keywords as string[] : Array.isArray(input.geos) ? input.geos as string[] : [String(input.geos ?? 'default')];
     const cached = meta.cached === true;
     const record: QueryRecord = {
+      ...(options.singleVolume ? { singleVolume: options.singleVolume } : {}),
+      ...(options.volumeRuns?.length ? { volumeRuns: options.volumeRuns } : {}),
       id: randomUUID(), tool, terms, source: options.source, egress: options.egress,
       geo: tool === 'trends_now' ? (Array.isArray(result.geos) ? result.geos.join(', ') : Array.isArray(input.geos) ? input.geos.join(', ') : String(input.geos ?? 'default')) : String(filter.geo ?? input.geo ?? options.defaultGeo),
       time: String(filter.time ?? input.time ?? (tool === 'trends_now' ? `${input.hours ?? 24}h` : 'now 1-d')),

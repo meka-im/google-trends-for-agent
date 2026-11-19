@@ -78,7 +78,7 @@ export class OnDemandActorClient {
     return row((await this.readOutput(run.defaultKeyValueStoreId, token, signal, ACTOR_REQUEST_PROTOCOL)).result);
   }
 
-  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void) {
+  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void, started?: (id: string) => void) {
     throwIfAborted(callerSignal);
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
     const deadline = AbortSignal.timeout(this.options.deadlineMs ?? 330_000);
@@ -90,6 +90,7 @@ export class OnDemandActorClient {
       let run = row((await this.request(`/acts/${encodeURIComponent(actorId)}/runs?timeout=${ACTOR_RUN_TIMEOUT_SECS}&memory=${ACTOR_RUN_MEMORY_MB}&waitForFinish=0`, token, signal, 'POST', { toolRequest: input })).data);
       if (typeof run.id !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no run id.');
       runId = run.id;
+      started?.(runId);
       while (ACTIVE.has(String(run.status))) {
         progress?.(run.status === 'READY' ? 'queued' : 'running');
         await new Promise<void>((done, reject) => {
@@ -125,7 +126,7 @@ export class OnDemandActorClient {
 /** Local result reuse avoids starting an Actor at all on a snapshot cache hit. */
 export async function callActorTool(client: OnDemandActorClient, options: {
   token: string; actorId: string; name: GtfaTool['name']; input: Record<string, unknown>;
-  settings: ToolLiveSettings; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
+  settings: ToolLiveSettings; started?: (id: string) => void; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
 }) {
   throwIfAborted(options.signal);
   const { input, settings, name } = options;
@@ -165,7 +166,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
     const output = await client.call(options.token, options.actorId, {
       protocol: ACTOR_REQUEST_PROTOCOL, name, input: name === 'trends_snapshot' ? { ...input, svg: true } : input,
       settings: cloudSettings, history: history.slice(0, 12),
-    }, options.signal, options.progress);
+    }, options.signal, options.progress, options.started);
     throwIfAborted(options.signal);
     result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime,
       ...(output.usageUsd !== undefined ? { actorUsageUsd: output.usageUsd } : {}) } };

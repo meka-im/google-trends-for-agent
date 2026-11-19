@@ -16,7 +16,8 @@ import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 import { calibratedComparison } from './dashboard-comparison.js';
-import { calibratedSnapshot, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
+import { singleVolume } from './dashboard-single.js';
+import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
@@ -313,7 +314,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
   const execute = async (tool: GtfaTool, input: Record<string, unknown>, current: GtfaRuntimeSettings,
-    signal?: AbortSignal, progress?: (phase: QueryPhase) => void): Promise<Record<string, unknown>> => {
+    signal?: AbortSignal, progress?: (phase: QueryPhase) => void, started?: (id: string) => void): Promise<Record<string, unknown>> => {
     throwIfAborted(signal);
     progress?.('requesting');
     const snapshot = tool.name === 'trends_snapshot';
@@ -343,7 +344,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
       }
       result = await callActorTool(onDemand, {
         token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-        name: tool.name, input: queryInput, settings: executionSettings, signal, progress,
+        name: tool.name, input: queryInput, settings: executionSettings, signal, progress, started,
       });
     } else {
       result = await tool.execute(queryInput, { signal, settings: executionSettings });
@@ -357,14 +358,19 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     if (!parsed.success) return zodRejectionEnvelope(parsed.error);
     const input = parsed.data as Record<string, unknown>;
     if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
+    const single = source === 'manual' && tool.name === 'trends_snapshot';
+    const actorIds: string[] = [];
     let result: Record<string, unknown>;
     try {
-      result = source === 'manual' && tool.name === 'trends_compare'
-        ? await calibratedComparison(input, current, args => execute(tool, args, current, signal, progress), () => progress?.('calibrating'))
-        : await execute(tool, input, current, signal, progress);
-      if (source === 'manual' && tool.name === 'trends_snapshot') {
-        progress?.('calibrating');
-        result = calibratedSnapshot(result, input, current);
+      if (single) {
+        const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+        const previous = await new QueryHistoryStore(current.snapshotDir).previousCalibration(String(input.term), filter.geo, filter.time).catch(() => null);
+        result = await singleVolume(input, current, previous, (name, args) =>
+          execute(tools.find(t => t.name === name)!, args, current, signal, progress, id => actorIds.push(id)), () => progress?.('calibrating'));
+      } else {
+        result = source === 'manual' && tool.name === 'trends_compare'
+          ? await calibratedComparison(input, current, args => execute(tool, args, current, signal, progress), () => progress?.('calibrating'))
+          : await execute(tool, input, current, signal, progress);
       }
       throwIfAborted(signal);
     } catch (error) {
@@ -374,7 +380,19 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     }
     try {
       progress?.('saving');
-      const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, egress: current.egress, defaultGeo: current.geo, startedAt });
+      const calibration = row(result.calibration), reading = rows(calibration.series)[0];
+      const hasEstimate = Boolean(reading?.anchor || reading?.range);
+      const rounds = Array.isArray(calibration.rounds) ? calibration.rounds.length : 1;
+      const singleVolumeStats: QueryRecord['singleVolume'] = single && current.egress !== 'local' ? {
+        calls: actorIds.length, hit: hasEstimate ? rounds === 1 ? 'first' : 'second' : 'none',
+      } : undefined;
+      const retry = row(row(result.meta).calibrationRetry);
+      const primaryId = row(result.meta).cached ? undefined : row(result.meta).actorRunId;
+      const volumeRuns = actorIds.filter(id => id !== primaryId).map(id => ({
+        actorRunId: id, createdAt: new Date(startedAt).toISOString(),
+        costUsd: retry.actorRunId === id && typeof retry.actorUsageUsd === 'number' ? retry.actorUsageUsd : null,
+      }));
+      const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, singleVolume: singleVolumeStats, volumeRuns, egress: current.egress, defaultGeo: current.geo, startedAt });
       const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : {};
       result = { ...result, meta: { ...meta, queryRecordId: record.id } };
     } catch {

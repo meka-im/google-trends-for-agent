@@ -139,12 +139,23 @@ function Overview({ records, days, t }: { records: QueryRecord[]; days: number; 
   const ranking = new Map<string, number>();
   rows.filter(row => row.tool !== 'trends_now').forEach(row => row.terms.forEach(term => ranking.set(term, (ranking.get(term) ?? 0) + 1)));
   const top = [...ranking].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const singles = rows.filter(r => r.singleVolume);
+  const cacheHits = singles.filter(r => r.cached && r.singleVolume!.calls === 0);
+  const measured = singles.filter(r => !cacheHits.includes(r));
+  const successful = measured.filter(r => r.singleVolume!.hit !== 'none');
+  const callCount = (records: QueryRecord[]) => records.reduce((sum, r) => sum + r.singleVolume!.calls, 0);
   const routes = (['actor-public', 'actor-own', 'local'] as const).map(value => ({ value, count: rows.filter(row => row.egress === value).length }));
   const checks = records.flatMap(record => record.volumeRuns ?? []).filter(run => Date.parse(run.createdAt) >= start.getTime() && Date.parse(run.createdAt) <= Date.now());
   const runs = new Map([...rows, ...checks].filter(run => run.actorRunId).map(run => [run.actorRunId, run]));
   const priced = [...runs.values()].filter(row => row.costUsd !== null), cost = priced.reduce((sum, row) => sum + row.costUsd!, 0);
   const stops = routes.map((_, index) => routes.slice(0, index + 1).reduce((sum, row) => sum + row.count, 0) / (rows.length || 1) * 100);
   return <><div className="gd-metrics">{[['dashCount', String(rows.length), 'dashSources'], ['dashSuccess', percent(success, rows.length), 'dashOk'], ['dashCacheRate', percent(cached, rows.length), 'dashReuse'], ['dashDuration', average, 'dashCount']].map(([label, value, note]) => <article className="gd-card gd-metric" key={label}><span>{t(label!)}</span><strong>{value}</strong><small>{t(note!)}</small></article>)}</div>
+    {singles.length > 0 && <article className="gd-card gd-cost"><h3>{t('dashSingleStats')}</h3>
+      <p>{t('dashFirstHit')} · {percent(measured.filter(r => r.singleVolume!.hit === 'first').length, measured.length)}
+        {' · '}{t('dashVolumeHits')} {successful.length}/{measured.length}{' · '}{t('dashCached')} {cacheHits.length}</p>
+      <p>{t('dashMeanCalls')} · {successful.length ? (callCount(successful) / successful.length).toFixed(2) : '—'}
+        {' · '}{t('dashAllCallsPerHit')} · {successful.length ? (callCount(measured) / successful.length).toFixed(2) : '—'}</p>
+    </article>}
     <div className="gd-overview-grid"><article className="gd-card"><h3>{t('dashDaily')}</h3><DailyChart records={rows} days={days} t={t} /><div className="gd-legend">{['dashLive', 'dashCached', 'dashFailure'].map((key, index) => <span key={key}><i style={{ background: ['#89a8ed', '#a7cbbf', '#e4b7bc'][index] }} />{t(key)}</span>)}</div></article><article className="gd-card"><h3>{t('dashTop')}</h3><div className="gd-ranking">{top.map(([term, count], index) => <div key={term}><p><span>{String(index + 1).padStart(2, '0')}</span><strong>{term}</strong><span>{count}</span></p><div className="gd-rail"><i style={{ width: `${count / top[0]![1] * 100}%` }} /></div></div>)}{!top.length ? <p className="gd-muted">—</p> : null}</div></article></div>
     <div className="gd-bottom-grid"><article className="gd-card"><h3>{t('dashEgress')}</h3><div className="gd-distribution"><div className="gd-donut" style={{ background: rows.length ? `conic-gradient(#7e9fea 0 ${stops[0]}%, #b1c4ed ${stops[0]}% ${stops[1]}%, #dce4f4 ${stops[1]}% 100%)` : 'var(--gtfa-line)' }}><div><strong>{rows.length}</strong><small>{t('dashCount')}</small></div></div><div className="gd-dist-legend">{routes.map((row, i) => <p key={row.value}><i style={{ background: ['#7e9fea', '#b1c4ed', '#dce4f4'][i] }} />{egressLabel(row.value, t)}<strong>{row.count}</strong></p>)}</div></div></article>
       <article className="gd-card"><h3>{t('dashSources')}</h3><div className="gd-source-bars">{['manual', 'agent'].map(key => { const count = rows.filter(row => row.source === key).length; return <div key={key}><p>{t(key === 'manual' ? 'dashManual' : 'dashAgent')}<strong>{count}</strong></p><div className="gd-rail"><i style={{ width: `${rows.length ? count / rows.length * 100 : 0}%`, background: key === 'agent' ? '#a7cbbf' : undefined }} /></div></div>; })}</div></article>
@@ -240,15 +251,18 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
       const reason = String(reading.reason ?? object(result.calibration).reasonCode ?? '');
       const legacyBand = last?.estimate?.range && !last.estimate.range.points;
       const restore = Boolean(legacyBand && last?.actorRunId);
-      const canCheck = showChecks && Boolean(record.id) &&
+      const adaptive = Array.isArray(object(result.calibration).rounds);
+      const compactRange = adaptive && low !== null && high !== null && low > 0 && high <= 3 * low;
+      const canCheck = !adaptive && showChecks && Boolean(record.id) &&
         (restore || ((!last || last.errorCode || (legacyBand && last.egress === 'local')) && (average === null || legacy) && reason !== 'baseline'));
       const button = restore ? 'dashRestoreCurve' : last?.errorCode ? 'dashRetryEstimate' : legacy || legacyBand ? 'dashReestimate' : 'dashEstimateTerm';
       return <div className="gd-volume-row" key={term}>
         <span>{term}</span>
-        <strong>{low !== null && high !== null ? compactVolume.format(low) + '–' + compactVolume.format(high) : formatVolume(average)}</strong>
+        <strong>{compactRange ? formatVolume(Number(Math.sqrt(low! * high!).toPrecision(1))) : low !== null && high !== null ? compactVolume.format(low) + '–' + compactVolume.format(high) : formatVolume(average)}</strong>
         {average !== null && typeof reference === 'string' ? <small>{t('dashEstimateAnchor')} · {reference}{legacy ? ' · ' + t('dashEstimateLegacy') : ''}</small> : null}
-        {low !== null && high !== null ? <small>{t('dashVolumeDisagreement')} · {Array.isArray(range.anchors) ? range.anchors.join(' / ') : ''}</small> : null}
+        {low !== null && high !== null ? <small>{compactRange ? formatNumber(low) + '–' + formatNumber(high) + ' · ' : ''}{t('dashVolumeDisagreement')} · {Array.isArray(range.anchors) ? range.anchors.join(' / ') : ''}</small> : null}
         {average === null && low === null ? <small>{t(reasonKey[reason] ?? (result.ok ? 'dashEstimateMissing' : 'dashUnavailable'))}</small> : null}
+        {adaptive && object(result.calibration).retryError ? <small role="alert">{t(object(result.calibration).retryError === 'WINDOW_MISMATCH' ? 'dashEstimateNewWindow' : 'dashEstimateFailed')}</small> : null}
         {last?.errorCode ? <small role="alert">{t(last.errorCode === 'BLOCKED' || last.errorCode === 'RATE_LIMITED' ? 'dashEstimateBlocked' : 'dashEstimateFailed')}</small> : null}
         {last?.estimate && typeof period.from === 'string' && typeof period.to === 'string' ?
           <small>{t(last.sameWindow ? 'dashEstimateSaved' : 'dashEstimateNewWindow')} · {dateText(period.from, true)} – {dateText(period.to, true)}</small> : null}
