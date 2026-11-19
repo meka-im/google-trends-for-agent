@@ -484,6 +484,7 @@ export const EN: Record<string, string> = {
   baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
   baselineBuiltin: 'Built-in baselines',
   baselineBuiltinHint: 'MEKA baselines from Google Ads Keyword Planner.',
+  baselineDailyWindow: 'Daily comparisons and estimates for 30 days or longer',
   baselineAllRegions: 'All regions',
   baselineBrowseGeo: 'Browse baseline region',
   baselineDailyEstimate: 'Searches/day (estimate)',
@@ -767,6 +768,7 @@ export const ZH: Record<string, string> = {
   baselinesHint: '当前使用内置地区基线，开启后可自定义。',
   baselineBuiltin: '内置基准',
   baselineBuiltinHint: 'MEKA 基准来自 Google Ads Keyword Planner。',
+  baselineDailyWindow: '用于 30 天及以上的日粒度对比和补估',
   baselineAllRegions: '全部地区',
   baselineBrowseGeo: '查看基准地区',
   baselineDailyEstimate: '每日搜索量（估算）',
@@ -1020,7 +1022,7 @@ function normalizeTolerance(value: unknown): string {
 function defaultRegionalBaselineAnchors(geo: string): AnchorDraft[] {
   const reference = mekaDefaultAnchor(geo);
   if (reference) return [{ term: reference.term, geo: reference.geo, dailySearches: String(reference.dailySearches), tolerance: '0.5' }];
-  return catalogForGeo(geo).map(({ term, geo, dailySearches, tolerance }) => ({ term, geo, dailySearches: String(dailySearches), tolerance: String(tolerance) }));
+  return [];
 }
 
 function blankAnchor(geo = DEFAULT_GEO): AnchorDraft {
@@ -2437,13 +2439,14 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     ...anchorOptions,
     ...mekaAnchorsFor(draft.geo)
       .filter(anchor => !anchorTerms.some(term => term.toLowerCase() === anchor.term.toLowerCase()))
-      .map(anchor => ({ value: anchor.term, label: anchor.term })),
+      .map(anchor => ({ value: anchor.term, label: anchor.term, ...(anchor.dailyOnly ? { description: t('baselineDailyWindow') } : {}) })),
   ], [anchorOptions, anchorTerms, draft.geo, t]);
   const regionalAnchor = mekaDefaultAnchor(draft.geo)?.term;
+  const defaultWindowLabel = regionalAnchor ? `${t('windowDefault')} · ${regionalAnchor}` : t('windowDefault');
   const shortWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · ${regionalAnchor ?? automaticAnchorFor('now 1-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, regionalAnchor, t]);
+    [{ value: '', label: defaultWindowLabel }, ...anchorOptions], [anchorOptions, defaultWindowLabel]);
   const longWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · ${regionalAnchor ?? automaticAnchorFor('now 7-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, regionalAnchor, t]);
+    [{ value: '', label: defaultWindowLabel }, ...anchorOptions], [anchorOptions, defaultWindowLabel]);
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
@@ -2566,7 +2569,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <section className="gtfa-section" style={styles.section}>
       <SectionHeader icon="sliders" title={t('defaults')} description={t('defaultsDescription')} />
       <div className="gtfa-defaults-grid">
-        <ChoicePicker label={t('geo')} hint={t(catalogForGeo(draft.geo).length ? 'geoBaselineHint' : 'geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
+        <ChoicePicker label={t('geo')} hint={t(regionalAnchor ? 'geoBaselineHint' : 'geoHint')} icon="globe" placeholder={t('geoSearch')} emptyText={t('choiceEmpty')} value={draft.geo} disabled={!editable}
           options={geoOptions} onChange={value => edit({ geo: value,
             ...(!draft.newAnchor.term.trim() && !draft.newAnchor.dailySearches.trim() && draft.newAnchor.geo === draft.geo
               ? { newAnchor: { ...draft.newAnchor, geo: value } } : {}),

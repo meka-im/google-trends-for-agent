@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { calibratedComparison } from '../src/dashboard-comparison.js';
 
 function source(anchorValue?: number, scores: Record<string, number> = {}) {
-  const anchors: Record<string, number> = { 'oz to ml': 20, sudoku: 38, instagram: 70, gpts: 8 };
+  const anchors: Record<string, number> = {
+    'psi to bar': 15, 'kph to mph': 11, 'oz to ml': 35, 'word search': 100, sudoku: 38, instagram: 70, gpts: 8,
+  };
   return vi.fn(async (input: Record<string, unknown>) => ({ ok: true, status: 'ok', filter: { geo: input.geo ?? 'US', time: input.time ?? 'now 1-d' },
     series: (input.keywords as string[]).map(keyword => {
       const anchor = anchors[keyword.toLowerCase()];
@@ -12,32 +14,41 @@ function source(anchorValue?: number, scores: Record<string, number> = {}) {
 }
 describe('one-batch dashboard comparison', () => {
   it('selects the nearest usable reference for each term in one shared request', async () => {
-    const execute = source(undefined, { Alpha: 10, 'oz to ml': 1, sudoku: 10, instagram: 95 }), progress = vi.fn();
+    const searches: Record<string, number> = {
+      Alpha: 2400, Beta: 13500, 'kph to mph': 1600, 'oz to ml': 5300, 'word search': 15000, sudoku: 88000, instagram: 990000,
+    };
+    const execute = vi.fn(async (input: Record<string, unknown>) => {
+      const terms = input.keywords as string[];
+      const peak = Math.max(...terms.map(term => searches[term]!));
+      return source(undefined, Object.fromEntries(terms.map(term => [term, Math.round(100 * searches[term]! / peak)])))(input);
+    });
+    const progress = vi.fn();
     const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'], time: 'now 1-d' }, { geo: 'US' }, execute, progress);
     expect(execute).toHaveBeenCalledOnce();
-    expect(execute.mock.calls[0]![0].keywords).toEqual(['Alpha', 'Beta', 'oz to ml', 'sudoku', 'instagram']);
+    expect(execute.mock.calls[0]![0].keywords).toEqual(['Alpha', 'Beta', 'word search', 'oz to ml', 'kph to mph']);
     expect(result.series.map(row => row.keyword)).toEqual(['Alpha', 'Beta']);
     expect(result.series[1]!.peak).toBe(100);
-    expect(result.calibration.series.map(row => row.anchor?.term)).toEqual(['sudoku', 'instagram']);
-    expect(result.calibration.series.map(row => row.traffic.average)).toEqual([88000, 625263]);
+    expect(result.calibration.series.map(row => row.anchor?.term)).toEqual(['kph to mph', 'word search']);
+    expect(result.calibration.series.map(row => row.traffic.average)).toEqual([2327, 13500]);
     expect(result.meta.actorRunId).toBe('one-run'); expect(progress).toHaveBeenCalledOnce();
   });
   it('returns a volume for the strong term when the same batch suppresses the weak term', async () => {
     const execute = source(undefined, { DSH: 0, 'GTA 6': 100, 'oz to ml': 0, sudoku: 2, instagram: 50 });
-    const result = await calibratedComparison({ keywords: ['DSH', 'GTA 6'] }, { geo: 'US' }, execute, () => {});
+    const result = await calibratedComparison({ keywords: ['DSH', 'GTA 6'] }, { geo: 'US', anchor: 'instagram' }, execute, () => {});
     expect(execute).toHaveBeenCalledOnce();
     expect(result.calibration.series.map(row => [row.keyword, row.anchor?.term, row.traffic.average])).toEqual([
       ['DSH', undefined, null], ['GTA 6', 'instagram', 1980000],
     ]);
   });
   it('reports the anchor spread when compatible samples imply materially different volumes', async () => {
-    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, source(), () => {});
+    const execute = source(undefined, { 'word search': 0, 'oz to ml': 20, 'kph to mph': 60 });
+    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, execute, () => {});
     expect(result.calibration.series[0]).toMatchObject({
-      reason: 'disagreement', traffic: { average: null }, range: { low: 10600, high: 565714 },
+      reason: 'disagreement', traffic: { average: null }, range: { low: 1067, high: 10600 },
     });
   });
   it('uses settled daily samples for both the mean and peak', async () => {
-    const base = source(undefined, { Alpha: 10, 'oz to ml': 0, sudoku: 0, instagram: 10 });
+    const base = source(undefined, { Alpha: 10, 'word search': 10 });
     const execute = async (input: Record<string, unknown>) => {
       const result = await base(input);
       for (const term of result.series) {
@@ -46,14 +57,25 @@ describe('one-batch dashboard comparison', () => {
       }
       return result;
     };
-    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'], time: 'today 1-m' }, { geo: 'US' }, execute, () => {});
+    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'], time: 'today 1-m' }, { geo: 'US', anchor: 'word search' }, execute, () => {});
     const alpha = result.calibration.series[0]!;
-    expect(alpha.traffic).toMatchObject({ average: 990000, latest: 990000, peak: 990000, settledLatest: 990000 });
+    expect(alpha.traffic).toMatchObject({ average: 15000, latest: 15000, peak: 15000, settledLatest: 15000 });
     expect(alpha.points).toHaveLength(22);
     expect(alpha.points.at(-1)?.t).toBe('2026-11-22T00:00:00.000Z');
   });
+  it('uses the US low anchor only in eligible daily comparisons', async () => {
+    const daily = source(undefined, { Alpha: 15 });
+    const input = { keywords: ['Alpha', 'Beta'], time: 'today 1-m' };
+    const settings = { geo: 'US', anchor: 'psi to bar' };
+    const result = await calibratedComparison(input, settings, daily, () => {});
+    expect(daily).toHaveBeenCalledExactlyOnceWith({ ...input, keywords: ['Alpha', 'Beta', 'psi to bar'] });
+    expect(result.calibration.series[0]).toMatchObject({ anchor: { term: 'psi to bar' }, traffic: { average: 480 } });
+    const hourly = source();
+    await calibratedComparison({ ...input, time: 'now 7-d' }, settings, hourly, () => {});
+    expect(hourly.mock.calls[0]![0].keywords).toEqual(['Alpha', 'Beta', 'word search', 'oz to ml', 'kph to mph']);
+  });
   it('keeps the actual score when auto-added anchors overwhelm every requested term', async () => {
-    const execute = source(undefined, { Alpha: 1, Beta: 2, instagram: 100 });
+    const execute = source(undefined, { Alpha: 1, Beta: 2, 'word search': 100 });
     const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, execute, () => {});
     expect(result.calibration.weakComparison).toBe(true);
     expect(result.series.map(row => row.peak)).toEqual([1, 2]);
@@ -83,10 +105,14 @@ describe('one-batch dashboard comparison', () => {
     const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, weak, () => {});
     expect(weak).toHaveBeenCalledOnce(); expect(result.calibration.series.every(series => series.traffic.average === null)).toBe(true);
     expect(result.calibration.series.map(series => series.reason)).toEqual(['anchor', 'anchor']);
-    const unsupported = source();
-    const other = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'NZ' }, unsupported, () => {});
-    expect(unsupported).toHaveBeenCalledExactlyOnceWith({ keywords: ['Alpha', 'Beta'] });
-    expect(other.calibration.reasonCode).toBe('baseline');
+    for (const geo of ['NZ', 'AU', 'IN']) {
+      const unsupported = source();
+      const input = { keywords: ['Alpha', 'Beta'], geo };
+      const other = await calibratedComparison(input, { geo: 'US' }, unsupported, () => {});
+      expect(unsupported).toHaveBeenCalledExactlyOnceWith(input);
+      expect(other.calibration.reasonCode).toBe('baseline');
+      expect(other.series[0]!.peak).toBe(40);
+    }
   });
   it('uses the selected region and a user baseline in the same shared batch', async () => {
     const execute = source(20);

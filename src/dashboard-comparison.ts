@@ -1,7 +1,11 @@
 import { supportsVolumeWindow } from './volume-types.js';
 import { summarizeInterest } from './gaps.js';
 import { estimateVolume, normalizeTerm, pointsOf, row, rows, volumeCalibration, volumeFilter, volumeReferences, type VolumeSettings } from './dashboard-volume.js';
-import type { Anchor } from './traffic.js';
+import { anchorDailySearches, type Anchor } from './traffic.js';
+
+// Start near the middle of the expected range for ordinary keyword research.
+// Adding a top-tier anchor can hide both smaller references and user terms.
+const INITIAL_DAILY_SEARCHES = 10_000;
 
 function selectReferences(keywords: string[], refs: ReturnType<typeof volumeReferences>): Anchor[] {
   const { pinned, lookup, available } = refs;
@@ -14,12 +18,8 @@ function selectReferences(keywords: string[], refs: ReturnType<typeof volumeRefe
     return known ? [known] : [];
   });
   if (included.length) return included;
-  const slots = 5 - keywords.length;
-  const fractions = slots === 1 ? [.5] : slots === 2 ? [.25, .75] : slots === 3 ? [.15, .5, .75] : [];
-  return [...new Set(fractions.flatMap(fraction => {
-    const anchor = available[Math.floor((available.length - 1) * fraction)];
-    return anchor ? [anchor] : [];
-  }))];
+  const distance = (anchor: Anchor) => Math.abs(Math.log(anchorDailySearches(anchor)! / INITIAL_DAILY_SEARCHES));
+  return [...available].sort((a, b) => distance(a) - distance(b)).slice(0, 5 - keywords.length);
 }
 
 /** Prefer shared-batch estimates so an ordinary comparison needs one Actor run. */

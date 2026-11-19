@@ -4,9 +4,9 @@ Calibration is an estimate of Google web searches across all categories. A basel
 
 ## MEKA baselines in dsh
 
-dsh includes the MEKA baseline catalog dated 2026-11-19, with 70 Google Ads Keyword Planner anchors for Worldwide and eight countries. Single-term calibration starts from the middle of the selected region's volume tiers. The dashboard uses spare comparison slots for anchors and calibrates each term against its closest usable anchor in the same request. Five entered terms can be calibrated when they include a known anchor. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
+dsh includes 59 Google Ads Keyword Planner anchors from the MEKA catalog dated 2026-11-19. It covers Worldwide, the US, Canada, the UK, Germany, France, and Japan. Queries for other regions return relative interest by default. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
 
-Fixed anchors, window choices, and custom baselines take priority. The catalog snapshot ships with the plugin. A new snapshot takes effect with a plugin update. The plugin uses the existing query limits and displays a missing estimate when the comparison supplies too little signal.
+For a new comparison without a known or fixed anchor, the dashboard fills available slots with regional anchors near 10,000 searches/day. This keeps common keywords and anchors visible on the shared scale. The follow-up estimate for a weak keyword uses the two lowest eligible anchors. Anchors marked `30d+` qualify for 30-day, 90-day, and 12-month comparisons and follow-up estimates. A native single-term snapshot uses an hourly-qualified anchor for both its requested window and the companion 7-day chart. Fixed eligible anchors and custom values for the same term take priority. If the data is too sparse, the dashboard shows an unavailable estimate. The catalog snapshot ships with the plugin.
 
 ## Built-in defaults for CLI, MCP and Actor
 

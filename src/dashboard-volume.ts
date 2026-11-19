@@ -3,7 +3,7 @@ import { supportsVolumeWindow, type TrafficEstimate, type VolumeReason, type Vol
 import { MEKA_BASELINE_VERSION, mekaAnchorsFor } from './dsh-baselines.js';
 import { settledPoints, type TrendsFilter } from './filter.js';
 import { markGaps } from './gaps.js';
-import { anchorDailySearches, defaultAnchorFor, dshBaselinesFor, findAnchor, SHORT_WINDOWS, type Anchor, type Baselines } from './traffic.js';
+import { anchorDailySearches, findAnchor, SHORT_WINDOWS, type Anchor, type Baselines } from './traffic.js';
 
 export const row = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -16,17 +16,24 @@ export const describeAnchor = (anchor: Anchor) => ({
 export interface VolumeSettings { geo: string; anchor?: string; baselines?: Baselines }
 export const volumeFilter = (geo: string, time: string): TrendsFilter => ({ geo: geo.trim().toUpperCase(), time, property: '', category: 0 });
 
-export function volumeReferences(filter: TrendsFilter, settings: VolumeSettings) {
+export function volumeReferences(filter: TrendsFilter, settings: VolumeSettings, referenceTime = filter.time) {
   const window = (SHORT_WINDOWS as readonly string[]).includes(filter.time) ? 'short' : 'long';
-  const pinned = settings.anchor || settings.baselines?.windowAnchors?.[window]?.trim();
-  const baselines = dshBaselinesFor(filter.geo, settings.baselines);
-  const lookup = (term: string) => findAnchor(baselines, term, filter.geo, filter);
-  const regional = mekaAnchorsFor(filter.geo).map(anchor => lookup(anchor.term)!);
-  const custom = settings.baselines?.anchors.filter(anchor => anchor.geo.trim().toUpperCase() === filter.geo).map(anchor => lookup(anchor.term)!) ?? [];
+  const requested = settings.anchor || settings.baselines?.windowAnchors?.[window]?.trim();
+  const regional = mekaAnchorsFor(filter.geo, referenceTime);
+  const custom = settings.baselines?.anchors.filter(anchor => anchor.geo.trim().toUpperCase() === filter.geo) ?? [];
   const byTerm = new Map([...regional, ...custom].map(anchor => [normalizeTerm(anchor.term), anchor]));
+  const pinnedKey = requested === undefined ? undefined : normalizeTerm(requested);
+  const ineligiblePin = pinnedKey !== undefined && !byTerm.has(pinnedKey) &&
+    mekaAnchorsFor(filter.geo).some(anchor => normalizeTerm(anchor.term) === pinnedKey);
+  const pinned = ineligiblePin ? undefined : requested;
+  // Historical built-ins remain available to explicit pins. Automatic
+  // calibration uses the MEKA catalog and user-supplied rows for this region.
+  const lookup = (term: string) => {
+    const key = normalizeTerm(term);
+    return byTerm.get(key) ?? (pinned && key === pinnedKey ? findAnchor(undefined, term, filter.geo, filter) : undefined);
+  };
   const available = [...byTerm.values()].sort((left, right) => anchorDailySearches(left)! - anchorDailySearches(right)!);
-  const fallback = lookup(defaultAnchorFor(filter.time, baselines, filter.geo));
-  return { pinned, lookup, available: available.length ? available : fallback ? [fallback] : [] };
+  return { pinned, lookup, available };
 }
 
 export function pointsOf(value: unknown, scoreKey = 'value'): CalibrationPoint[] {
@@ -134,8 +141,35 @@ export function calibratedSnapshot(result: Record<string, unknown>, input: Recor
   if (!result.ok) return result;
   const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 1-d'));
   const series = row(result.series), anchorName = row(result.anchor).term;
-  const anchor = typeof anchorName === 'string' ? volumeReferences(filter, settings).lookup(anchorName) : undefined;
+  const pin = typeof input.anchor === 'string' ? { ...settings, anchor: input.anchor } : settings;
+  const anchor = typeof anchorName === 'string' ? volumeReferences(filter, pin).lookup(anchorName) : undefined;
   const estimate = estimateVolume(String(input.term), pointsOf(series.points, 'score'),
     anchor ? [{ anchor, points: pointsOf(series.anchorPoints, 'score') }] : [], filter, 'baseline');
   return { ...result, calibration: volumeCalibration([estimate]) };
+}
+
+/** Keep relative results from either runtime when dsh has no eligible reference. */
+export function relativeDshResult(result: Record<string, unknown>, snapshot: boolean, geo: string) {
+  const note = `Search-volume baseline unavailable for ${geo || 'Worldwide'}.`;
+  const anchor = { term: 'none', dailySearches: null, ratio: null, note };
+  const verdict = row(result.verdict);
+  if (!snapshot) {
+    return result.verdict ? { ...result, verdict: {
+      ...verdict, traffic: nullTraffic(), anchor: { ...anchor, band: null },
+      warnings: [...(Array.isArray(verdict.warnings) ? verdict.warnings : []), note],
+    } } : result;
+  }
+  if (!result.traffic) return result;
+  const reference = { ...anchor, tolerance: null, level: null, source: 'baseline' };
+  const chart = { path: null, svg: '' };
+  const series = row(result.series), meta = row(result.meta);
+  const points = rows(series.points).map(point => ({ ...point, traffic: null }));
+  return {
+    ...result,
+    ...(result.ok ? { summary: `${String(result.term)} (${geo || 'Worldwide'}) · ${note}` } : {}),
+    anchor: reference, anchor7d: reference, traffic: nullTraffic(), traffic7d: nullTraffic(),
+    chart, chart7d: chart, series: { ...series, points, anchorPoints: [] },
+    verdict: { ...verdict, prioritize: false },
+    meta: { ...meta, warnings: [...(Array.isArray(meta.warnings) ? meta.warnings : []), note] },
+  };
 }

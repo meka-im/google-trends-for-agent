@@ -149,18 +149,18 @@ describe('dsh query history and dashboard', () => {
       if (String(url).endsWith('/records/TOOL_RESPONSE')) return Response.json({ protocol: 1, snapshots: [], result: { ok: true, status: 'ok', schemaVersion: 1,
         filter, meta: { fetchedAt: new Date().toISOString() },
         series: keywords.map((keyword, index) => ({ keyword,
-          points: Array.from({ length: 24 }, (_, hour) => ({
-            t: new Date(Date.UTC(2026, 10, 1, hour)).toISOString(),
-            value: (actorRuns === 1 ? [0, 60, 1, 10, 95] : [28, 18, 60])[index],
+          points: Array.from({ length: 24 }, (_, day) => ({
+            t: new Date(Date.UTC(2026, 10, day + 1)).toISOString(),
+            value: (actorRuns === 1 ? [0, 60, 60, 21, 6] : [60, 22, 74])[index],
           })) })) } });
       throw new Error('Unexpected Actor request');
     });
     await register({ tools: { register() {} }, get: name => name === 'connection' ? { fetch: { register(route: Route & { path: string }) { routes.set(route.path, route); return async () => {}; } } } : undefined },
       { egress: 'actor-public', apifyToken: 'apify_api_test_placeholder', snapshotDir: directory, chartDir: null }, { onDemand: { fetch: actorFetch } });
-    const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'] } }) }));
+    const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'], time: 'today 1-m' } }) }));
     const output = (await reply.json()).result;
     expect(output.ok).toBe(true); expect(output.calibration.status).toBe('partial');
-    expect(keywords).toEqual(['Alpha', 'Beta', 'oz to ml', 'sudoku', 'instagram']);
+    expect(keywords).toEqual(['Alpha', 'Beta', 'word search', 'oz to ml', 'kph to mph']);
     expect(actorFetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
     const records = await new QueryHistoryStore(directory).list();
     expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'run-1', costUsd: 0.001 });
@@ -173,9 +173,9 @@ describe('dsh query history and dashboard', () => {
     const response = await post(check);
     expect(response.status).toBe(200);
     const { saved } = await response.json();
-    expect(keywords).toEqual(['Alpha', 'kph to mph', 'oz to ml']);
+    expect(keywords).toEqual(['Alpha', 'psi to bar', 'kph to mph']);
     expect(saved.volumeChecks).toMatchObject([{ sameWindow: true, keyword: 'Alpha', actorRunId: 'run-2', costUsd: 0.001,
-      estimate: { anchor: { term: 'kph to mph' }, traffic: { average: 2489 } } }]);
+      estimate: { anchor: { term: 'kph to mph' }, traffic: { average: 1297 } } }]);
     expect(saved.result).toEqual((await new QueryHistoryStore(directory).get(id))!.result);
     expect((await post({ ...check, requestId: randomUUID() })).status).toBe(200);
     expect(actorRuns).toBe(2);

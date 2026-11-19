@@ -240,6 +240,35 @@ describe('dsh plugin execution', () => {
     expect(result.interest).not.toHaveProperty('points');
   });
 
+  it('keeps an older Actor snapshot relative when dsh has no regional baseline', async () => {
+    const { ctx, tools } = fakeCtx(credentialsWithToken('oauth'));
+    const traffic = { average: 8100, high: 10000, settledLatest: 7000 };
+    const actor = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('/runs?')) {
+        expect(JSON.parse(String(init?.body)).toolRequest).toMatchObject({
+          input: { term: 'sudoku', geo: 'AU', anchor: 'sudoku' }, settings: { charts: false },
+        });
+        return Response.json({ data: { id: 'run', status: 'SUCCEEDED', defaultKeyValueStoreId: 'store' } });
+      }
+      return Response.json({ protocol: 1, result: {
+        ok: true, schemaVersion: 1, status: 'ok', term: 'sudoku',
+        filter: { geo: 'AU', time: 'now 7-d' }, traffic, traffic7d: traffic,
+        anchor: { term: 'sudoku', dailySearches: 8100 },
+        chart: { svg: '<svg>8100</svg>', path: null },
+        verdict: { label: 'steady', prioritize: true },
+        series: { points: [{ t: '2026-11-18T00:00:00Z', score: 50, traffic: 8100 }] },
+        meta: { fetchedAt: new Date().toISOString() },
+      }, snapshots: [] });
+    });
+    await register(ctx, config({ egress: 'actor-public' }), { onDemand: { fetch: actor as typeof fetch } });
+    const result = await tools.get('trends_snapshot')!.execute({ term: 'sudoku', geo: 'AU', time: 'now 7-d' }, {});
+    expect(result).toMatchObject({
+      ok: true, traffic: { average: null }, traffic7d: { average: null },
+      chart: { svg: '', path: null }, verdict: { label: 'steady', prioritize: false },
+      series: { points: [{ score: 50, traffic: null }] },
+    });
+  });
+
   it('returns the shared error envelope when an Actor egress has no token', async () => {
     vi.stubEnv('APIFY_TOKEN', '');
     const { ctx, tools } = fakeCtx();

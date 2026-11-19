@@ -9,16 +9,16 @@ import {
   type ApifyOAuthManager,
   type OAuthCredentialsService,
 } from './apify-oauth.js';
-import { BUILTIN_ANCHORS, dshBaselinesFor, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
+import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
 import { DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, resolveEgress, type EgressMode, type EgressNotice } from './options.js';
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 import { calibratedComparison } from './dashboard-comparison.js';
-import { calibratedSnapshot } from './dashboard-volume.js';
+import { calibratedSnapshot, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
-import { MEKA_BASELINES_URL } from './dsh-baselines.js';
+import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
@@ -310,39 +310,45 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const onDemand = new OnDemandActorClient(overrides.onDemand);
   const tools = createTools({
     transport,
-    settings: geo => {
-      const snapshot = settings();
-      return {
-        defaultGeo: snapshot.geo,
-        anchor: snapshot.anchor,
-        baselines: dshBaselinesFor(geo ?? snapshot.geo, snapshot.baselines),
-        cache: snapshot.cache,
-        snapshotDir: snapshot.snapshotDir,
-        chartDir: snapshot.chartDir,
-      };
-    },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
   const execute = async (tool: GtfaTool, input: Record<string, unknown>, current: GtfaRuntimeSettings,
     signal?: AbortSignal, progress?: (phase: QueryPhase) => void): Promise<Record<string, unknown>> => {
     throwIfAborted(signal);
     progress?.('requesting');
+    const snapshot = tool.name === 'trends_snapshot';
+    const calibrates = snapshot || tool.name === 'trends_ask' && input.validate === true;
+    const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+    // A native snapshot reuses its anchor in the companion 7-day series.
+    const referenceTime = snapshot ? 'now 7-d' : filter.time;
+    const pin = snapshot && typeof input.anchor === 'string' ? { ...current, anchor: input.anchor } : current;
+    const refs = calibrates ? volumeReferences(filter, pin, referenceTime) : undefined;
+    const automatic = refs ? mekaDefaultAnchor(filter.geo, referenceTime) : undefined;
+    const reference = refs && (refs.pinned ? refs.lookup(refs.pinned)
+      : refs.lookup(automatic?.term ?? '') ?? refs.available.at(Math.floor((refs.available.length - 1) / 2)));
+    const relative = calibrates && !reference;
+    // Comparing a term with itself preserves its raw series on older Actors.
+    const anchor = refs ? reference?.term ?? refs.pinned ?? String(input.term) : current.anchor;
+    const queryInput = snapshot ? { ...input, anchor, ...(!input.tz && process.env.GTFA_TZ ? { tz: process.env.GTFA_TZ } : {}) } : input;
+    const executionSettings = { defaultGeo: current.geo, anchor,
+      baselines: reference ? { version: 2 as const, anchors: [reference] } : current.baselines,
+      cache: current.cache, snapshotDir: current.snapshotDir, chartDir: relative ? null : current.chartDir,
+    };
+    let result: Record<string, unknown>;
     if (current.egress !== 'local' && !overrides.transport) {
       const resolved = await oauth.resolveToken(current.apifyToken);
       if (!resolved.token) {
         const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
         return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
       }
-      const actorInput = tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ ? { ...input, tz: process.env.GTFA_TZ } : input;
-      const calibrated = tool.name === 'trends_snapshot' || tool.name === 'trends_ask' && input.validate === true;
-      return callActorTool(onDemand, {
+      result = await callActorTool(onDemand, {
         token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-        name: tool.name, input: actorInput, settings: { defaultGeo: current.geo, anchor: current.anchor,
-          baselines: calibrated ? dshBaselinesFor(String(input.geo ?? current.geo), current.baselines) : current.baselines,
-          cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
+        name: tool.name, input: queryInput, settings: executionSettings, signal, progress,
       });
+    } else {
+      result = await tool.execute(queryInput, { signal, settings: executionSettings });
     }
-    return tool.execute(input, { signal });
+    return relative ? relativeDshResult(result, snapshot, filter.geo) : result;
   };
   const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source'], progress?: (phase: QueryPhase) => void) => {
     throwIfAborted(signal);

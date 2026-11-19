@@ -4,6 +4,7 @@
 
 Initial release in preparation.
 
+- Sync 59 published MEKA anchors. Use nearby tiers for the first dsh comparison and include daily-only anchors in eligible follow-up estimates.
 - Plot anchor disagreement as a per-sample range in the dsh search-volume chart. Restore missing samples from retained Actor results.
 
 - Estimate missing search volume on demand from a saved dsh result. One explicit follow-up uses the selected connection and records the result and any Actor cost.

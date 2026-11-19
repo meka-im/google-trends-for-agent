@@ -29,7 +29,11 @@ export function BaselineCatalog({ t, locale }: { t: (key: string) => string; loc
       <thead><tr><th scope="col">{t('anchorGeo')}</th><th scope="col">{t('anchorTerm')}</th>
         <th scope="col">{t('baselineDailyEstimate')}</th></tr></thead>
       <tbody>{anchors.map(anchor => <tr key={`${anchor.geo}:${anchor.term}`}>
-        <th scope="row">{name(anchor.geo)}</th><td>{anchor.term}</td>
+        <th scope="row">{name(anchor.geo)}</th>
+        <td>
+          {anchor.term}
+          {anchor.dailyOnly ? <small className="gtfa-catalog-window" title={t('baselineDailyWindow')}>30d+</small> : null}
+        </td>
         <td>{numbers.format(anchor.dailySearches)}</td>
       </tr>)}</tbody>
     </table>

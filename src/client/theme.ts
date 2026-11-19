@@ -226,6 +226,7 @@ export const SETTINGS_CSS = `
 .gtfa-catalog-table th:nth-child(2) { width:41%; }
 .gtfa-catalog-table th:nth-child(3) { width:28%; }
 .gtfa-catalog-table td:nth-child(2) { font-family:var(--ds-font-family-code,Menlo,monospace); }
+.gtfa-catalog-window { margin-inline-start:6px; color:var(--gtfa-muted); white-space:nowrap; }
 .gtfa-catalog-table td:nth-child(n+3),.gtfa-catalog-table th:nth-child(n+3) { text-align:right; font-variant-numeric:tabular-nums; }
 .gtfa-catalog-table td:nth-child(n+3) { white-space:nowrap; }
 .gtfa-baseline-editor { border:1px solid var(--gtfa-line); border-radius:11px; }
