@@ -48,6 +48,22 @@ The seodata API provides keyword-volume estimates but omits the measurement rang
 
 The wider ±75% band acknowledges these limitations and disagreement with cross-keyword checks. Separate calculator-based estimates and 3-month Trends ratios were examined; they were not substituted for direct regional keyword volumes. The Worldwide calculator/translate checks imply roughly 3.3–7.8 million monthly sudoku searches, showing why the global figure should not be presented as precise. US derivation and its original sources are in [the reference](reference.md#calibration-and-the-anchor).
 
+### Reading search-volume estimates in dsh
+
+A dashboard comparison starts one batch of up to five terms, including any
+available reference slots. If an estimate is missing, **Estimate separately**
+uses the saved region and time preset with a smaller group of regional anchors.
+Each click starts one comparison through the current connection. Actor runs are
+metered and their returned usage is included in the local cost card. History
+shows the saved follow-up. A shifted rolling window appears with its own dates.
+
+Dashboard estimates multiply a regional reference's historical daily baseline
+by the target-to-reference mean interest ratio from matched, settled samples.
+Sparse series and weak anchors leave the estimate blank. When usable anchors
+give estimates more than 2× apart, the dashboard displays their spread. Short
+intervals are expressed as daily equivalents. The year-long baseline is applied
+to windows up to a year.
+
 ## Validation evidence
 
 [The dated evidence directory](https://github.com/meka-im/google-trends-for-agent/tree/main/validation/2026-11-16-regional-baselines/) contains the API responses, source observations and Google Trends comparisons used for this review. Each new region was compared against ChatGPT in 24h and 7d windows, using one shared 0–100 scale per query. All sixteen final comparisons returned `ok`; their selected anchors passed the current reliability gate. There was no `BLOCKED` or `RATE_LIMITED` result. The benchmark demonstrates data access and numerical eligibility; it does not establish the accuracy of absolute search-volume estimates.

@@ -136,26 +136,54 @@ describe('dsh query history and dashboard', () => {
     const directory = await mkdtemp(join(tmpdir(), 'gtfa-dashboard-actor-')); directories.push(directory);
     const routes = new Map<string, Route>();
     let keywords: string[] = [];
+    let actorRuns = 0;
+    let filter = { geo: 'US', time: 'now 1-d' };
     const actorFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('/runs?')) {
-        keywords = JSON.parse(String(init!.body)).toolRequest.input.keywords;
-        return Response.json({ data: { id: 'one-run', status: 'SUCCEEDED', defaultKeyValueStoreId: 'one-store', usageTotalUsd: 0.001 } });
+        const input = JSON.parse(String(init!.body)).toolRequest.input;
+        keywords = input.keywords;
+        filter = { geo: input.geo ?? 'US', time: input.time };
+        actorRuns++;
+        return Response.json({ data: { id: 'run-' + actorRuns, status: 'SUCCEEDED', defaultKeyValueStoreId: 'one-store', usageTotalUsd: 0.001 } });
       }
       if (String(url).endsWith('/records/TOOL_RESPONSE')) return Response.json({ protocol: 1, snapshots: [], result: { ok: true, status: 'ok', schemaVersion: 1,
-        filter: { geo: 'US', time: 'now 1-d' }, meta: { fetchedAt: new Date().toISOString() },
-        series: keywords.map((keyword, index) => ({ keyword, average: 50 - index * 10, latest: 50 - index * 10, peak: 50 - index * 10,
-          points: Array.from({ length: 24 }, (_, hour) => ({ t: new Date(Date.UTC(2026, 10, 1, hour)).toISOString(), value: 50 - index * 10 })) })) } });
+        filter, meta: { fetchedAt: new Date().toISOString() },
+        series: keywords.map((keyword, index) => ({ keyword,
+          points: Array.from({ length: 24 }, (_, hour) => ({
+            t: new Date(Date.UTC(2026, 10, 1, hour)).toISOString(),
+            value: (actorRuns === 1 ? [0, 60, 1, 10, 95] : [28, 18, 60])[index],
+          })) })) } });
       throw new Error('Unexpected Actor request');
     });
     await register({ tools: { register() {} }, get: name => name === 'connection' ? { fetch: { register(route: Route & { path: string }) { routes.set(route.path, route); return async () => {}; } } } : undefined },
       { egress: 'actor-public', apifyToken: 'apify_api_test_placeholder', snapshotDir: directory, chartDir: null }, { onDemand: { fetch: actorFetch } });
     const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'] } }) }));
     const output = (await reply.json()).result;
-    expect(output.ok).toBe(true); expect(output.calibration.status).toBe('ok');
+    expect(output.ok).toBe(true); expect(output.calibration.status).toBe('partial');
     expect(keywords).toEqual(['Alpha', 'Beta', 'oz to ml', 'sudoku', 'instagram']);
     expect(actorFetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
     const records = await new QueryHistoryStore(directory).list();
-    expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'one-run', costUsd: 0.001 });
+    expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'run-1', costUsd: 0.001 });
+
+    const id = records[0]!.id, route = routes.get('/api/gtfa.dashboard')!;
+    const post = (body: unknown) => route.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify(body) }));
+    expect((await post({ action: 'estimate', id, term: 'unrelated' })).status).toBe(422);
+    expect(actorRuns).toBe(1);
+    const check = { action: 'estimate', id, term: 'alpha', requestId: randomUUID() };
+    const response = await post(check);
+    expect(response.status).toBe(200);
+    const { saved } = await response.json();
+    expect(keywords).toEqual(['Alpha', 'kph to mph', 'oz to ml']);
+    expect(saved.volumeChecks).toMatchObject([{ sameWindow: true, keyword: 'Alpha', actorRunId: 'run-2', costUsd: 0.001,
+      estimate: { anchor: { term: 'kph to mph' }, traffic: { average: 2489 } } }]);
+    expect(saved.result).toEqual((await new QueryHistoryStore(directory).get(id))!.result);
+    expect((await post({ ...check, requestId: randomUUID() })).status).toBe(200);
+    expect(actorRuns).toBe(2);
+    const store = new QueryHistoryStore(directory);
+    expect(await store.list()).toMatchObject([{ id, volumeRuns: [{ actorRunId: 'run-2', costUsd: 0.001 }] }]);
+    expect((await store.get(id))?.volumeChecks).toHaveLength(1);
+    expect(await store.clear([id])).toBe(1);
+    await expect(stat(join(store.directory, id + '.volume.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
   it('reports only the active request progress without starting work, and clears it after cancellation', async () => {
     let started!: () => void;

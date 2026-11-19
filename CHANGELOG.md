@@ -4,6 +4,9 @@
 
 Initial release in preparation.
 
+- Estimate missing search volume on demand from a saved dsh result. One explicit follow-up uses the selected connection and records the result and any Actor cost.
+- Use matched, settled samples for dashboard estimates. Show an anchor range when eligible anchors disagree and display estimates at two significant digits.
+
 - Use the MEKA regional Google Ads catalog in dsh. Dashboard comparisons choose a usable anchor for each term within the same batch.
 - Unify the dsh query form for 1–5 terms, retain its draft/result across panel navigation, and show actual Actor progress with elapsed time.
 - Estimate multi-term traffic from one shared term-and-anchor batch. Five selected terms remain one batch; missing anchor space or weak baselines produce explicit null estimates.

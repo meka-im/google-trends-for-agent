@@ -1,7 +1,18 @@
+import type { VolumeSeries } from './volume-types.js';
 import type { EgressMode } from './options.js';
 
 /** Browser-safe journal contract; results remain native tool envelopes. */
 export type QueryToolName = 'trends_ask' | 'trends_compare' | 'trends_now' | 'trends_snapshot';
+export interface VolumeRun { actorRunId: string | null; costUsd: number | null; createdAt: string }
+export interface VolumeCheck extends VolumeRun {
+  keyword: string;
+  requestId: string;
+  sameWindow: boolean;
+  egress: EgressMode;
+  fetchedAt: string | null;
+  estimate?: VolumeSeries;
+  errorCode?: string;
+}
 export interface QueryRecord {
   id: string;
   tool: QueryToolName;
@@ -18,5 +29,6 @@ export interface QueryRecord {
   actorRunId: string | null;
   costUsd: number | null;
   errorCode: string | null;
+  volumeRuns?: VolumeRun[];
 }
-export interface SavedQuery { record: QueryRecord; result: Record<string, unknown> }
+export interface SavedQuery { record: QueryRecord; result: Record<string, unknown>; volumeChecks?: VolumeCheck[] }

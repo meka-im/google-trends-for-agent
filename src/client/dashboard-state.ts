@@ -19,8 +19,8 @@ export async function dashboardRequest<T>(suffix = '', body?: unknown, signal?: 
   const response = await fetch(`${URL}${suffix}`, { method: body === undefined ? 'GET' : 'POST', cache: 'no-store', signal,
     headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  const value = await response.json() as T & { ok?: boolean };
-  if (!response.ok || value.ok !== true) throw new Error('Dashboard request failed');
+  const value = await response.json() as T & { ok?: boolean; code?: string };
+  if (!response.ok || value.ok !== true) throw new Error(value.code === 'ESTIMATE_UNAVAILABLE' ? 'dashEstimateUnavailable' : 'dashFailed');
   return value;
 }
 function session(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
@@ -101,35 +101,54 @@ export class DashboardController {
       if (!this.disposed && !signal.aborted && this.value.operation?.requestId === requestId) this.pollProgress(requestId, signal);
     }, 1000);
   }
-  async run(): Promise<boolean> {
+  private async operate(terms: string[], send: (signal: AbortSignal, requestId: string, startedAt: number) => Promise<void>) {
     if (this.queryController || this.disposed) return false;
-    const { text, geo, time, reuse, state } = this.value;
-    const terms = queryKeywords(text), distinct = new Set(terms.map(term => term.toLowerCase().replace(/\s+/g, ' ')));
-    if (!terms.length || terms.length > 5 || terms.some(term => term.length > 100) || distinct.size !== terms.length) {
-      this.commit({ fieldError: 'dashInputError', error: '' }); return false;
-    }
     this.viewController?.abort();
     const operation = new AbortController(), requestId = crypto.randomUUID(), startedAt = Date.now();
     this.queryController = operation;
     const signal = AbortSignal.any([operation.signal, AbortSignal.timeout(130_000)]);
     this.commit({ fieldError: '', error: '', operation: { requestId, startedAt, phase: 'requesting', terms } }, true);
     this.pollProgress(requestId, signal);
-    const name = terms.length === 1 ? 'trends_snapshot' : 'trends_compare';
-    try {
-      const output = await dashboardRequest<{ result: Record<string, unknown> }>('', { action: 'query', name, requestId,
-        input: { ...(terms.length === 1 ? { term: terms[0], svg: false, fresh: !reuse } : { keywords: terms }), geo, time, timeoutMs: 60000 } }, signal);
-      if (this.disposed) return true;
-      const next = await this.refresh(), id = row(output.result.meta).queryRecordId;
-      const record = next?.records.find(record => record.id === id);
-      this.commit({ result: { record: record ?? { id: typeof id === 'string' && ID.test(id) ? id : '', tool: name, terms, geo, time, source: 'manual', egress: state?.settings.egress ?? 'local', status: String(output.result.status ?? 'error'), cached: row(output.result.meta).cached === true,
-        createdAt: new Date(startedAt).toISOString(), fetchedAt: String(row(output.result.meta).fetchedAt ?? ''), durationMs: Date.now() - startedAt, actorRunId: null, costUsd: null, errorCode: null }, result: output.result }, metric: 'interest' }, true);
-    } catch {
-      if (!this.disposed) { await this.refresh(); this.commit({ error: signal.aborted ? operation.signal.aborted ? 'dashCancelled' : 'dashTimedOut' : 'dashFailed' }); }
+    try { await send(signal, requestId, startedAt); }
+    catch (error) {
+      if (!this.disposed) {
+        await this.refresh();
+        this.commit({ error: signal.aborted ? operation.signal.aborted ? 'dashCancelled' : 'dashTimedOut'
+          : error instanceof Error && error.message === 'dashEstimateUnavailable' ? error.message : 'dashFailed' });
+      }
     } finally {
       clearTimeout(this.progressTimer); this.queryController = null;
       this.commit({ operation: null });
     }
     return true;
+  }
+  async run(): Promise<boolean> {
+    const { text, geo, time, reuse, state } = this.value;
+    const terms = queryKeywords(text), distinct = new Set(terms.map(term => term.toLowerCase().replace(/\s+/g, ' ')));
+    if (!terms.length || terms.length > 5 || terms.some(term => term.length > 100) || distinct.size !== terms.length) {
+      this.commit({ fieldError: 'dashInputError', error: '' });
+      return false;
+    }
+    const name = terms.length === 1 ? 'trends_snapshot' : 'trends_compare';
+    return this.operate(terms, async (signal, requestId, startedAt) => {
+      const output = await dashboardRequest<{ result: Record<string, unknown> }>('', { action: 'query', name, requestId,
+        input: { ...(terms.length === 1 ? { term: terms[0], svg: false, fresh: !reuse } : { keywords: terms }), geo, time, timeoutMs: 60000 } }, signal);
+      if (this.disposed || signal.aborted) return;
+      const next = await this.refresh(), id = row(output.result.meta).queryRecordId;
+      const record = next?.records.find(record => record.id === id);
+      this.commit({ result: { record: record ?? { id: typeof id === 'string' && ID.test(id) ? id : '', tool: name, terms, geo, time, source: 'manual', egress: state?.settings.egress ?? 'local', status: String(output.result.status ?? 'error'), cached: row(output.result.meta).cached === true,
+        createdAt: new Date(startedAt).toISOString(), fetchedAt: String(row(output.result.meta).fetchedAt ?? ''), durationMs: Date.now() - startedAt, actorRunId: null, costUsd: null, errorCode: null }, result: output.result }, metric: 'interest' }, true);
+    });
+  }
+  async estimate(term: string) {
+    const id = this.value.result?.record.id;
+    if (!id || !ID.test(id)) return;
+    await this.operate([term], async (signal, requestId) => {
+      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action: 'estimate', id, term, requestId }, signal);
+      if (this.disposed || signal.aborted) return;
+      this.commit({ result: reply.saved, metric: 'traffic' }, true);
+      await this.refresh();
+    });
   }
   cancel = () => { this.queryController?.abort(); };
   async view(id: string, prefill = true) {

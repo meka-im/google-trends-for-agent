@@ -12,14 +12,14 @@ function source(anchorValue?: number, scores: Record<string, number> = {}) {
 }
 describe('one-batch dashboard comparison', () => {
   it('selects the nearest usable reference for each term in one shared request', async () => {
-    const execute = source(), progress = vi.fn();
+    const execute = source(undefined, { Alpha: 10, 'oz to ml': 1, sudoku: 10, instagram: 95 }), progress = vi.fn();
     const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'], time: 'now 1-d' }, { geo: 'US' }, execute, progress);
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0]![0].keywords).toEqual(['Alpha', 'Beta', 'oz to ml', 'sudoku', 'instagram']);
     expect(result.series.map(row => row.keyword)).toEqual(['Alpha', 'Beta']);
     expect(result.series[1]!.peak).toBe(100);
     expect(result.calibration.series.map(row => row.anchor?.term)).toEqual(['sudoku', 'instagram']);
-    expect(result.calibration.series.map(row => row.traffic.average)).toEqual([92632, 848571]);
+    expect(result.calibration.series.map(row => row.traffic.average)).toEqual([88000, 625263]);
     expect(result.meta.actorRunId).toBe('one-run'); expect(progress).toHaveBeenCalledOnce();
   });
   it('returns a volume for the strong term when the same batch suppresses the weak term', async () => {
@@ -29,6 +29,34 @@ describe('one-batch dashboard comparison', () => {
     expect(result.calibration.series.map(row => [row.keyword, row.anchor?.term, row.traffic.average])).toEqual([
       ['DSH', undefined, null], ['GTA 6', 'instagram', 1980000],
     ]);
+  });
+  it('reports the anchor spread when compatible samples imply materially different volumes', async () => {
+    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, source(), () => {});
+    expect(result.calibration.series[0]).toMatchObject({
+      reason: 'disagreement', traffic: { average: null }, range: { low: 10600, high: 565714 },
+    });
+  });
+  it('uses settled daily samples for both the mean and peak', async () => {
+    const base = source(undefined, { Alpha: 10, 'oz to ml': 0, sudoku: 0, instagram: 10 });
+    const execute = async (input: Record<string, unknown>) => {
+      const result = await base(input);
+      for (const term of result.series) {
+        term.points.forEach((point, i) => { point.t = new Date(Date.UTC(2026, 10, i + 1)).toISOString(); });
+        if (term.keyword === 'Alpha') term.points.slice(-2).forEach(point => { point.value = 100; });
+      }
+      return result;
+    };
+    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'], time: 'today 1-m' }, { geo: 'US' }, execute, () => {});
+    const alpha = result.calibration.series[0]!;
+    expect(alpha.traffic).toMatchObject({ average: 990000, latest: 990000, peak: 990000, settledLatest: 990000 });
+    expect(alpha.points).toHaveLength(22);
+    expect(alpha.points.at(-1)?.t).toBe('2026-11-22T00:00:00.000Z');
+  });
+  it('keeps the actual score when auto-added anchors overwhelm every requested term', async () => {
+    const execute = source(undefined, { Alpha: 1, Beta: 2, instagram: 100 });
+    const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, execute, () => {});
+    expect(result.calibration.weakComparison).toBe(true);
+    expect(result.series.map(row => row.peak)).toEqual([1, 2]);
   });
   it('accepts four user terms plus one anchor, without a second query', async () => {
     const execute = source();
@@ -54,7 +82,7 @@ describe('one-batch dashboard comparison', () => {
     const weak = source(0);
     const result = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'US' }, weak, () => {});
     expect(weak).toHaveBeenCalledOnce(); expect(result.calibration.series.every(series => series.traffic.average === null)).toBe(true);
-    expect(result.meta.warnings?.join(' ')).toContain('sparse/weak');
+    expect(result.calibration.series.map(series => series.reason)).toEqual(['anchor', 'anchor']);
     const unsupported = source();
     const other = await calibratedComparison({ keywords: ['Alpha', 'Beta'] }, { geo: 'NZ' }, unsupported, () => {});
     expect(unsupported).toHaveBeenCalledExactlyOnceWith({ keywords: ['Alpha', 'Beta'] });

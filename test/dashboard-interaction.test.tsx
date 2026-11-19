@@ -97,6 +97,14 @@ describe('dashboard interactions', () => {
     expect(resultSeries(saved, true)[0]).toMatchObject({ average: null, latest: null, peak: null, points: [{ value: null }, { value: null }] });
     expect(resultSeries(saved)[0]!.points.map(point => point.value)).toEqual([80, null]);
   });
+  it('keeps an updated follow-up window off the original chart', () => {
+    const saved = { record: { terms: ['Alpha'], tool: 'trends_compare' }, result: { series: [] },
+      volumeChecks: [{ keyword: 'Alpha', sameWindow: false, estimate: { traffic: { average: 1000 }, points: [{ t: '2026-11-19', value: 1000 }] } }],
+    } as unknown as SavedQuery;
+    expect(resultSeries(saved, true)[0]).toMatchObject({ average: null, points: [] });
+    saved.volumeChecks![0]!.sameWindow = true;
+    expect(resultSeries(saved, true)[0]).toMatchObject({ average: 1000, points: [{ t: '2026-11-19', value: 1000 }] });
+  });
   it('keeps one in-flight query alive across leaving and reopening the panel, including real progress', async () => {
     let finish!: () => void;
     const h = api(new Promise<void>(resolve => { finish = resolve; })), user = userEvent.setup();

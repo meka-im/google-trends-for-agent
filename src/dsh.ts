@@ -16,6 +16,8 @@ import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 import { calibratedComparison } from './dashboard-comparison.js';
+import { calibratedSnapshot } from './dashboard-volume.js';
+import { estimateRequest, finishEstimate } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL } from './dsh-baselines.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
@@ -321,6 +323,27 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
+  const execute = async (tool: GtfaTool, input: Record<string, unknown>, current: GtfaRuntimeSettings,
+    signal?: AbortSignal, progress?: (phase: QueryPhase) => void): Promise<Record<string, unknown>> => {
+    throwIfAborted(signal);
+    progress?.('requesting');
+    if (current.egress !== 'local' && !overrides.transport) {
+      const resolved = await oauth.resolveToken(current.apifyToken);
+      if (!resolved.token) {
+        const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
+        return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
+      }
+      const actorInput = tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ ? { ...input, tz: process.env.GTFA_TZ } : input;
+      const calibrated = tool.name === 'trends_snapshot' || tool.name === 'trends_ask' && input.validate === true;
+      return callActorTool(onDemand, {
+        token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
+        name: tool.name, input: actorInput, settings: { defaultGeo: current.geo, anchor: current.anchor,
+          baselines: calibrated ? dshBaselinesFor(String(input.geo ?? current.geo), current.baselines) : current.baselines,
+          cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
+      });
+    }
+    return tool.execute(input, { signal });
+  };
   const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source'], progress?: (phase: QueryPhase) => void) => {
     throwIfAborted(signal);
     const current = settings(), startedAt = Date.now();
@@ -330,28 +353,13 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
     let result: Record<string, unknown>;
     try {
-      const execute = async (input: Record<string, unknown>): Promise<Record<string, unknown>> => {
-        progress?.('requesting');
-        if (current.egress !== 'local' && !overrides.transport) {
-          const resolved = await oauth.resolveToken(current.apifyToken);
-          if (!resolved.token) {
-            const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
-            return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
-          }
-          if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
-          const calibrated = tool.name === 'trends_snapshot' || tool.name === 'trends_ask' && input.validate === true;
-          return callActorTool(onDemand, {
-            token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-            name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor,
-              baselines: calibrated ? dshBaselinesFor(String(input.geo ?? current.geo), current.baselines) : current.baselines,
-              cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
-          });
-        }
-        return tool.execute(input, { signal });
-      };
       result = source === 'manual' && tool.name === 'trends_compare'
-        ? await calibratedComparison(input, current, execute, () => progress?.('calibrating'))
-        : await execute(input);
+        ? await calibratedComparison(input, current, args => execute(tool, args, current, signal, progress), () => progress?.('calibrating'))
+        : await execute(tool, input, current, signal, progress);
+      if (source === 'manual' && tool.name === 'trends_snapshot') {
+        progress?.('calibrating');
+        result = calibratedSnapshot(result, input, current);
+      }
       throwIfAborted(signal);
     } catch (error) {
       result = { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
@@ -389,10 +397,23 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
-    dashboard: { settings, execute: async (name, input, signal, progress) => {
-      const tool = tools.find(tool => tool.name === name)!;
-      return run(tool, input, signal, 'manual', progress);
-    } },
+    dashboard: {
+      settings,
+      execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),
+      estimate: async (saved, term, requestId, startedAt, egress, signal, progress) => {
+        const current = { ...settings(), egress };
+        const request = estimateRequest(saved, term, current);
+        if (!request) return undefined;
+        const tool = tools.find(tool => tool.name === 'trends_compare')!;
+        const input = tool.inputSchema.parse({
+          keywords: [request.keyword, ...request.references.map(anchor => anchor.term)],
+          geo: request.filter.geo, time: request.filter.time, timeoutMs: 60000,
+        }) as Record<string, unknown>;
+        const result = await execute(tool, input, current, signal, progress);
+        progress('calibrating');
+        return finishEstimate(request, result, egress, requestId, new Date(startedAt).toISOString());
+      },
+    },
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
     ...(localTransport ? { localTransport } : {}),
     ...(overrides.routes?.relayTransport ? { relayTransport: overrides.routes.relayTransport } : {}),
