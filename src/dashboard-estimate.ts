@@ -64,3 +64,25 @@ export function finishEstimate(
     })), filter) } : { errorCode: typeof error.code === 'string' ? error.code : 'NETWORK_ERROR' }),
   };
 }
+
+/** Rebuild a v0.2.28 range from the exact completed batch, keeping its saved summary. */
+export function restoreEstimateBand(saved: SavedQuery, check: VolumeCheck, output: Record<string, unknown>, settings: VolumeSettings) {
+  const original = check.estimate, range = original?.range;
+  if (!original || !range || range.points || !output.ok) return undefined;
+  const filter = volumeFilter(saved.record.geo, saved.record.time);
+  const actual = row(output.filter);
+  if (actual.geo !== filter.geo || actual.time !== filter.time) return undefined;
+  const { lookup } = volumeReferences(filter, settings);
+  const batch = new Map(rows(output.series).map(value => [normalizeTerm(String(value.keyword)), pointsOf(value.points)]));
+  const references = range.anchors.flatMap(term => {
+    const anchor = lookup(term);
+    return anchor ? [{ anchor, points: batch.get(normalizeTerm(term)) ?? [] }] : [];
+  });
+  const restored = estimateVolume(check.keyword, batch.get(normalizeTerm(check.keyword)) ?? [], references, filter);
+  const band = restored.range;
+  // The same scope, anchors, and saved results rule out applying newer baselines to history.
+  if (!band?.points || band.low !== range.low || band.high !== range.high ||
+    band.anchors.length !== range.anchors.length || !band.anchors.every((anchor, index) => anchor === range.anchors[index]) ||
+    restored.period?.from !== original.period?.from || restored.period?.to !== original.period?.to) return undefined;
+  return { ...check, estimate: { ...original, range: { ...range, points: band.points } } };
+}

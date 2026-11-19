@@ -101,7 +101,17 @@ export function estimateVolume(
   if (!best) return { ...unavailable, reason: 'anchor' };
   const averages = estimates.map(estimate => estimate.traffic.average!);
   const low = Math.min(...averages), high = Math.max(...averages);
-  if (high > 2 * low) return { ...unavailable, reason: 'disagreement', range: { low, high, anchors: estimates.map(estimate => estimate.anchor.term) } };
+  if (high > 2 * low) {
+    const points = settled.map((point, index) => {
+      const values = estimates.flatMap(estimate => {
+        const value = estimate.points[index]!.value;
+        return value === null ? [] : [value];
+      });
+      const aligned = values.length === estimates.length;
+      return { t: point.time, low: aligned ? Math.min(...values) : null, high: aligned ? Math.max(...values) : null };
+    });
+    return { ...unavailable, reason: 'disagreement', range: { low, high, anchors: estimates.map(estimate => estimate.anchor.term), points } };
+  }
   const used = best.points.filter(point => point.value !== null);
   return { keyword, anchor: best.anchor, traffic: best.traffic, points: best.points,
     period: { from: used[0]!.t, to: used.at(-1)!.t } };

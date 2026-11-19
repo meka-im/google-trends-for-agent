@@ -4,6 +4,8 @@
 
 Initial release in preparation.
 
+- Plot anchor disagreement as a per-sample range in the dsh search-volume chart. Restore missing samples from retained Actor results.
+
 - Estimate missing search volume on demand from a saved dsh result. One explicit follow-up uses the selected connection and records the result and any Actor cost.
 - Use matched, settled samples for dashboard estimates. Show an anchor range when eligible anchors disagree and display estimates at two significant digits.
 

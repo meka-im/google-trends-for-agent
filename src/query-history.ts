@@ -84,7 +84,10 @@ export class QueryHistoryStore {
     return this.serial(async () => {
       const saved = await this.read(id);
       if (!saved) return null;
-      const volumeChecks = [...(saved.volumeChecks ?? []), check];
+      const volumeChecks = [...(saved.volumeChecks ?? [])];
+      const index = volumeChecks.findIndex(previous => previous.requestId === check.requestId);
+      if (index === -1) volumeChecks.push(check);
+      else volumeChecks[index] = check;
       await writeJson(join(this.directory, id + VOLUME_SUFFIX), volumeChecks);
       return { ...saved, volumeChecks };
     });

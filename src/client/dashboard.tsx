@@ -8,7 +8,8 @@ import { GEO_CODES, regionLabel, type EgressMode } from '../options.js';
 import type { QueryRecord, SavedQuery } from '../query-history-types.js';
 import { DashboardController, dashboardRequest, queryKeywords } from './dashboard-state.js';
 import type { QueryProgress } from '../query-progress.js';
-import { supportsVolumeWindow } from '../volume-types.js';
+import { supportsVolumeWindow, type VolumeBandPoint } from '../volume-types.js';
+import { TrendChart, hasChartPoints } from './trend-chart.js';
 
 type Translate = (key: string) => string;
 const TIME_KEYS = [['now 1-H', 'dashTime1h'], ['now 4-H', 'dashTime4h'], ['now 1-d', 'dashTime24h'], ['now 7-d', 'dashTime7d'],
@@ -118,7 +119,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
       </div>
       {terms.length === 5 ? <p className="gd-limit-hint">{t('dashFiveTerms')}</p> : null}
       {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-      {result ? <Result key={result.record.id} saved={result} metric={metric} setMetric={setMetric} busy={busy} egress={state?.settings.egress} estimate={term => void controller.estimate(term)} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={32} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
+      {result ? <Result key={result.record.id} saved={result} metric={metric} setMetric={setMetric} busy={busy} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={32} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
     </section>
     <section id="gd-panel-records" role="tabpanel" aria-labelledby="gd-tab-records" hidden={tab !== 'records'}>
       <div className="gd-toolbar"><div><h2>{t('dashRecords')}</h2><p>{t('dashHistoryHint')}</p></div></div>
@@ -172,7 +173,7 @@ interface Series {
   average: number | null;
   latest: number | null;
   peak: number | null;
-  range?: { low: number; high: number };
+  range?: { low: number; high: number; points: VolumeBandPoint[] };
 }
 
 function volumeRows(saved: SavedQuery) {
@@ -198,7 +199,9 @@ export function resultSeries(saved: SavedQuery, traffic = false): Series[] {
         ? array(object(data.series).points).map(point => ({ t: point.t, value: point.traffic, gap: point.gap })) : [];
     return { term, points: values.map(point => ({ t: String(point.t), value: point.gap ? null : number(point.value) })),
       average: number(stats.average), latest: number(stats.settledLatest ?? stats.latest), peak: number(stats.peak),
-      ...(low !== null && high !== null ? { range: { low, high } } : {}) };
+      ...(low !== null && high !== null ? {
+        range: { low, high, points: array(range.points).map(point => ({ t: String(point.t), low: number(point.low), high: number(point.high) })) },
+      } : {}) };
   });
   if (Array.isArray(data.series)) return array(data.series).map(row => {
     const points = array(row.points);
@@ -219,7 +222,9 @@ export function resultSeries(saved: SavedQuery, traffic = false): Series[] {
 const reasonKey: Record<string, string> = { baseline: 'dashVolumeNoBaseline', capacity: 'dashVolumeCapacity', window: 'dashVolumeLongWindow',
   samples: 'dashEstimateMissing', anchor: 'dashVolumeWeakAnchor', disagreement: 'dashVolumeDisagreement' };
 
-function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; t: Translate; egress?: EgressMode; estimate: (term: string) => void; busy: boolean }) {
+type EstimateAction = (term: string, action?: 'restore') => void;
+
+function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean }) {
   const { record, result } = saved;
   if (record.tool !== 'trends_compare' && record.tool !== 'trends_snapshot') return null;
   const showChecks = Boolean(result.ok) && record.status !== 'blocked' && supportsVolumeWindow(record.time);
@@ -233,8 +238,11 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
       const average = number(object(reading.traffic).average), reference = object(reading.anchor).term;
       const range = object(reading.range), low = number(range.low), high = number(range.high), period = object(reading.period);
       const reason = String(reading.reason ?? object(result.calibration).reasonCode ?? '');
-      const canCheck = showChecks && Boolean(record.id) && (!last || last.errorCode) && (average === null || legacy) && reason !== 'baseline';
-      const button = last?.errorCode ? 'dashRetryEstimate' : legacy ? 'dashReestimate' : 'dashEstimateTerm';
+      const legacyBand = last?.estimate?.range && !last.estimate.range.points;
+      const restore = Boolean(legacyBand && last?.actorRunId);
+      const canCheck = showChecks && Boolean(record.id) &&
+        (restore || ((!last || last.errorCode || (legacyBand && last.egress === 'local')) && (average === null || legacy) && reason !== 'baseline'));
+      const button = restore ? 'dashRestoreCurve' : last?.errorCode ? 'dashRetryEstimate' : legacy || legacyBand ? 'dashReestimate' : 'dashEstimateTerm';
       return <div className="gd-volume-row" key={term}>
         <span>{term}</span>
         <strong>{low !== null && high !== null ? compactVolume.format(low) + '–' + compactVolume.format(high) : formatVolume(average)}</strong>
@@ -244,8 +252,10 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
         {last?.errorCode ? <small role="alert">{t(last.errorCode === 'BLOCKED' || last.errorCode === 'RATE_LIMITED' ? 'dashEstimateBlocked' : 'dashEstimateFailed')}</small> : null}
         {last?.estimate && typeof period.from === 'string' && typeof period.to === 'string' ?
           <small>{t(last.sameWindow ? 'dashEstimateSaved' : 'dashEstimateNewWindow')} · {dateText(period.from, true)} – {dateText(period.to, true)}</small> : null}
-        {canCheck ? <div className="gd-volume-action"><Button disabled={busy || !egress} onClick={() => estimate(term)} label={t(button) + ' · ' + term}>{t(button)}</Button>
-          {egress && egress !== 'local' ? <small>{t('dashEstimateCost')}</small> : null}</div> : null}
+        {canCheck ? <div className="gd-volume-action">
+          <Button disabled={busy || !egress} onClick={() => estimate(term, restore ? 'restore' : undefined)} label={t(button) + ' · ' + term}>{t(button)}</Button>
+          {restore ? <small>{t('dashRestoreSource')}</small> : egress && egress !== 'local' ? <small>{t('dashEstimateCost')}</small> : null}
+        </div> : null}
       </div>;
     })}
     <small>{t('dashEstimateNote')}</small>
@@ -253,15 +263,15 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
 }
 
 function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
-  saved: SavedQuery; metric: string; setMetric: (v: string) => void; t: Translate; egress?: EgressMode; estimate: (term: string) => void; busy: boolean;
+  saved: SavedQuery; metric: string; setMetric: (v: string) => void; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean;
 }) {
   const { record, result } = saved, meta = object(result.meta);
   const [focused, focusTerm] = useState<string | null>(null);
   const trafficSeries = resultSeries(saved, true), hasTraffic = trafficSeries.some(row => row.average !== null || row.range);
   const currentMetric = metric === 'traffic' && hasTraffic ? 'traffic' : 'interest';
   const series = currentMetric === 'traffic' ? trafficSeries : resultSeries(saved);
-  const chartSeries = series.map((row, index) => ({ ...row, color: colors[index]! }))
-    .filter(row => row.points.some(point => point.value !== null));
+  const legend = series.map((row, index) => ({ ...row, color: colors[index]! }));
+  const chartSeries = legend.filter(hasChartPoints);
   const visible = focused && chartSeries.some(row => row.term === focused) ? chartSeries.filter(row => row.term === focused) : chartSeries;
   const format = currentMetric === 'traffic' ? formatVolume : formatNumber;
   const comparison = record.tool === 'trends_compare';
@@ -276,13 +286,22 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
           <Button primary={currentMetric === 'interest'} onClick={() => { focusTerm(null); setMetric('interest'); }}>{t('dashInterest')}</Button>
           <Button disabled={!hasTraffic} primary={currentMetric === 'traffic'} onClick={() => { focusTerm(null); setMetric('traffic'); }}>{t('dashTraffic')}</Button>
         </div></div>
-        <TrendChart series={visible} traffic={currentMetric === 'traffic'} label={t('dashTrend')} empty={t('dashUnavailable')} />
+        <TrendChart series={visible} traffic={currentMetric === 'traffic'}
+          label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
         {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?
           <p className="gd-chart-note">{t('dashWeakComparison')}</p> : null}
-        {chartSeries.length ? <div className="gd-legend gd-chart-legend">
-          {chartSeries.map(row => chartSeries.length === 1 ? <span key={row.term}><i style={{ background: row.color }} />{row.term}</span>
-            : <button key={row.term} type="button" aria-pressed={visible.some(item => item.term === row.term)}
-              onClick={() => focusTerm(focused === row.term ? null : row.term)}><i style={{ background: row.color }} />{row.term}</button>)}
+        {legend.length ? <div className="gd-legend gd-chart-legend">
+          {legend.map(row => {
+            const available = hasChartPoints(row);
+            const marker = <><i className={row.range?.points.length ? 'gd-band-marker' : undefined} style={{ color: row.color }} />{row.term}</>;
+            if (!available) return <span key={row.term} className="gd-legend-missing">{marker}
+              <small>{t(currentMetric === 'interest' && comparison ? 'dashNoSharedSeries' : 'dashNoCurve')}</small></span>;
+            if (chartSeries.length === 1) return <span key={row.term}>{marker}{row.range?.points.length ? <small>{t('dashAnchorBand')}</small> : null}</span>;
+            return <button key={row.term} type="button" aria-pressed={visible.some(item => item.term === row.term)}
+              onClick={() => focusTerm(focused === row.term ? null : row.term)}>
+              {marker}{row.range?.points.length ? <small>{t('dashAnchorBand')}</small> : null}
+            </button>;
+          })}
         </div> : null}
         <table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th>
           <th>{t('dashAverage')}</th><th>{t(currentMetric === 'traffic' ? 'dashLatestUsable' : 'dashLatest')}</th><th>{t('dashPeak')}</th>
@@ -303,14 +322,6 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
   </div>;
 }
 const arrayOfStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-function TrendChart({ series, traffic, label, empty }: { series: (Series & { color: string })[]; traffic: boolean; label: string; empty: string }) {
-  const timestamps = series.flatMap(row => row.points.map(point => Date.parse(point.t))).filter(Number.isFinite), values = series.flatMap(row => row.points.flatMap(point => point.value === null ? [] : [point.value]));
-  if (!values.length || !timestamps.length) return <div className="gd-empty"><p>{empty}</p></div>;
-  const start = Math.min(...timestamps), end = Math.max(...timestamps), max = traffic ? Math.max(1, ...values) * 1.1 : 100;
-  const x = (stamp: number) => 50 + (stamp - start) / (end - start || 1) * 585, y = (value: number) => 205 - value / max * 180;
-  const formatDate = (stamp: number) => new Date(stamp).toLocaleDateString(undefined, end - start > 366 * 86400000 ? { year: 'numeric', month: 'short' } : end - start > 2 * 86400000 ? { month: 'short', day: 'numeric' } : { month: 'numeric', day: 'numeric' });
-  return <svg className="gd-trend-chart" viewBox="0 0 670 250" role="img" aria-label={label}>{[0, 1, 2, 3, 4].map(i => <g key={i}><line x1="50" x2="635" y1={y(max * i / 4)} y2={y(max * i / 4)} stroke="var(--gtfa-line)" /><text x="40" y={y(max * i / 4) + 3} textAnchor="end">{Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(max * i / 4)}</text></g>)}{series.map(row => { let pen = false; const path = row.points.map(point => { const stamp = Date.parse(point.t); if (point.value === null || !Number.isFinite(stamp)) { pen = false; return ''; } const next = `${pen ? 'L' : 'M'}${x(stamp).toFixed(1)},${y(point.value).toFixed(1)}`; pen = true; return next; }).join(' '); return <path key={row.term} d={path} fill="none" stroke={row.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />; })}{[0, .25, .5, .75, 1].map(fraction => <text key={fraction} x={50 + 585 * fraction} y="235" textAnchor={fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle'}>{end - start < 2 * 86400000 ? new Date(start + fraction * (end - start)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : formatDate(start + fraction * (end - start))}</text>)}</svg>;
-}
 
 function ClearDialog({ count, t, busy, cancel, confirm }: { count: number; t: Translate; busy: boolean; cancel: () => void; confirm: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);

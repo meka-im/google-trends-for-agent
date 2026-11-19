@@ -62,6 +62,22 @@ export class OnDemandActorClient {
     if (!response.ok) throw new GTrendsError('NETWORK_ERROR', `Apify API returned HTTP ${response.status}.`);
   }
 
+  private async readOutput(storeId: unknown, token: string, signal: AbortSignal, protocol: ActorToolRequest['protocol']) {
+    if (typeof storeId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
+    const output = await this.request(`/key-value-stores/${encodeURIComponent(storeId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
+    if (output.protocol !== protocol || typeof row(output.result).ok !== 'boolean') {
+      throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${protocol}. Rebuild the Actor.`);
+    }
+    return output;
+  }
+
+  /** Read a completed run already billed to this account. */
+  async readCompletedResult(token: string, runId: string, signal: AbortSignal): Promise<Record<string, unknown>> {
+    const run = row((await this.request(`/actor-runs/${encodeURIComponent(runId)}`, token, signal)).data);
+    if (run.id !== runId || run.status !== 'SUCCEEDED') throw new GTrendsError('NETWORK_ERROR', 'Saved Apify result is unavailable.');
+    return row((await this.readOutput(run.defaultKeyValueStoreId, token, signal, ACTOR_REQUEST_PROTOCOL)).result);
+  }
+
   async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void) {
     throwIfAborted(callerSignal);
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
@@ -87,10 +103,8 @@ export class OnDemandActorClient {
       if (!TERMINAL.has(String(run.status))) throw new GTrendsError('NETWORK_ERROR', 'Apify returned an unknown run state.');
       terminal = true;
       if (run.status !== 'SUCCEEDED') throw new GTrendsError(run.status === 'TIMED-OUT' ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', `Apify run ended with ${String(run.status)}. Update the Actor if it does not support on-demand tool requests.`);
-      if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
       progress?.('reading');
-      const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
-      if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
+      const output = await this.readOutput(run.defaultKeyValueStoreId, token, signal, input.protocol);
       return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId,
         ...(typeof run.usageTotalUsd === 'number' && Number.isFinite(run.usageTotalUsd) && run.usageTotalUsd >= 0 ? { usageUsd: run.usageTotalUsd } : {}) };
     } catch (error) {

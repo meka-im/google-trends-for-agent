@@ -20,7 +20,11 @@ export async function dashboardRequest<T>(suffix = '', body?: unknown, signal?: 
     headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await response.json() as T & { ok?: boolean; code?: string };
-  if (!response.ok || value.ok !== true) throw new Error(value.code === 'ESTIMATE_UNAVAILABLE' ? 'dashEstimateUnavailable' : 'dashFailed');
+  if (!response.ok || value.ok !== true) {
+    const message = value.code === 'ESTIMATE_UNAVAILABLE' ? 'dashEstimateUnavailable'
+      : value.code === 'CURVE_UNAVAILABLE' ? 'dashRestoreUnavailable' : 'dashFailed';
+    throw new Error(message);
+  }
   return value;
 }
 function session(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
@@ -114,7 +118,7 @@ export class DashboardController {
       if (!this.disposed) {
         await this.refresh();
         this.commit({ error: signal.aborted ? operation.signal.aborted ? 'dashCancelled' : 'dashTimedOut'
-          : error instanceof Error && error.message === 'dashEstimateUnavailable' ? error.message : 'dashFailed' });
+          : error instanceof Error && ['dashEstimateUnavailable', 'dashRestoreUnavailable'].includes(error.message) ? error.message : 'dashFailed' });
       }
     } finally {
       clearTimeout(this.progressTimer); this.queryController = null;
@@ -140,11 +144,11 @@ export class DashboardController {
         createdAt: new Date(startedAt).toISOString(), fetchedAt: String(row(output.result.meta).fetchedAt ?? ''), durationMs: Date.now() - startedAt, actorRunId: null, costUsd: null, errorCode: null }, result: output.result }, metric: 'interest' }, true);
     });
   }
-  async estimate(term: string) {
+  async estimate(term: string, action: 'estimate' | 'restore' = 'estimate') {
     const id = this.value.result?.record.id;
     if (!id || !ID.test(id)) return;
     await this.operate([term], async (signal, requestId) => {
-      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action: 'estimate', id, term, requestId }, signal);
+      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action, id, term, requestId }, signal);
       if (this.disposed || signal.aborted) return;
       this.commit({ result: reply.saved, metric: 'traffic' }, true);
       await this.refresh();

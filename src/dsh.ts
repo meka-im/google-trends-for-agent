@@ -17,7 +17,7 @@ import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 import { calibratedComparison } from './dashboard-comparison.js';
 import { calibratedSnapshot } from './dashboard-volume.js';
-import { estimateRequest, finishEstimate } from './dashboard-estimate.js';
+import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL } from './dsh-baselines.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
@@ -412,6 +412,14 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
         const result = await execute(tool, input, current, signal, progress);
         progress('calibrating');
         return finishEstimate(request, result, egress, requestId, new Date(startedAt).toISOString());
+      },
+      restore: async (saved, check, signal) => {
+        if (!check.actorRunId) return undefined;
+        const current = settings();
+        const { token } = await oauth.resolveToken(current.apifyToken);
+        if (!token) return undefined;
+        const output = await onDemand.readCompletedResult(token, check.actorRunId, signal);
+        return restoreEstimateBand(saved, check, output, current);
       },
     },
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
