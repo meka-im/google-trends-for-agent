@@ -1,11 +1,26 @@
 import { readFile } from 'node:fs/promises';
 import type { TrendsFilter } from './filter.js';
 import { automaticAnchorFor, BASELINE_CATALOG } from './baseline-catalog.js';
+import { mekaAnchorsFor, mekaDefaultAnchor } from './dsh-baselines.js';
 
 export interface Anchor { term: string; dailySearches?: number; tolerance?: number; geo: string }
 /** Optional per-window overrides; short = now 1-H / now 4-H / now 1-d, long = everything else. */
 export interface WindowAnchors { short?: string; long?: string }
 export interface Baselines { version: 2; anchors: Anchor[]; windowAnchors?: WindowAnchors }
+
+/** Select the requested region's MEKA data for dsh while preserving user overrides. */
+export function dshBaselinesFor(geo: string, overrides?: Baselines): Baselines | undefined {
+  const automatic = mekaDefaultAnchor(geo);
+  if (!automatic) return overrides;
+  return {
+    version: 2,
+    anchors: [...(overrides?.anchors ?? []), ...mekaAnchorsFor(geo)],
+    windowAnchors: {
+      short: overrides?.windowAnchors?.short?.trim() || automatic.term,
+      long: overrides?.windowAnchors?.long?.trim() || automatic.term,
+    },
+  };
+}
 
 /** Windows measured in hours or one day: dense, fast-moving, and better anchored by sudoku. */
 export const SHORT_WINDOWS = ['now 1-H', 'now 4-H', 'now 1-d'] as const;

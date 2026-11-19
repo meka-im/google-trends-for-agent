@@ -4,6 +4,7 @@
 
 Initial release in preparation.
 
+- Use the MEKA regional Google Ads catalog in dsh. Dashboard comparisons choose a usable anchor for each term within the same batch.
 - Unify the dsh query form for 1–5 terms, retain its draft/result across panel navigation, and show actual Actor progress with elapsed time.
 - Estimate multi-term traffic from one shared term-and-anchor batch. Five selected terms remain one batch; missing anchor space or weak baselines produce explicit null estimates.
 - Fix clipped dashboard select labels and show input errors beside the field.

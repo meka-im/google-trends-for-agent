@@ -9,13 +9,15 @@ import {
   type ApifyOAuthManager,
   type OAuthCredentialsService,
 } from './apify-oauth.js';
-import { BUILTIN_ANCHORS, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
+import { BUILTIN_ANCHORS, dshBaselinesFor, loadBaselinesFromEnv, parseBaselines, type Anchor, type Baselines, type WindowAnchors } from './traffic.js';
 import { DEFAULT_GEO, GEO_CODES, GTFA_PUBLIC_ACTOR_ID, normalizeGeo, resolveEgress, type EgressMode, type EgressNotice } from './options.js';
 import { createDefaultTransport, throwIfAborted, type Transport } from './transport.js';
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
 import { calibratedComparison } from './dashboard-comparison.js';
+import { MEKA_BASELINES_URL } from './dsh-baselines.js';
+import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
@@ -306,12 +308,12 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const onDemand = new OnDemandActorClient(overrides.onDemand);
   const tools = createTools({
     transport,
-    settings: () => {
+    settings: geo => {
       const snapshot = settings();
       return {
         defaultGeo: snapshot.geo,
         anchor: snapshot.anchor,
-        baselines: snapshot.baselines,
+        baselines: dshBaselinesFor(geo ?? snapshot.geo, snapshot.baselines),
         cache: snapshot.cache,
         snapshotDir: snapshot.snapshotDir,
         chartDir: snapshot.chartDir,
@@ -337,9 +339,11 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
             return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
           }
           if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
+          const calibrated = tool.name === 'trends_snapshot' || tool.name === 'trends_ask' && input.validate === true;
           return callActorTool(onDemand, {
             token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-            name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
+            name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor,
+              baselines: calibrated ? dshBaselinesFor(String(input.geo ?? current.geo), current.baselines) : current.baselines,
               cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
           });
         }
@@ -369,7 +373,8 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   for (const tool of tools) {
     ctx.tools.register({
       name: tool.name,
-      description: tool.description,
+      description: tool.description.replace(REGIONAL_CALIBRATION_GUIDANCE,
+        `dsh uses regional Google Ads baselines from ${MEKA_BASELINES_URL} for estimated searches/day. Explicit anchor and baseline overrides take priority. Sparse samples retain null traffic.`),
       parameters: dshParameters(tool.inputSchema),
       output: {
         schema: { type: 'object' },

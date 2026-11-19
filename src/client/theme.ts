@@ -223,9 +223,8 @@ export const SETTINGS_CSS = `
 .gtfa-catalog-table th,.gtfa-catalog-table td { padding:9px 14px; border-top:1px solid var(--gtfa-line); text-align:left; overflow-wrap:anywhere; }
 .gtfa-catalog-table thead th { background:var(--gtfa-soft); color:var(--gtfa-muted); font-size:10px; font-weight:400; }
 .gtfa-catalog-table th:first-child { width:31%; font-weight:500; }
-.gtfa-catalog-table th:nth-child(2) { width:25%; }
+.gtfa-catalog-table th:nth-child(2) { width:41%; }
 .gtfa-catalog-table th:nth-child(3) { width:28%; }
-.gtfa-catalog-table th:last-child { width:16%; }
 .gtfa-catalog-table td:nth-child(2) { font-family:var(--ds-font-family-code,Menlo,monospace); }
 .gtfa-catalog-table td:nth-child(n+3),.gtfa-catalog-table th:nth-child(n+3) { text-align:right; font-variant-numeric:tabular-nums; }
 .gtfa-catalog-table td:nth-child(n+3) { white-space:nowrap; }

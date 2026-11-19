@@ -2,7 +2,13 @@
 
 Calibration is an estimate of Google web searches across all categories. A baseline applies to its exact region, including the explicit empty geo `""` for Worldwide. It does not restrict which regions can be queried. Regions without a matching baseline still return relative interest and related queries; their numeric traffic fields stay `null`.
 
-## Built-in coverage
+## MEKA baselines in dsh
+
+dsh includes the MEKA baseline catalog dated 2026-11-19, with 70 Google Ads Keyword Planner anchors for Worldwide and eight countries. Single-term calibration starts from the middle of the selected region's volume tiers. The dashboard uses spare comparison slots for anchors and calibrates each term against its closest usable anchor in the same request. Five entered terms can be calibrated when they include a known anchor. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
+
+Fixed anchors, window choices, and custom baselines take priority. The catalog snapshot ships with the plugin. A new snapshot takes effect with a plugin update. The plugin uses the existing query limits and displays a missing estimate when the comparison supplies too little signal.
+
+## Built-in defaults for CLI, MCP and Actor
 
 Sources reviewed on **2026-11-16**. Review dates are separate from the providers' measurement periods below. The US calibration is retained; the other entries are rounded regional estimates.
 

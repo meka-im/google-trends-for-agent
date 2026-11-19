@@ -186,7 +186,26 @@ function Result({ saved, metric, setMetric, t }: { saved: SavedQuery; metric: st
   return <div className="gd-results"><div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div><div className="gd-result-grid"><article className="gd-card"><div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')}</h3><div className="gd-actions"><Button primary={currentMetric === 'interest'} onClick={() => setMetric('interest')}>{t('dashInterest')}</Button><Button disabled={!hasTraffic} primary={currentMetric === 'traffic'} onClick={() => setMetric('traffic')}>{t('dashTraffic')}</Button></div></div>
     <TrendChart series={series} traffic={currentMetric === 'traffic'} label={t('dashTrend')} empty={t('dashUnavailable')} />
     <div className="gd-legend">{series.map((row, i) => <span key={row.term}><i style={{ background: colors[i] }} />{row.term}</span>)}</div><table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th><th>{t('dashAverage')}</th><th>{t('dashLatest')}</th><th>{t('dashPeak')}</th></tr></thead><tbody>{series.map(row => <tr key={row.term}><td>{row.term}</td><td>{formatNumber(row.average)}</td><td>{formatNumber(row.latest)}</td><td>{formatNumber(row.peak)}</td></tr>)}</tbody></table></article>
-    <aside className="gd-card gd-result-info"><h3>{t('dashResultInfo')}</h3><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{comparison && calibrated.length ? <div className="gd-volume-list"><span>{t('dashCompareVolume')}</span>{calibrated.map((row, index) => <div key={index}><span>{String(row.keyword)}</span><strong>{number(object(row.traffic).average) === null ? '—' : formatNumber(object(row.traffic).average)}</strong></div>)}<small>{t('dashEstimateNote')}</small></div> : <div className="gd-traffic"><span>{t('dashTraffic')} / day</span><strong>{hasTraffic ? formatNumber(traffic.average) : t('dashNoTraffic')}</strong><small>{t('dashEstimateNote')}</small></div>}{!hasTraffic ? <p className="gd-volume-note">{t(volumeNote)}</p> : null}{typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}</aside></div>
+    <aside className="gd-card gd-result-info">
+      <h3>{t('dashResultInfo')}</h3>
+      <dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+      {comparison && calibrated.length ? <div className="gd-volume-list">
+        <span>{t('dashCompareVolume')}</span>
+        {calibrated.map(row => {
+          const term = String(row.keyword);
+          const average = number(object(row.traffic).average);
+          const reference = object(row.anchor).term;
+          return <div key={term}>
+            <span>{term}</span><strong>{formatNumber(average)}</strong>
+            {typeof reference === 'string' ? <small>{t('dashEstimateAnchor')} · {reference}</small>
+              : average === null && hasTraffic ? <small>{t('dashEstimateMissing')}</small> : null}
+          </div>;
+        })}
+        <small>{t('dashEstimateNote')}</small>
+      </div> : <div className="gd-traffic"><span>{t('dashTraffic')} / day</span><strong>{hasTraffic ? formatNumber(traffic.average) : t('dashNoTraffic')}</strong><small>{t('dashEstimateNote')}</small></div>}
+      {!hasTraffic ? <p className="gd-volume-note">{t(volumeNote)}</p> : null}
+      {typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}
+    </aside></div>
     {typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}
     {warnings.length ? <details className="gd-warnings"><summary>{t('dashResultInfo')} · {warnings.length}</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}
     {!comparison ? <div className="gd-related">{['popular', 'rising'].map(key => <article className="gd-card" key={key}><h3>{t(key === 'popular' ? 'dashPopular' : 'dashRising')}</h3>{array(tables[key]).slice(0, 10).map((row, i) => <p key={i}><span>{String(row.query ?? '')}</span><strong>{String(row.formattedValue ?? row.value ?? '—')}</strong></p>)}{!array(tables[key]).length ? <p className="gd-muted">{t('dashNoRelated')}</p> : null}</article>)}</div> : null}</div>;

@@ -148,7 +148,7 @@ describe('dsh plugin registration', () => {
     expect(skill.resourceBase).toMatchObject({ kind: 'directory' });
     expect(existsSync(skill.resourceBase.path)).toBe(true);
     expect((await provider()!.get()).content).toMatch(/trends_ask/);
-    expect((await provider()!.get()).content).toMatch(/63,000|gpts/);
+    expect((await provider()!.get()).content).toContain('MEKA');
   });
 
   it('uses JSON-schema parameters that dsh can validate', () => {

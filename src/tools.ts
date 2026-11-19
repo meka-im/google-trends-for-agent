@@ -82,7 +82,7 @@ export interface ToolsOptions extends ClientOptions {
   /** Server-wide anchor for validate/trends_snapshot (a per-call trends_snapshot anchor still wins); unset = automatic by window. */
   anchor?: string;
   /** Live values for the dsh settings UI; overrides the static fields above per call. */
-  settings?: () => ToolLiveSettings;
+  settings?: (geo?: string) => ToolLiveSettings;
 }
 
 /** One transport-neutral agent tool: the single source for MCP and dsh. */
@@ -185,8 +185,8 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
   const defaultGeo = options.defaultGeo !== undefined ? options.defaultGeo.trim() : DEFAULTS.geo;
   const anchorOverride = options.anchor?.trim() || undefined;
-  const live = (): Required<Pick<ToolLiveSettings, 'defaultGeo' | 'cache' | 'snapshotDir' | 'chartDir'>> & Pick<ToolLiveSettings, 'anchor' | 'baselines'> => {
-    const values = options.settings?.() ?? {};
+  const live = (geo?: string): Required<Pick<ToolLiveSettings, 'defaultGeo' | 'cache' | 'snapshotDir' | 'chartDir'>> & Pick<ToolLiveSettings, 'anchor' | 'baselines'> => {
+    const values = options.settings?.(geo) ?? {};
     return {
       defaultGeo: values.defaultGeo !== undefined ? values.defaultGeo.trim() : defaultGeo,
       anchor: values.anchor?.trim() || anchorOverride,
@@ -197,7 +197,6 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     };
   };
   const geoField = options.settings ? z.string().trim().optional() : z.string().default(defaultGeo);
-  const storeFor = () => new SnapshotStore(live().snapshotDir);
   const scoped = (context: ToolCallContext | undefined, timeoutMs?: number) => {
     throwIfAborted(context?.signal);
     const signal = context?.signal ?? options.signal;
@@ -228,9 +227,10 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const parsed = ask.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
       const { term, geo, time: range, fresh, validate, points, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean; timeoutMs?: number };
-      const settings = live();
+      const settings = live(geo);
       const { query, shared } = scoped(context, timeoutMs);
-      const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = new SnapshotStore(settings.snapshotDir);
+      const filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       const refresh = fresh || settings.cache === false ? 'always' : undefined;
       let snap: TermSnapshot | undefined, history: TermSnapshot[] | undefined, cached = false, ageMin = 0, verdict: Record<string, unknown> | undefined, validationWarnings: string[] = [];
       if (validate) {
@@ -268,9 +268,10 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const parsed = snapshot.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
       const { term, geo, time: range, anchor, fresh, svg, tz, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string; timeoutMs?: number };
-      const settings = live();
+      const settings = live(geo);
       const { query } = scoped(context, timeoutMs);
-      const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = new SnapshotStore(settings.snapshotDir);
+      const filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       try {
         const forcedAnchor = anchor ?? settings.anchor;
         const refresh = fresh || settings.cache === false ? 'always' : undefined;

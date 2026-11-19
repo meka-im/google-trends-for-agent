@@ -152,7 +152,7 @@ describe('dsh query history and dashboard', () => {
     const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'] } }) }));
     const output = (await reply.json()).result;
     expect(output.ok).toBe(true); expect(output.calibration.status).toBe('ok');
-    expect(keywords).toEqual(['Alpha', 'Beta', 'sudoku']);
+    expect(keywords).toEqual(['Alpha', 'Beta', 'oz to ml', 'sudoku', 'instagram']);
     expect(actorFetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
     const records = await new QueryHistoryStore(directory).list();
     expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'one-run', costUsd: 0.001 });

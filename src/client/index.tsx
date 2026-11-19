@@ -27,7 +27,8 @@ import { Dashboard, TrendsMark } from './dashboard.js';
 import { DashboardController } from './dashboard-state.js';
 import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
 import { parseActorRuntime } from '../actor-runtime.js';
-import { automaticAnchorFor, catalogForGeo, BASELINE_REFERENCE_URL, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
+import { automaticAnchorFor, catalogForGeo, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
+import { mekaAnchorsFor, mekaDefaultAnchor } from '../dsh-baselines.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -482,7 +483,7 @@ export const EN: Record<string, string> = {
   baselinesDescription: 'Custom rows override the same term and region; other built-ins still apply.',
   baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
   baselineBuiltin: 'Built-in baselines',
-  baselineBuiltinHint: 'Used automatically by query region. No need to add each one.',
+  baselineBuiltinHint: 'MEKA baselines from Google Ads Keyword Planner.',
   baselineAllRegions: 'All regions',
   baselineBrowseGeo: 'Browse baseline region',
   baselineDailyEstimate: 'Searches/day (estimate)',
@@ -765,7 +766,7 @@ export const ZH: Record<string, string> = {
   baselinesDescription: '自定义项覆盖相同词和地区，其余内置基准继续使用。',
   baselinesHint: '当前使用内置地区基线，开启后可自定义。',
   baselineBuiltin: '内置基准',
-  baselineBuiltinHint: '按查询地区自动使用，无需逐个添加。',
+  baselineBuiltinHint: 'MEKA 基准来自 Google Ads Keyword Planner。',
   baselineAllRegions: '全部地区',
   baselineBrowseGeo: '查看基准地区',
   baselineDailyEstimate: '每日搜索量（估算）',
@@ -1017,6 +1018,8 @@ function normalizeTolerance(value: unknown): string {
 }
 
 function defaultRegionalBaselineAnchors(geo: string): AnchorDraft[] {
+  const reference = mekaDefaultAnchor(geo);
+  if (reference) return [{ term: reference.term, geo: reference.geo, dailySearches: String(reference.dailySearches), tolerance: '0.5' }];
   return catalogForGeo(geo).map(({ term, geo, dailySearches, tolerance }) => ({ term, geo, dailySearches: String(dailySearches), tolerance: String(tolerance) }));
 }
 
@@ -2429,12 +2432,18 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       description: automaticAnchorFor('now 1-d', draft.geo) === term && automaticAnchorFor('now 7-d', draft.geo) === term
         ? t('anchorRegionalOption') : term.toLowerCase() === 'sudoku' ? t('anchorShortOption') : term.toLowerCase() === 'gpts' ? t('anchorLongOption') : undefined,
     })), [anchorTerms, draft.geo, t]);
-  const fixedAnchorOptions = useMemo(() =>
-    [{ value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') }, ...anchorOptions], [anchorOptions, t]);
+  const fixedAnchorOptions = useMemo(() => [
+    { value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') },
+    ...anchorOptions,
+    ...mekaAnchorsFor(draft.geo)
+      .filter(anchor => !anchorTerms.some(term => term.toLowerCase() === anchor.term.toLowerCase()))
+      .map(anchor => ({ value: anchor.term, label: anchor.term })),
+  ], [anchorOptions, anchorTerms, draft.geo, t]);
+  const regionalAnchor = mekaDefaultAnchor(draft.geo)?.term;
   const shortWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · ${automaticAnchorFor('now 1-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, t]);
+    [{ value: '', label: `${t('windowDefault')} · ${regionalAnchor ?? automaticAnchorFor('now 1-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, regionalAnchor, t]);
   const longWindowOptions = useMemo(() =>
-    [{ value: '', label: `${t('windowDefault')} · ${automaticAnchorFor('now 7-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, t]);
+    [{ value: '', label: `${t('windowDefault')} · ${regionalAnchor ?? automaticAnchorFor('now 7-d', draft.geo)}` }, ...anchorOptions], [anchorOptions, draft.geo, regionalAnchor, t]);
   const geoOptions = useMemo(() => {
     const options = [
       { value: '', label: t('geoWorldwide'), search: 'world worldwide global 全球' },
@@ -2565,7 +2574,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
-      <p style={{ ...styles.hint, margin: 0 }}><a href={BASELINE_REFERENCE_URL} target="_blank" rel="noopener noreferrer">{t('baselineSources')}</a></p>
+      <p style={{ ...styles.hint, margin: 0 }}><a href="https://meka.im/datasets/google-trends-anchors" target="_blank" rel="noopener noreferrer">{t('baselineSources')}</a></p>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
         onChange={checked => edit({ cache: checked })} />
     </section>
