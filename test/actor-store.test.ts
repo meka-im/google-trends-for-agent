@@ -58,7 +58,7 @@ describe('Actor Store metadata', () => {
 
   it('uses a small example input that matches the README Quick start and the input schema', () => {
     const example = store.exampleRunInput as Record<string, unknown>;
-    expect(example).toEqual({ tool: 'snapshot', terms: ['Sora'], geo: 'US', window: 'now 1-d', anchor: '' });
+    expect(example).toEqual({ tool: 'snapshot', terms: ['Sora'], geo: 'US', window: 'now 7-d', anchor: '' });
     for (const key of Object.keys(example)) expect(properties).toHaveProperty(key);
     const quickStart = readme.slice(readme.indexOf('## Quick start'), readme.indexOf('### MCP client'));
     const block = quickStart.match(/```json\n([\s\S]*?)```/);
@@ -86,12 +86,12 @@ describe('Actor input schema', () => {
       enum: expect.arrayContaining(['', ...BUILTIN_ANCHOR_TERMS]),
     });
     expect((properties.anchor.enum as string[]).length).toBe(BUILTIN_ANCHOR_TERMS.length + 1);
-    expect(properties.anchor.enum).toEqual(expect.arrayContaining(['calculator', 'ナンプレ']));
+    expect(properties.anchor.enum).toEqual(expect.arrayContaining(['calculator', 'テトリス']));
     expect((properties.anchor.enumTitles as string[]).length).toBe((properties.anchor.enum as string[]).length);
     expect(properties.timeoutMs).toMatchObject({ type: 'integer', minimum: 1000, maximum: 60000 });
     expect(properties.proxyConfiguration).toMatchObject({ sectionCaption: 'Advanced: proxy', editor: 'proxy' });
     expect(properties.proxyConfiguration.default).toEqual(properties.proxyConfiguration.prefill);
-    expect(properties.window.default).toBe('now 1-d');
+    expect(properties.window.default).toBe('now 7-d');
     expect((properties.window.enum as string[]).length).toBe(9);
   });
 

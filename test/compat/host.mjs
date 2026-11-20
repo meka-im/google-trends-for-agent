@@ -16,9 +16,23 @@ const { MockAgent, setGlobalDispatcher } = await load('undici');
 const dispatcher = new MockAgent();
 dispatcher.disableNetConnect();
 setGlobalDispatcher(dispatcher);
+const MEKA_BASELINES_URL = 'https://meka.im/data/google-trends-anchors/baselines/v1/index.json';
 const unexpectedFetches = [];
+let baselineSyncFetches = 0;
 globalThis.fetch = async url => {
-  unexpectedFetches.push(String(url));
+  const target = String(url);
+  if (target === MEKA_BASELINES_URL) {
+    baselineSyncFetches += 1;
+    return Response.json({
+      schemaVersion: 1,
+      version: '2026-11-19',
+      regions: [{
+        geo: 'US',
+        anchors: [{ term: 'sudoku', dailySearches: 88000, validation: { '7d': { pointCount: 168, nonzeroPoints: 168, peak: 85 } } }],
+      }],
+    });
+  }
+  unexpectedFetches.push(target);
   throw new Error('External HTTP is disabled in the compatibility driver');
 };
 
@@ -118,6 +132,9 @@ try {
   assert.equal((await manager.status()).connected, false);
   assert.equal((await manager.resolveToken()).token, undefined);
   report.logoutRemovedHostSession = true;
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(baselineSyncFetches, 1, 'Initial boot must sync MEKA baselines once and restart must reuse cached baselines');
+  report.baselinesSyncedOnceOnFirstBoot = true;
   assert.deepEqual(unexpectedFetches, []);
   console.log('GTFA_COMPAT_RESULT ' + JSON.stringify(report));
 } finally {

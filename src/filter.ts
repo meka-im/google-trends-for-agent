@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { GTrendsSearchType } from './core.js';
 export interface TrendsFilter { geo: string; time: string; category: number; property: string; hl?: string }
-export const DEFAULT_FILTER: TrendsFilter = { geo: 'US', time: 'now 1-d', category: 0, property: '' };
+export const DEFAULT_FILTER: TrendsFilter = { geo: 'US', time: 'now 7-d', category: 0, property: '' };
 export function resolveFilter(args: Partial<TrendsFilter> = {}, config?: Partial<TrendsFilter>, env: NodeJS.ProcessEnv = process.env): TrendsFilter {
   if (config === undefined) {
     try { const data = JSON.parse(readFileSync('gtfa.config.json', 'utf8')); config = data.filter ?? data; }

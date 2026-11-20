@@ -42,10 +42,10 @@ describe('CLI ask --json', () => {
   it('emits the same ask envelope shape as MCP instead of the raw snapshot wrapper', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gtfa-gap-')); dirs.push(dir);
     await new SnapshotStore(dir).save(fixture());
-    const r = await runAskCli(['low sample', '--json', '--points', '--refresh', 'never', '--store', dir]);
+    const r = await runAskCli(['low sample', '--time', 'now 1-d', '--json', '--points', '--refresh', 'never', '--store', dir]);
     expect(r.code).toBe(0);
     const out = JSON.parse(r.stdout);
-    const plain = JSON.parse((await runAskCli(['low sample', '--json', '--refresh', 'never', '--store', dir])).stdout);
+    const plain = JSON.parse((await runAskCli(['low sample', '--time', 'now 1-d', '--json', '--refresh', 'never', '--store', dir])).stdout);
     expect(plain.interest).not.toHaveProperty('points');
     expect(plain.interest).toMatchObject({ average: 51.3, peak: 70, gapCount: 5 });
     expect(out).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', term: 'low sample', filter: { geo: 'US', time: 'now 1-d', category: 0, property: 'web' },

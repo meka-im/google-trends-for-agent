@@ -4,9 +4,9 @@ Use the native `gtfa` tools for light, interactive search-interest research. The
 
 ## When to use which tool
 
-- **Verify a new term has real demand** — `trends_ask` with `{ "term": "<term>", "validate": true }`. Start with the default US / `now 1-d`; use `fresh: true` when a cached snapshot would be stale. If `status` is `no_data` or `error`, stop and report it. Only `validate: true` adds a searches/day estimate.
-- **Compare against an anchor or rival** — `trends_compare` with 1–5 distinct keywords, for example `["<candidate>", "gpts"]`. All keywords share one 0–100 scale; use `latest` and `peak`, and confirm the candidate is not a rounding artifact.
-- **Calibrated searches/day + chart** — `trends_snapshot` with one term. It returns `traffic`, `series`, and `chart`; `anchor7d` / `chart7d` / `traffic7d` retain their shape in normal fallback results. For a non-7-day primary, the extra 7-day request runs sequentially after the primary attempt unless the primary is `BLOCKED` or `RATE_LIMITED`; ordinary `NETWORK_ERROR` does not by itself skip it.
+- **Verify a new term has real demand** — `trends_ask` with `{ "term": "<term>", "validate": true }`. Start with the default US / `now 7-d`; use `fresh: true` when a cached snapshot would be stale. If `status` is `no_data` or `error`, stop and report it. Only `validate: true` adds a searches/day estimate.
+- **Compare against an anchor or rival** — `trends_compare` with 1–5 distinct keywords, for example `["<candidate>", "sudoku"]`. All keywords share one 0–100 scale; pass `calibrate: true` to attach multi-tier MEKA estimated searches/day (`batchVolume`).
+- **Calibrated searches/day + chart** — `trends_snapshot` with one term. It returns `traffic`, `calibration` (with automatic second-round multi-tier anchor retry when needed), `series`, and `chart`; `anchor7d` / `chart7d` / `traffic7d` retain their shape and reuse the primary when `time` is `now 7-d`.
 - **What is trending now** — `trends_now` by country. `geos` accepts a code list, `"default"`, or `"all"`; `hours` is the Trending Now window (`4`, `24`, `48`, `168`). It fetches sequentially and stops after the first block or rate limit.
 
 If `interest.average` < 1 and both Popular/Rising tables are empty, treat the result as `no_data`: low confidence, no rising/high verdict, and null numeric traffic fields (including peaks and series traffic). Related-query evidence keeps a low-average term eligible for validation.

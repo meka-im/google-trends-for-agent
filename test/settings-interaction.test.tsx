@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, ConnectionTestResults, EN, type ConfigPageProps } from '../src/client/index.js';
 import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
+import { setActiveMekaBaselines, summarizeMekaCatalog } from '../src/dsh-baselines.js';
 import { regionLabel } from '../src/options.js';
 
 type PathOp = { op: 'set' | 'unset'; path: string[]; value?: unknown };
@@ -64,6 +65,18 @@ function api() {
       const result = diagnostic();
       return Response.json({ ...result, egress, network: { ...result.network, egress } });
     }
+    if (path === 'api/gtfa.baselines') {
+      return Response.json(summarizeMekaCatalog());
+    }
+    if (path === 'api/gtfa.baselines-sync') {
+      const status = {
+        ...summarizeMekaCatalog(),
+        source: 'synced',
+        version: '2026-11-20',
+        syncedAt: '2026-11-20T07:30:00.000Z',
+      };
+      return Response.json({ ok: true, updated: true, status });
+    }
     throw new Error(`Unexpected request in interaction test: ${path}`);
   });
   vi.stubGlobal('fetch', fetch);
@@ -102,6 +115,7 @@ const tick = async (ms: number) => { await act(async () => { await vi.advanceTim
 
 afterEach(() => {
   cleanup();
+  setActiveMekaBaselines(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -401,8 +415,7 @@ describe('query-default pickers', () => {
     const input = screen.getByRole('combobox', { name: t('anchor') }) as HTMLInputElement;
     await user.click(input);
     expect(screen.getByText(t('anchorAutoOption'))).toBeTruthy();
-    expect(screen.getByText(t('anchorShortOption'))).toBeTruthy();
-    expect(screen.getByText(t('anchorLongOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorRegionalOption'))).toBeTruthy();
     await user.type(input, 'my re');
     await user.click(within(screen.getByRole('listbox', { name: t('anchor') })).getByRole('option', { name: 'my research' }));
     expect(input.value).toBe('my research');
@@ -445,7 +458,7 @@ describe('baseline editor', () => {
   };
   const sampleBaselines = () => ({ anchors: [
     { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
-  ], windowAnchors: { short: 'research', long: 'gpts' } });
+  ], windowAnchors: { short: 'research', long: 'sudoku' } });
 
   it('shows all built-ins alongside existing US rows and preserves edits while browsing', async () => {
     const anchors = [
@@ -497,6 +510,17 @@ describe('baseline editor', () => {
     expect(screen.queryByRole('spinbutton', { name: `${t('anchorDaily')} gpts` })).toBeNull();
     expect(button('save').disabled).toBe(true);
     expect(backend.saved().baselines).toBeUndefined();
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('syncs MEKA baselines manually on click and updates status without touching saved config', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    await waitFor(() => expect(network.count('api/gtfa.baselines')).toBe(1));
+    await user.click(button('baselineSync'));
+    expect(await screen.findByText('Updated to MEKA baselines 2026-11-20 (59 anchors).')).toBeTruthy();
+    expect(screen.getByText('Synced · 2026-11-20')).toBeTruthy();
+    expect(network.count('api/gtfa.baselines-sync')).toBe(1);
     expect(backend.mutate).not.toHaveBeenCalled();
   });
 
@@ -640,7 +664,7 @@ describe('baseline editor', () => {
 });
 
 describe('Actor creation and selection', () => {
-  it.each([null, { version: '0.2.22', baselineCatalogRevision: '2026-11-16' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-16' }])('separates actual runtime version from successful keyword checks: %j', runtime => {
+  it.each([null, { version: '0.2.22', baselineCatalogRevision: '2026-11-19' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-19' }])('separates actual runtime version from successful keyword checks: %j', runtime => {
     const base = diagnostic();
     render(<ConnectionTestResults result={{ ...base, egress: 'actor-own', network: { ...base.network, egress: 'actor-own' },
       data: { ...base.data, keywords: base.data.keywords.map(item => ({ ...item, status: 'ok' as const })) },

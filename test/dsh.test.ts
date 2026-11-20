@@ -116,7 +116,7 @@ describe('dsh plugin registration', () => {
     const { ctx, tools } = fakeCtx();
     await apply(ctx, config());
     expect([...tools.keys()].sort()).toEqual(['trends_ask', 'trends_compare', 'trends_now', 'trends_snapshot']);
-    expect(Object.keys(tools.get('trends_compare')!.parameters.properties as object).sort()).toEqual(['geo', 'keywords', 'time', 'timeoutMs']);
+    expect(Object.keys(tools.get('trends_compare')!.parameters.properties as object).sort()).toEqual(['calibrate', 'geo', 'keywords', 'time', 'timeoutMs']);
     for (const tool of tools.values()) {
       expect(tool.description).toMatch(/Output: ok, schemaVersion/);
       expect(tool.parameters).toMatchObject({ type: 'object', properties: expect.any(Object) });
@@ -227,7 +227,7 @@ describe('dsh plugin execution', () => {
     const { ctx, tools } = fakeCtx();
     await register(ctx, config(), { transport: compareTransport(), minIntervalMs: 0 });
     const result = await tools.get('trends_compare')!.execute({ keywords: ['chatgpt', 'claude'] }, { signal: new AbortController().signal });
-    expect(result).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 1-d' } });
+    expect(result).toMatchObject({ ok: true, schemaVersion: 1, status: 'ok', filter: { geo: 'US', time: 'now 7-d' } });
     expect((result.series as { keyword: string }[]).map(row => row.keyword)).toEqual(['chatgpt', 'claude']);
   });
 

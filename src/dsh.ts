@@ -20,6 +20,7 @@ import { singleVolume } from './dashboard-single.js';
 import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
+import { createMekaBaselinesSync, type MekaBaselineBoundary } from './dsh-baselines-sync.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
@@ -80,7 +81,14 @@ function createConfig(Schema: SchemaFactory) {
     // Keep this callback self-contained: dsh serializes transform callbacks to the
     // browser settings form, where this module's imports are not in scope.
     const row = (value ?? {}) as { anchors?: Array<{ term?: unknown }> | null; windowAnchors?: Record<string, unknown> | null };
-    const terms = new Set(['gpts', 'sudoku', 'calculator', 'ナンプレ']);
+    const terms = new Set([
+      'gpts', 'inches to yards', 'psi to bar', 'word search', 'feet to meters', 'stopwatch', 'sudoku',
+      'netflix', 'tiktok', 'instagram', 'youtube', 'kph to mph', 'oz to ml', 'youtube music', 'gmail',
+      'amazon', 'psi to kpa', 'inches to mm', 'km to miles', 'speed test', 'inches to feet', 'miles to km',
+      'crossword solver', 'solitaire', 'calculator', 'facebook', 'zoll in mm', 'fahrenheit in celsius',
+      'cm in zoll', 'kreuzworträtsel', 'speedtest', 'google maps', 'cm en pouces', 'synonymes',
+      'taux de change', 'mots fléchés', '目覚まし', '囲碁', '時刻', 'テトリス', 'タイマー', '電卓', '翻訳',
+    ]);
     for (const anchor of row.anchors ?? []) {
       const term = String(anchor.term ?? '').trim().toLowerCase();
       if (!term) throw new Error('anchor term must not be blank');
@@ -149,6 +157,12 @@ export interface RegisterOverrides {
   oauth?: ApifyOAuthManager;
   /** Test seam: OAuth HTTP fetch; production uses global fetch. */
   oauthFetch?: typeof globalThis.fetch;
+  /** Test seam / lifecycle control for MEKA baselines sync. */
+  baselinesSync?: {
+    autoSync?: boolean;
+    fetch?: typeof globalThis.fetch;
+    boundary?: MekaBaselineBoundary;
+  };
 }
 
 /** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
@@ -319,7 +333,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     progress?.('requesting');
     const snapshot = tool.name === 'trends_snapshot';
     const calibrates = snapshot || tool.name === 'trends_ask' && input.validate === true;
-    const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+    const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 7-d'));
     // A native snapshot reuses its anchor in the companion 7-day series.
     const referenceTime = snapshot ? 'now 7-d' : filter.time;
     const pin = snapshot && typeof input.anchor === 'string' ? { ...current, anchor: input.anchor } : current;
@@ -363,7 +377,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     let result: Record<string, unknown>;
     try {
       if (single) {
-        const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+        const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 7-d'));
         const previous = await new QueryHistoryStore(current.snapshotDir).previousCalibration(String(input.term), filter.geo, filter.time).catch(() => null);
         result = await singleVolume(input, current, previous, (name, args) =>
           execute(tools.find(t => t.name === name)!, args, current, signal, progress, id => actorIds.push(id)), () => progress?.('calibrating'));
@@ -417,9 +431,15 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     });
   }
   registerSkill(ctx);
+  const baselinesSync = overrides.baselinesSync?.boundary ?? createMekaBaselinesSync({
+    getSnapshotDir: () => settings().snapshotDir,
+    ...(overrides.baselinesSync?.fetch ? { fetch: overrides.baselinesSync.fetch } : {}),
+  });
+  if (overrides.baselinesSync?.autoSync) baselinesSync.ensureInitialSync();
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
+    baselines: baselinesSync,
     dashboard: {
       settings,
       execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),
@@ -463,5 +483,5 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
 
 /** Cordis entrypoint. */
 export async function apply(ctx: DshContext, config: GtfaConfig = {}) {
-  await register(ctx, config);
+  await register(ctx, config, { baselinesSync: { autoSync: true } });
 }

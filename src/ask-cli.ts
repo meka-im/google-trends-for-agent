@@ -5,10 +5,11 @@ import { validateTerms, parseLeadInput, type LeadInput } from './validate.js';
 import { resolveFilter } from './filter.js';
 import { SnapshotStore, askTerm, snapshotDiff, type TermSnapshot } from './snapshot.js';
 import { queryTrends } from './api.js';
-import { askEnvelope, blockedVerdict, verdictEnvelope, schemaRejectionEnvelope } from './tools.js';
+import { askEnvelope, blockedVerdict, createTools, verdictEnvelope, schemaRejectionEnvelope } from './tools.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { fetchTrending } from './trending.js';
 import { DEFAULT_EXPLORE_TIMEOUT_MS } from './client.js';
+import { resolveRuntimeEgress, wrapToolsWithEgress } from './egress.js';
 
 export const askHelp = `Usage: gtfa ask <term> [options]
   Returns interest, popular (Top) and rising related queries, and regions for one term.
@@ -25,8 +26,10 @@ export const askHelp = `Usage: gtfa ask <term> [options]
   --fresh             Force live data; --refresh always|never|if-stale
   --max-age MIN       Reuse saved snapshots younger than MIN minutes (default 360)
   --timeout MS        Per-request timeout (integer 1000-60000; Explore default ${DEFAULT_EXPLORE_TIMEOUT_MS})
-  --geo US --time "now 1-d" --category N --property ""
+  --geo US --time "now 7-d" --category N --property ""
   --store DIR         Snapshot storage (default .gtfa/snapshots)
+  --egress MODE       local (default) | actor-public | actor-own (or GTFA_EGRESS)
+  --actor ID          Apify Actor id for actor-own (or GTFA_APIFY_ACTOR)
   --json              Agent envelope JSON (ask/validate; --diff implies JSON; --validate without --json prints a table)
   --pretty            Indent JSON output; --validate without --json still prints a table
   Environment: GTFA_BASELINES=/path/baselines.json overrides anchor baselines`;
@@ -68,12 +71,44 @@ export async function runAskCli(args: string[], options: { query?: typeof queryT
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       from: { type: 'string' }, geo: { type: 'string' }, time: { type: 'string' }, category: { type: 'string' }, property: { type: 'string' },
       anchor: { type: 'string' }, 'no-anchor': { type: 'boolean' }, trending: { type: 'boolean' }, 'max-age': { type: 'string' },
-      store: { type: 'string' }, json: { type: 'boolean' }, refresh: { type: 'string' }, fresh: { type: 'boolean' },
+      store: { type: 'string' }, egress: { type: 'string' }, actor: { type: 'string' }, json: { type: 'boolean' }, refresh: { type: 'string' }, fresh: { type: 'boolean' },
       validate: { type: 'boolean' }, diff: { type: 'boolean' }, points: { type: 'boolean' }, timeout: { type: 'string' }, pretty: { type: 'boolean' }, help: { type: 'boolean' },
     } });
     pretty = v.pretty ?? false;
     if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? askHelp : outputJson({ help: askHelp }), stderr: '' };
     const timeoutMs = timeoutValue(v.timeout);
+    const runtimeEgress = resolveRuntimeEgress({ egress: v.egress as never, apifyActor: v.actor });
+    if (!options.query && !v.from && runtimeEgress.egress !== 'local') {
+      const term = positionals.join(' ').trim();
+      if (!term) throw new Error('provide a term');
+      const filter = resolveFilter({ geo: v.geo, time: v.time, category: v.category === undefined ? undefined : Number(v.category), property: v.property });
+      const baselines = options.baselines ?? await loadBaselinesFromEnv();
+      const tool = wrapToolsWithEgress(createTools({
+        ...(baselines ? { baselines } : {}),
+        ...(v.store ? { snapshotDir: v.store } : {}),
+      }), {
+        egress: runtimeEgress.egress,
+        apifyToken: runtimeEgress.apifyToken,
+        apifyActor: runtimeEgress.apifyActor,
+        ...(baselines ? { baselines } : {}),
+        ...(v.anchor ? { anchor: v.anchor } : {}),
+        ...(v.store ? { snapshotDir: v.store } : {}),
+      }).find(item => item.name === 'trends_ask')!;
+      const envelope = await tool.execute({
+        term,
+        geo: filter.geo,
+        time: filter.time,
+        fresh: Boolean(v.fresh || v.diff || v.refresh === 'always'),
+        validate: Boolean(v.validate),
+        points: Boolean(v.points),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      }) as { ok?: boolean; status?: string; error?: { code?: string; message?: string } };
+      return {
+        code: envelopeExitCode(envelope),
+        stdout: outputJson(envelope),
+        stderr: envelope.ok ? '' : `${envelope.error?.code ?? 'ERROR'}: ${envelope.error?.message ?? envelope.status ?? 'error'}`,
+      };
+    }
     const query = withTimeout(options.query ?? queryTrends, timeoutMs);
     const trendingBase = options.trendingFetch ?? fetchTrending;
     const trendingFetch: typeof fetchTrending = timeoutMs === undefined

@@ -8,7 +8,7 @@ import { loadBaselinesFromEnv } from './traffic.js';
 import { actorFailMessage, runOnce, validateActorRunInput, type ActorRunInput } from './actor-run.js';
 import { ACTOR_RUNTIME_KEY } from './actor-runtime.js';
 import { VERSION } from './version.js';
-import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
+import { currentMekaBaselineVersion } from './dsh-baselines.js';
 
 interface ActorInput extends ActorRunInput {
   proxyConfiguration?: Record<string, unknown>;
@@ -25,7 +25,7 @@ await Actor.init();
 
 try {
   if (standby) throw new Error('Standby serving is disabled. Use an on-demand Actor run or the official Apify MCP gateway.');
-  await Actor.setValue(ACTOR_RUNTIME_KEY, { version: VERSION, baselineCatalogRevision: BASELINE_CATALOG_REVISION });
+  await Actor.setValue(ACTOR_RUNTIME_KEY, { version: VERSION, baselineCatalogRevision: currentMekaBaselineVersion() });
   const input = (await Actor.getInput<ActorInput>()) ?? {};
   if (input.toolRequest === undefined && validateActorRunInput(input)) {
     // Fail fast without building a proxy or tools for an input we cannot run.

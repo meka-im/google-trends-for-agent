@@ -1,1 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Google Trends for Agents — Signal"><rect width="64" height="64" rx="17" fill="#2E61E9"/><path d="m14 42 10-13a3 3 0 0 1 4.7 0l5.1 6.6a2.9 2.9 0 0 0 4.9-.5L49 17" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="49" cy="17" r="4.4" fill="#A9EFDF"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Google Trends for Agents">
+  <defs>
+    <linearGradient id="gtfa-s1" x1="10" y1="50" x2="28" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1D4ED8"/>
+      <stop offset="55%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="gtfa-s2" x1="22" y1="22" x2="39" y2="43" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="48%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="gtfa-s3" x1="33" y1="43" x2="56" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="48%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="gtfa-sh1" x1="28" y1="26" x2="17" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B1120" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#0B1120" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gtfa-sh2" x1="39" y1="38" x2="28" y2="27" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B1120" stop-opacity="0.46"/>
+      <stop offset="100%" stop-color="#0B1120" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gtfa-hi" x1="36" y1="36" x2="54" y2="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+  <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#gtfa-s1)" stroke-width="12.4" stroke-linecap="round"/>
+  <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#gtfa-sh1)" stroke-width="12.4" stroke-linecap="round"/>
+  <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#gtfa-s2)" stroke-width="12.4" stroke-linecap="round"/>
+  <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#gtfa-sh2)" stroke-width="12.4" stroke-linecap="round"/>
+  <line x1="36.8" y1="39.5" x2="52.8" y2="16.2" stroke="url(#gtfa-s3)" stroke-width="12.4" stroke-linecap="round"/>
+  <line x1="38.4" y1="36.8" x2="51.2" y2="18.2" stroke="url(#gtfa-hi)" stroke-width="4.2" stroke-linecap="round"/>
+</svg>

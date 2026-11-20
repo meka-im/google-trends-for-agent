@@ -24,11 +24,11 @@ function runCli(cliArgs: string[], options: { encoding: string; env: NodeJS.Proc
   }
 }
 describe('CLI offline output', () => {
-  it('compare and default --query use US / now 1-d like MCP, but keep explicit dates', () => {
+  it('compare and default --query use US / now 7-d like MCP, but keep explicit dates', () => {
     const clean = { ...env, GTFA_GEO: '', GTFA_TIME: '' }; delete (clean as Record<string, unknown>).GTFA_GEO; delete (clean as Record<string, unknown>).GTFA_TIME;
     for (const cli of [['compare', 'coffee', 'tea'], ['--query', 'coffee']]) {
       const r = JSON.parse(runCli([...args, ...cli], { encoding: 'utf8', env: clean }).stdout);
-      expect(r.input).toMatchObject({ geo: 'US', timeRange: 'now 1-d' });
+      expect(r.input).toMatchObject({ geo: 'US', timeRange: 'now 7-d' });
     }
     const dated = JSON.parse(runCli([...args, '--query', 'coffee', '--start', '2026-01-01', '--end', '2026-02-01'], { encoding: 'utf8', env: clean }).stdout);
     expect(dated.input).toMatchObject({ geo: 'US', startDate: '2026-01-01', endDate: '2026-02-01' });

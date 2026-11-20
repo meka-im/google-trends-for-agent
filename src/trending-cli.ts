@@ -1,7 +1,8 @@
 import { parseArgs } from 'node:util';
 import { normalizeTrendingGeos, TRENDING_GEOS } from './geos.js';
 import { fetchTrending, listTrending, type TrendingHours, type TrendingResponse, type TrendingOptions } from './trending.js';
-import { nowEnvelope, schemaRejectionEnvelope } from './tools.js';
+import { createTools, nowEnvelope, schemaRejectionEnvelope } from './tools.js';
+import { resolveRuntimeEgress, wrapToolsWithEgress } from './egress.js';
 import { csvCell } from './export.js';
 
 export function trendingExitCode(results: TrendingResponse[]): number {
@@ -18,6 +19,7 @@ const help = `Usage: gtfa now --geo SG [options]
   --format json|csv --json --pretty --list-geos
   --json              Agent envelope JSON (same as the trends_now MCP tool)
   --timeout MS --min-interval MS (default 1500)
+  --egress MODE (local|actor-public|actor-own) --actor ID
   --help
 Example: gtfa now --geo SG --hours 24 --limit 20
 Exit codes: 0 success, 1 upstream failure, 2 partial, 3 blocked/rate limited, 4 invalid input`;
@@ -29,6 +31,7 @@ export async function runTrendingCli(args: string[], options: TrendingOptions = 
       geo: { type: 'string' }, 'all-geos': { type: 'boolean' }, 'default-geos': { type: 'boolean' }, 'list-geos': { type: 'boolean' },
       hours: { type: 'string' }, 'min-volume': { type: 'string' }, category: { type: 'string' }, limit: { type: 'string' }, lang: { type: 'string' },
       format: { type: 'string', default: 'json' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, help: { type: 'boolean' }, timeout: { type: 'string' }, 'min-interval': { type: 'string' },
+      egress: { type: 'string' }, actor: { type: 'string' },
     } });
     if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? help : JSON.stringify({ help }), stderr: '' };
     json = v.json ?? false;
@@ -43,6 +46,25 @@ export async function runTrendingCli(args: string[], options: TrendingOptions = 
     const opts = { ...options, ...(v.timeout !== undefined ? { timeoutMs: number(v.timeout) } : {}), ...(v['min-interval'] !== undefined ? { minIntervalMs: number(v['min-interval']) } : {}) };
     const all = !!v['all-geos'];
     const geos = normalizeTrendingGeos(all ? 'all' : v['default-geos'] ? 'default' : v.geo!.split(','));
+    const runtimeEgress = resolveRuntimeEgress({ egress: v.egress as never, apifyActor: v.actor });
+    if (!options.transport && runtimeEgress.egress !== 'local') {
+      const tool = wrapToolsWithEgress(createTools(), {
+        egress: runtimeEgress.egress,
+        apifyToken: runtimeEgress.apifyToken,
+        apifyActor: runtimeEgress.apifyActor,
+      }).find(item => item.name === 'trends_now')!;
+      const envelope = await tool.execute({
+        geos,
+        hours: input.hours,
+        ...(input.limit !== undefined ? { limit: input.limit } : {}),
+        ...(v.timeout !== undefined ? { timeoutMs: number(v.timeout) } : {}),
+      }) as { ok?: boolean; status?: string; error?: { code?: string; message?: string } };
+      const code = !envelope.ok
+        ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1)
+        : envelope.status === 'partial' ? 2 : 0;
+      const stderr = !envelope.ok ? `${envelope.error?.code ?? 'ERROR'}: ${envelope.error?.message ?? envelope.status ?? 'error'}` : '';
+      return { code, stdout: JSON.stringify(envelope, null, pretty ? 2 : undefined), stderr };
+    }
     if (v.json) { const batch = await listTrending({ ...input, geos }, opts); const invalid = batch.results.find(r => r.error?.code === 'INVALID_INPUT'); result = invalid ? schemaRejectionEnvelope(invalid.error!.message) : nowEnvelope(batch.results, input.hours as TrendingHours); results = batch.results; }
     else if (!all && geos.length === 1) { const response = await fetchTrending({ ...input, geo: geos[0] }, opts); result = response; results = [response]; }
     else { const batch = await listTrending({ ...input, geos }, opts); result = batch; results = batch.results; }

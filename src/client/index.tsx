@@ -21,14 +21,17 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
-import { BaselineCatalog } from './baseline-catalog.js';
+import { BaselineCatalog, type BaselineSyncFeedback } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
 import { Dashboard, TrendsMark } from './dashboard.js';
 import { DashboardController } from './dashboard-state.js';
 import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
 import { parseActorRuntime } from '../actor-runtime.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
-import { mekaAnchorsFor, mekaDefaultAnchor } from '../dsh-baselines.js';
+import {
+  mekaAnchorsFor, mekaDefaultAnchor, setActiveMekaBaselines, summarizeMekaCatalog,
+  type MekaAnchor, type MekaBaselineStatus,
+} from '../dsh-baselines.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -47,6 +50,8 @@ const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const UPDATE_URL = 'api/gtfa.apify-update';
 const TEST_URL = 'api/gtfa.test-connection';
+const BASELINES_URL = 'api/gtfa.baselines';
+const BASELINES_SYNC_URL = 'api/gtfa.baselines-sync';
 export const APIFY_OAUTH_STATUS_URL = 'api/gtfa.apify-oauth';
 export const APIFY_OAUTH_START_URL = 'api/gtfa.apify-oauth-start';
 export const APIFY_OAUTH_CANCEL_URL = 'api/gtfa.apify-oauth-cancel';
@@ -482,8 +487,19 @@ export const EN: Record<string, string> = {
   baselines: 'Anchors & baselines',
   baselinesDescription: 'Custom rows override the same term and region; other built-ins still apply.',
   baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
-  baselineBuiltin: 'Built-in baselines',
-  baselineBuiltinHint: 'MEKA baselines from Google Ads Keyword Planner.',
+  baselineBuiltin: 'MEKA baselines',
+  baselineBuiltinHint: 'Google Ads Keyword Planner',
+  baselineSync: 'Sync now',
+  baselineSyncing: 'Syncing…',
+  baselineSourceSynced: 'Synced',
+  baselineSourceBundled: 'Bundled',
+  baselineMeta: '{regions} regions · {count} anchors',
+  baselineSyncedAt: 'Synced {time}',
+  baselineSyncPolicy: 'Auto-synced on install; manual afterwards',
+  baselineSyncUpdated: 'Updated to MEKA baselines {version} ({count} anchors).',
+  baselineSyncCurrent: 'Already up to date ({version}).',
+  baselineSyncFailed: 'Could not sync from meka.im. Keeping current baselines.',
+  baselineInspect: 'View anchors',
   baselineDailyWindow: 'Daily comparisons and estimates for 30 days or longer',
   baselineAllRegions: 'All regions',
   baselineBrowseGeo: 'Browse baseline region',
@@ -766,8 +782,19 @@ export const ZH: Record<string, string> = {
   baselines: '锚点与基线',
   baselinesDescription: '自定义项覆盖相同词和地区，其余内置基准继续使用。',
   baselinesHint: '当前使用内置地区基线，开启后可自定义。',
-  baselineBuiltin: '内置基准',
-  baselineBuiltinHint: 'MEKA 基准来自 Google Ads Keyword Planner。',
+  baselineBuiltin: 'MEKA 校准基准',
+  baselineBuiltinHint: 'Google Ads Keyword Planner',
+  baselineSync: '手动同步',
+  baselineSyncing: '同步中…',
+  baselineSourceSynced: '已同步',
+  baselineSourceBundled: '内置快照',
+  baselineMeta: '{regions} 个地区 · {count} 个锚点',
+  baselineSyncedAt: '同步于 {time}',
+  baselineSyncPolicy: '安装时自动同步一次，后续手动更新',
+  baselineSyncUpdated: '已更新至 MEKA 基准 {version}（共 {count} 个锚点）。',
+  baselineSyncCurrent: '已是最新版本（{version}）。',
+  baselineSyncFailed: '无法连接 meka.im 同步，当前继续使用本地基准。',
+  baselineInspect: '查看基准明细',
   baselineDailyWindow: '用于 30 天及以上的日粒度对比和补估',
   baselineAllRegions: '全部地区',
   baselineBrowseGeo: '查看基准地区',
@@ -825,53 +852,53 @@ export const ZH: Record<string, string> = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'grid', gap: 18, width: '100%', minWidth: 0, maxWidth: 920, padding: '8px 0 24px' },
-  section: { display: 'grid', gap: 18, padding: 24, border: '1px solid var(--gtfa-line)', borderRadius: 16, background: 'var(--gtfa-surface)' },
-  sectionHeader: { display: 'grid', gap: 4 },
-  sectionTitle: { margin: 0, fontSize: 15, lineHeight: 1.5, fontWeight: 650 },
-  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
+  page: { display: 'grid', gap: 14, width: '100%', minWidth: 0, maxWidth: 820, padding: '4px 0 24px' },
+  section: { display: 'grid', gap: 16, padding: 20, border: '1px solid var(--gtfa-line)', borderRadius: 14, background: 'var(--gtfa-surface)', boxShadow: '0 1px 2px rgba(15,23,42,.03)' },
+  sectionHeader: { display: 'grid', gap: 2 },
+  sectionTitle: { margin: 0, fontSize: 14, lineHeight: 1.45, fontWeight: 650, letterSpacing: '-.015em' },
+  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--gtfa-muted)' },
   field: { display: 'grid', minWidth: 0 },
-  label: { marginBottom: 8, fontSize: 12, fontWeight: 550 },
-  hint: { margin: '6px 0 0', fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
-  fieldError: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
-  warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-warning-primary, #a87921)' },
+  label: { marginBottom: 6, fontSize: 12, fontWeight: 550 },
+  hint: { margin: '5px 0 0', fontSize: 11, lineHeight: 1.55, color: 'var(--gtfa-muted)' },
+  fieldError: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--dsw-alias-state-error-primary, #dc2626)' },
+  warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--dsw-alias-state-warning-primary, #d97706)' },
   input: { boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 36, padding: '7px 11px', border: '1px solid var(--gtfa-line)',
-    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
-  segment: { position: 'relative', display: 'grid', gap: 12, padding: '14px 16px', minHeight: 102, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
-    borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13, cursor: 'pointer' },
-  segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)', boxShadow: 'inset 0 0 0 .5px var(--gtfa-accent)' },
-  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, minHeight: 32, fontSize: 13 },
-  switch: { boxSizing: 'border-box', flex: '0 0 auto', width: 34, height: 20, padding: 2, border: 0, borderRadius: 12,
-    background: 'var(--gtfa-hover)', cursor: 'pointer' },
+    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5 },
+  segment: { position: 'relative', display: 'grid', alignContent: 'start', gap: 8, padding: '12px 14px', minHeight: 78, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
+    borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5, cursor: 'pointer' },
+  segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)' },
+  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 32, fontSize: 12.5 },
+  switch: { boxSizing: 'border-box', flex: '0 0 auto', width: 36, height: 20, padding: 2, border: 0, borderRadius: 12,
+    background: 'color-mix(in srgb,var(--gtfa-ink) 18%,var(--gtfa-surface))', cursor: 'pointer', transition: 'background 150ms ease' },
   switchOn: { background: 'var(--gtfa-accent)' },
-  switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.08)', transition: 'transform 120ms ease' },
-  switchThumbOn: { transform: 'translateX(14px)' },
-  readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '7px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
+  switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(15,23,42,.2)', transition: 'transform 150ms cubic-bezier(.22,1,.36,1)' },
+  switchThumbOn: { transform: 'translateX(16px)' },
+  readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '4px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
     fontSize: 12, overflowWrap: 'anywhere' },
-  saveBar: { position: 'sticky', bottom: 12, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 0, marginBottom: 12, padding: '14px 18px', border: '1px solid var(--gtfa-save-border)', borderRadius: 12,
-    background: 'var(--gtfa-save-surface)', boxShadow: 'var(--gtfa-save-shadow)' },
-  button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '7px 13px', minHeight: 34,
-    border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
-  buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
-    border: '1px solid var(--gtfa-line)', borderRadius: 7, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 11, cursor: 'pointer' },
+  saveBar: { position: 'sticky', bottom: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+    marginTop: 2, marginBottom: 8, padding: '11px 16px', border: '1px solid var(--gtfa-line)', borderRadius: 12,
+    background: 'color-mix(in srgb,var(--gtfa-surface) 92%,transparent)', backdropFilter: 'blur(10px)' },
+  button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', minHeight: 32,
+    border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, fontWeight: 550, cursor: 'pointer' },
+  buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px', minHeight: 28,
+    border: '1px solid var(--gtfa-line)', borderRadius: 7, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 11.5, fontWeight: 500, cursor: 'pointer' },
   primary: { background: 'var(--gtfa-accent)', borderColor: 'var(--gtfa-accent)', color: '#fff' },
-  pill: { display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 5, fontSize: 10, fontWeight: 500,
+  pill: { display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 550,
     color: 'var(--gtfa-green)', background: 'var(--gtfa-green-soft)' },
   status: { margin: 0, fontSize: 13 },
-  error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
-  summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px', cursor: 'pointer' },
-  connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)' },
+  error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #dc2626)' },
+  summary: { display: 'flex', alignItems: 'center', gap: 10, padding: '15px 20px', cursor: 'pointer' },
+  connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)', overflow: 'hidden' },
   signupPrimary: { color: 'var(--gtfa-accent)', fontWeight: 550, textDecoration: 'none' },
   signupSecondary: { color: 'var(--gtfa-muted)', textDecoration: 'underline' },
   oauthCard: { display: 'grid', gap: 0 },
   oauthActions: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  oauthCode: { display: 'inline-block', padding: '7px 11px', borderRadius: 7, border: '1px solid var(--gtfa-line)',
-    background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 17, fontWeight: 600, letterSpacing: '.06em', overflowWrap: 'anywhere' },
-  oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 34, padding: '7px 13px',
+  oauthCode: { display: 'inline-block', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--gtfa-line)',
+    background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 16, fontWeight: 650, letterSpacing: '.06em', overflowWrap: 'anywhere' },
+  oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 32, padding: '6px 12px',
     borderRadius: 8, background: 'var(--gtfa-accent)', color: '#fff', fontSize: 12, fontWeight: 550, textDecoration: 'none' },
-  usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
-  testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.6 },
+  usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.55, color: 'var(--gtfa-muted)' },
+  testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.55 },
 };
 
 const TOLERANCE_OPTIONS = [
@@ -1460,6 +1487,51 @@ export async function deployApifyActor(signal?: AbortSignal, update?: { actorId:
   }
 }
 
+/** Parse a MEKA baseline status response from the Host route. */
+function parseBaselineStatus(raw: unknown): MekaBaselineStatus | null {
+  const row = record(raw);
+  const source = row.source === 'synced' ? 'synced' : row.source === 'bundled' ? 'bundled' : null;
+  const version = stringOrNull(row.version);
+  if (!source || !version || !Array.isArray(row.anchors) || !row.anchors.length) return null;
+  const anchors: MekaAnchor[] = [];
+  for (const item of row.anchors) {
+    const entry = record(item);
+    const term = stringOrNull(entry.term);
+    const dailySearches = numberOrNull(entry.dailySearches);
+    if (typeof entry.geo !== 'string' || !term || dailySearches === null || dailySearches <= 0) continue;
+    anchors.push({
+      geo: entry.geo.trim().toUpperCase(),
+      term,
+      dailySearches: Math.round(dailySearches),
+      dailyOnly: entry.dailyOnly === true,
+    });
+  }
+  if (!anchors.length) return null;
+  const syncedAt = stringOrNull(row.syncedAt);
+  return summarizeMekaCatalog({ source, version, syncedAt, anchors });
+}
+
+export async function loadMekaBaselines(signal?: AbortSignal): Promise<MekaBaselineStatus | null> {
+  try {
+    const response = await fetch(BASELINES_URL, { cache: 'no-store', headers: { accept: 'application/json' }, signal });
+    if (!response.ok) return null;
+    return parseBaselineStatus(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function syncMekaBaselines(signal?: AbortSignal): Promise<{ ok: boolean; updated?: boolean; status: MekaBaselineStatus | null }> {
+  try {
+    const response = await fetch(BASELINES_SYNC_URL, { method: 'POST', cache: 'no-store', headers: { accept: 'application/json' }, signal });
+    const body = record(await response.json());
+    const status = parseBaselineStatus(body.status);
+    return { ok: response.ok && body.ok === true, updated: body.updated === true, status };
+  } catch {
+    return { ok: false, status: null };
+  }
+}
+
 /** Resolve only the deployed Actor's exact build; unrelated Actors never affect it. */
 export function resolveDeployBuild(actors: ApifyActorsView, target: DeployTarget | null): DeployBuildResolution {
   if (!target || actors.status !== 'ready') return { status: 'pending' };
@@ -1674,34 +1746,8 @@ export function ApifyOAuthCard({
   </div>;
 }
 
-function ApifyCardArt({ className = 'gtfa-credit-art' }: { className?: string }) {
-  const artId = useId().replace(/:/g, '');
-  return <svg className={className} viewBox="0 0 340 300" fill="none" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id={`${artId}-signal`} x1="0" y1="0" x2="210" y2="160" gradientUnits="userSpaceOnUse"><stop stopColor="#e2f3ef" /><stop offset="1" stopColor="#bfd9f9" /></linearGradient>
-        <linearGradient id={`${artId}-blue`} x1="0" y1="0" x2="170" y2="110" gradientUnits="userSpaceOnUse"><stop stopColor="#e9f3ff" /><stop offset="1" stopColor="#c1d9ff" /></linearGradient>
-      </defs>
-      <g transform="translate(40 -30) rotate(-24 150 150)">
-        <rect x="0" y="0" width="142" height="85" rx="12" fill={`url(#${artId}-blue)`} />
-        <path d="M16 22h65M16 34h37" stroke="#6e93c8" strokeOpacity=".45" strokeWidth="5" strokeLinecap="round" />
-        <rect x="154" y="0" width="150" height="85" rx="12" fill={`url(#${artId}-signal)`} />
-        <path d="m170 59 25-21 20 8 30-24 39 10" stroke="#6e93c8" strokeOpacity=".6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="0" y="97" width="234" height="112" rx="13" fill={`url(#${artId}-signal)`} />
-        <path d="M18 119h79M18 132h45" stroke="#6e93c8" strokeOpacity=".55" strokeWidth="5" strokeLinecap="round" />
-        <path d="m18 181 29-13 29 7 34-29 29 12 33-24 39-3" stroke="#6e93c8" strokeOpacity=".85" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="246" y="97" width="100" height="112" rx="13" fill={`url(#${artId}-blue)`} />
-        <rect x="0" y="221" width="102" height="100" rx="12" fill={`url(#${artId}-signal)`} />
-        <rect x="114" y="221" width="190" height="100" rx="12" fill={`url(#${artId}-blue)`} />
-        <path d="M133 244h76M133 257h42" stroke="#6e93c8" strokeOpacity=".5" strokeWidth="5" strokeLinecap="round" />
-        <circle cx="24" cy="283" r="9" fill="#88acd4" fillOpacity=".3" />
-        <path d="M44 282h36" stroke="#6e93c8" strokeOpacity=".4" strokeWidth="5" strokeLinecap="round" />
-      </g>
-    </svg>;
-}
-
 function ApifySignupBar({ t }: { t: Translate; locale: string }) {
   return <aside className="gtfa-free-credit" aria-label={template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}>
-    <ApifyCardArt />
     <div className="gtfa-free-credit-copy">
       <span className="gtfa-credit-eyebrow">{t('signupPlan')}</span>
       <div className="gtfa-credit-value"><strong>${APIFY_FREE_MONTHLY_CREDIT_USD}</strong><span>{t('signupMonthly')}</span></div>
@@ -1828,7 +1874,6 @@ export function ApifyUsageCard({ state, t, locale, onRefresh, onRetry, refreshin
     <UsageDetails data={state.data} t={t} locale={locale} actions={refresh} />
   </section>;
   return <section className="gtfa-usage-banner" aria-label={t('usageTitle')}>
-    <ApifyCardArt className="gtfa-credit-art gtfa-usage-art" />
     <div className="gtfa-usage-header"><span className="gtfa-credit-eyebrow">{t('usageTitle')}</span>{refresh}</div>
     <div className="gtfa-usage-state" role={state.status === 'error' ? 'alert' : 'status'}>
       <Icon name={state.status === 'error' ? 'alert' : 'refresh'} size={18} />
@@ -1880,7 +1925,6 @@ function UsageDetails({ data, t, locale, actions }: { data: ApifyUsageData; t: T
     : null;
 
   return <>
-    <ApifyCardArt className="gtfa-credit-art gtfa-usage-art" />
     <div className="gtfa-usage-header">
       <span className="gtfa-credit-eyebrow">{t('usageTitle')}</span>
       {data.plan.tier ? <span className="gtfa-usage-plan">{tierTitle(data.plan.tier)}</span> : null}
@@ -1964,12 +2008,12 @@ function Segmented<V extends string>({ label, value, options, onChange, disabled
         disabled={disabled} style={{ ...styles.segment, ...(active ? styles.segmentActive : null) }}
         onClick={() => { if (!active) onChange(option.value); }}>
         <span className="gtfa-route-card-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span className="gtfa-route-icon" style={{ color: active ? 'var(--gtfa-accent)' : 'var(--gtfa-muted)' }}><Icon name={option.icon ?? 'cloud'} size={22} /></span>
+          <span className="gtfa-route-icon" style={{ color: active ? 'var(--gtfa-accent)' : 'var(--gtfa-muted)' }}><Icon name={option.icon ?? 'cloud'} size={17} /></span>
           <span className="gtfa-route-radio" aria-hidden="true" />
         </span>
         <span className="gtfa-route-card-body">
           <span className="gtfa-route-title" style={{ fontWeight: 600 }}>{option.label}{option.recommended ? <span className="gtfa-recommended">{option.recommended}</span> : null}</span>
-          {option.description ? <span style={{ ...styles.hint, display: 'block', marginTop: 4 }}>{option.description}</span> : null}
+          {option.description ? <span style={{ ...styles.hint, display: 'block', marginTop: 3 }}>{option.description}</span> : null}
         </span>
       </button>;
     })}
@@ -2005,7 +2049,7 @@ function Toggle({ label, hint, checked, onChange, disabled }: {
 
 function SectionHeader({ title, description, icon }: { title: string; description: string; icon?: string }) {
   return <div className="gtfa-section-heading">
-    {icon ? <span className="gtfa-section-icon"><Icon name={icon} size={18} /></span> : null}
+    {icon ? <span className="gtfa-section-icon"><Icon name={icon} size={15} /></span> : null}
     <div style={styles.sectionHeader}><h3 style={styles.sectionTitle}>{title}</h3>
       <p style={styles.sectionDescription}>{description}</p></div>
   </div>;
@@ -2061,6 +2105,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
   const testAbort = useRef<AbortController | null>(null);
   useEffect(() => () => { testAbort.current?.abort(); testAbort.current = null; }, []);
+  const [mekaCatalog, setMekaCatalog] = useState<MekaBaselineStatus>(() => summarizeMekaCatalog());
+  const [syncingBaselines, setSyncingBaselines] = useState(false);
+  const [baselineFeedback, setBaselineFeedback] = useState<BaselineSyncFeedback | null>(null);
+  const baselinesLoaded = useRef(false);
+  const baselinesSyncAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => { baselinesSyncAbort.current?.abort(); baselinesSyncAbort.current = null; }, []);
   const [oauth, setOauth] = useState<ApifyOAuthView>(initialOAuth ?? { status: 'idle' });
   const [oauthBusy, setOauthBusy] = useState<ApifyOAuthAction | null>(null);
   const [oauthPoll, setOauthPoll] = useState({ id: 0, delay: 0, egress: draft.egress });
@@ -2092,6 +2142,53 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, []);
 
   useEffect(() => { if (draft.egress !== 'actor-own') resetDeployment(); }, [draft.egress, resetDeployment]);
+
+  useEffect(() => {
+    if (!advancedOpen || advancedTab !== 'anchors' || baselinesLoaded.current) return;
+    baselinesLoaded.current = true;
+    const controller = new AbortController();
+    void loadMekaBaselines(controller.signal).then(status => {
+      if (controller.signal.aborted || !status) return;
+      setActiveMekaBaselines({ source: status.source, version: status.version, syncedAt: status.syncedAt, anchors: status.anchors });
+      setMekaCatalog(status);
+    });
+    return () => controller.abort();
+  }, [advancedOpen, advancedTab]);
+
+  const syncBaselines = async () => {
+    if (syncingBaselines) return;
+    const controller = new AbortController();
+    baselinesSyncAbort.current = controller;
+    setSyncingBaselines(true);
+    setBaselineFeedback(null);
+    try {
+      const result = await syncMekaBaselines(controller.signal);
+      if (controller.signal.aborted) return;
+      if (result.status) {
+        setActiveMekaBaselines({
+          source: result.status.source,
+          version: result.status.version,
+          syncedAt: result.status.syncedAt,
+          anchors: result.status.anchors,
+        });
+        setMekaCatalog(result.status);
+      }
+      if (result.ok && result.status) {
+        setBaselineFeedback({
+          tone: 'ok',
+          text: template(t(result.updated ? 'baselineSyncUpdated' : 'baselineSyncCurrent'), {
+            version: result.status.version,
+            count: result.status.count,
+          }),
+        });
+      } else {
+        setBaselineFeedback({ tone: 'error', text: t('baselineSyncFailed') });
+      }
+    } finally {
+      if (baselinesSyncAbort.current === controller) baselinesSyncAbort.current = null;
+      setSyncingBaselines(false);
+    }
+  };
 
   const stopOAuthPolling = useCallback(() => {
     oauthPollGeneration.current++;
@@ -2437,11 +2534,11 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const fixedAnchorOptions = useMemo(() => [
     { value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') },
     ...anchorOptions,
-    ...mekaAnchorsFor(draft.geo)
+    ...mekaAnchorsFor(draft.geo, undefined, mekaCatalog.anchors)
       .filter(anchor => !anchorTerms.some(term => term.toLowerCase() === anchor.term.toLowerCase()))
       .map(anchor => ({ value: anchor.term, label: anchor.term, ...(anchor.dailyOnly ? { description: t('baselineDailyWindow') } : {}) })),
-  ], [anchorOptions, anchorTerms, draft.geo, t]);
-  const regionalAnchor = mekaDefaultAnchor(draft.geo)?.term;
+  ], [anchorOptions, anchorTerms, draft.geo, mekaCatalog.anchors, t]);
+  const regionalAnchor = mekaDefaultAnchor(draft.geo, 'now 7-d', mekaCatalog.anchors)?.term;
   const defaultWindowLabel = regionalAnchor ? `${t('windowDefault')} · ${regionalAnchor}` : t('windowDefault');
   const shortWindowOptions = useMemo(() =>
     [{ value: '', label: defaultWindowLabel }, ...anchorOptions], [anchorOptions, defaultWindowLabel]);
@@ -2533,7 +2630,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
             connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
             onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
             onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
-          {!oauthConnected && (tokenSet || usage.status === 'ready' || draft.token.trim()) ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
+          {!oauthConnected && (tokenSet || usage.status === 'ready' || draft.token.trim()) ? <div style={{ padding: '0 16px 14px' }}>{testButton}</div> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
             <ApifyUsageCard state={usage} t={t} locale={intlLocale}
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
@@ -2577,7 +2674,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
-      <p style={{ ...styles.hint, margin: 0 }}><a href="https://meka.im/datasets/google-trends-anchors" target="_blank" rel="noopener noreferrer">{t('baselineSources')}</a></p>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
         onChange={checked => edit({ cache: checked })} />
     </section>
@@ -2585,8 +2681,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <details className="gtfa-advanced" open={advancedOpen}
       onToggle={event => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }}>
       <summary style={styles.summary}>
-        <span className="gtfa-section-icon"><Icon name="sliders" size={18} /></span>
-        <span style={{ display: 'grid', gap: 4 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{t('advanced')}</span>
+        <span className="gtfa-section-icon"><Icon name="wrench" size={15} /></span>
+        <span style={{ display: 'grid', gap: 2 }}><span style={styles.sectionTitle}>{t('advanced')}</span>
           <span style={styles.sectionDescription}>{t('advancedDescription')}</span></span>
         <span className="gtfa-advanced-chevron" style={{ marginLeft: 'auto', color: 'var(--gtfa-quiet)' }}><Icon name="chevron" size={15} /></span>
       </summary>
@@ -2598,13 +2694,14 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       <div role="tabpanel" id={`${advancedId}-anchors-panel`} aria-labelledby={`${advancedId}-anchors-tab`}
         className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'anchors'} style={{ paddingBottom: 24 }}>
         <div className="gtfa-baseline-heading">
-          <SectionHeader icon="sliders" title={t('baselines')}
+          <SectionHeader title={t('baselines')}
             description={t(draft.baselineOverride ? 'baselinesDescription' : 'baselinesHint')} />
           <div className="gtfa-baseline-toggle"><span>{t('overrideBaselines')}</span>
             <Switch label={t('overrideBaselines')} checked={draft.baselineOverride} disabled={!editable}
               onChange={checked => edit(setBaselineOverride(draft, checked))} /></div>
         </div>
-        <BaselineCatalog t={t} locale={intlLocale} />
+        <BaselineCatalog t={t} locale={intlLocale} catalog={mekaCatalog} syncing={syncingBaselines}
+          feedback={baselineFeedback} onSync={() => { void syncBaselines(); }} />
         {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
         {draft.baselineOverride ? <>
           <h4 className="gtfa-custom-baseline-title">{t('baselineCustomRows')}</h4>
@@ -2709,7 +2806,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       </div>
     </details>
 
-    <div className="gtfa-save-bar" style={styles.saveBar}>
+    <div className={`gtfa-save-bar${dirty || blocking || failure ? ' active' : ''}`} style={styles.saveBar}>
       <span className={`gtfa-save-state${dirty ? ' dirty' : ''}`} role="status" aria-live="polite">
         {dirty ? <span aria-hidden="true">●</span> : <Icon name="check" size={12} />}
         {dirty ? t('unsaved') : notice ?? t('allSaved')}

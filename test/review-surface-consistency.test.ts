@@ -161,7 +161,7 @@ describe('validation snapshot identity', () => {
 
   it('uses the validation row snapshotId in trends_ask instead of the newest failed diagnostic', async () => {
     const store = new SnapshotStore(tempDir('gtfa-review-snapshot-id-tool-'));
-    const filter: TrendsFilter = { geo: 'US', time: 'now 1-d', category: 0, property: '' };
+    const filter: TrendsFilter = { geo: 'US', time: 'now 7-d', category: 0, property: '' };
     const { previous, current } = await seedSuccessfulHistory(store, 'Sora', filter);
     const diagnostic = failedSnapshot(
       'newer-failed-diagnostic',

@@ -8,8 +8,11 @@ import { formatGTrendsExport } from './export.js';
 import { planTrendsRequest } from './input.js';
 import { publicInput } from './core.js';
 import { filterInput, resolveFilter } from './filter.js';
-import { compareEnvelope, findDuplicateKeyword, schemaRejectionEnvelope } from './tools.js';
+import { compareEnvelope, createTools, findDuplicateKeyword, schemaRejectionEnvelope } from './tools.js';
 import { runDoctorCli } from './doctor-cli.js';
+import { runBaselinesCli } from './baselines-cli.js';
+import { resolveRuntimeEgress, wrapToolsWithEgress } from './egress.js';
+import { loadBaselinesFromEnv } from './traffic.js';
 import { VERSION } from './version.js';
 
 const help = `gtfa — Search-interest signals for AI agents — an unofficial Google Trends client
@@ -17,10 +20,11 @@ const help = `gtfa — Search-interest signals for AI agents — an unofficial G
 Usage:
   gtfa ask <term> [--validate] [--diff] [--fresh] [--points]   One term: interest, Popular + Rising, regions (ask --help)
   gtfa snapshot <term> [--json] [--svg] [--tz IANA]        Calibrated searches/day + chart path (snapshot --help)
-  gtfa compare <kw> [<kw> ...] [options]            Relative interest for 1-5 distinct keywords
+  gtfa compare <kw> [<kw> ...] [--calibrate]        Relative interest for 1-5 distinct keywords (add --calibrate for searches/day)
   gtfa --query coffee [--query tea] [options]       Same as compare (default mode)
   gtfa now --geo SG [--json]                        Trending Now (now --help); --hours = trending window 4|24|48|168
-  gtfa doctor [--json]                              Check Node, Google Trends reachability, proxy, and one gpts fetch
+  gtfa baselines [--sync] [--json]                  Inspect or manually sync MEKA calibration baselines
+  gtfa doctor [--json]                              Check Node, Google Trends reachability, proxy, and one fetch
 Ask batch input (--validate --from FILE|-):
   JSON string, object (name/term/keyword, in that order), or mixed array;
   wrappers: {leads|rows|keywords|table: [...]}. Example: ["sora",{"term":"nano banana"}]
@@ -36,6 +40,9 @@ Options for compare / default mode:
                       interestBySubregion,relatedQueries,relatedTopics
   --format json|csv   Output format (default json)
   --json              Agent envelope JSON (compare/default mode)
+  --calibrate         With compare: run multi-tier MEKA batch volume calibration
+  --egress MODE       local (default) | actor-public | actor-own (or GTFA_EGRESS)
+  --actor ID          Apify Actor id for actor-own (or GTFA_APIFY_ACTOR)
   --timeout MS        Request timeout
   --retries N         Retry count
   --min-interval MS   Request spacing (default 1000)
@@ -74,6 +81,7 @@ async function main(): Promise<void> {
       query: { type: 'string', multiple: true }, url: { type: 'string', multiple: true },
       geo: { type: 'string' }, time: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' },
       types: { type: 'string' }, format: { type: 'string', default: 'json' }, json: { type: 'boolean' },
+      calibrate: { type: 'boolean' }, egress: { type: 'string' }, actor: { type: 'string' },
       timeout: { type: 'string' }, retries: { type: 'string' }, 'min-interval': { type: 'string' },
       pretty: { type: 'boolean' }, help: { type: 'boolean' }, version: { type: 'boolean' },
     } });
@@ -107,7 +115,28 @@ async function main(): Promise<void> {
       ...(values.retries !== undefined ? { maxRetries: numeric(values.retries) } : {}),
     });
     const options = values['min-interval'] !== undefined ? { minIntervalMs: numeric(values['min-interval']) } : {};
-    if (plan.batch) {
+    const runtimeEgress = resolveRuntimeEgress({ egress: values.egress as never, apifyActor: values.actor });
+    if (values.calibrate || runtimeEgress.egress !== 'local') {
+      const baselines = await loadBaselinesFromEnv();
+      const baseTools = createTools({ ...options, ...(baselines ? { baselines } : {}) });
+      const tool = wrapToolsWithEgress(baseTools, {
+        egress: runtimeEgress.egress,
+        apifyToken: runtimeEgress.apifyToken,
+        apifyActor: runtimeEgress.apifyActor,
+        ...(baselines ? { baselines } : {}),
+      }).find(item => item.name === 'trends_compare')!;
+      const input = plan.inputs[0];
+      const toolResult = await tool.execute({
+        keywords: input.queries,
+        geo: input.geo,
+        time: input.timeRange ?? defaults.time,
+        ...(values.calibrate ? { calibrate: true } : {}),
+        ...(values.timeout !== undefined ? { timeoutMs: numeric(values.timeout) } : {}),
+      });
+      result = toolResult;
+      const errObj = toolResult.error && typeof toolResult.error === 'object' ? toolResult.error as TrendsResponse['error'] : undefined;
+      results = [{ status: toolResult.ok ? (toolResult.status === 'partial' ? 'partial' : 'ok') : 'error', input, ...(errObj ? { error: errObj } : {}), meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } }];
+    } else if (plan.batch) {
       const batch = await batchTrends(plan.inputs.map(publicInput), options);
       result = json ? batch.results.map((r, i) => { const inp = plan.inputs[i]; return compareEnvelope(inp.queries, r, { geo: inp.geo, time: inp.timeRange ?? `${inp.startDate} ${inp.endDate}` }); }) : batch; results = batch.results;
     } else {
@@ -124,11 +153,11 @@ async function main(): Promise<void> {
   for (const response of results) if (response.error) console.error(`${response.error.code}: ${response.error.message}`);
 }
 if (process.argv[2] === 'help') {
-  process.argv.splice(2, process.argv.length - 2, ...(['now', 'ask', 'snapshot', 'doctor'].includes(process.argv[3]) ? [process.argv[3], '--help'] : process.argv.length === 3 ? ['--help'] : ['--invalid-help-topic']));
+  process.argv.splice(2, process.argv.length - 2, ...(['now', 'ask', 'snapshot', 'doctor', 'baselines'].includes(process.argv[3]) ? [process.argv[3], '--help'] : process.argv.length === 3 ? ['--help'] : ['--invalid-help-topic']));
 }
 if (process.argv[2] === 'compare') {
   const rest = process.argv.slice(3), keywords: string[] = [], flags: string[] = [];
-  for (let i = 0; i < rest.length; i++) { if (rest[i].startsWith('--')) { flags.push(rest[i]); if (!['--pretty', '--json', '--help', '--version'].includes(rest[i]) && !rest[i].includes('=') && i + 1 < rest.length) flags.push(rest[++i]); } else keywords.push(rest[i]); }
+  for (let i = 0; i < rest.length; i++) { if (rest[i].startsWith('--')) { flags.push(rest[i]); if (!['--pretty', '--json', '--help', '--version', '--calibrate'].includes(rest[i]) && !rest[i].includes('=') && i + 1 < rest.length) flags.push(rest[++i]); } else keywords.push(rest[i]); }
   process.argv.splice(2, process.argv.length - 2, ...keywords.flatMap(k => ['--query', k]), ...flags);
 }
 if (process.argv[2] === 'ask') {
@@ -143,6 +172,11 @@ if (process.argv[2] === 'ask') {
   process.exitCode = result.code;
 } else if (process.argv[2] === 'snapshot') {
   const result = await runSnapshotCli(process.argv.slice(3));
+  console.log(result.stdout);
+  if (result.stderr) console.error(result.stderr);
+  process.exitCode = result.code;
+} else if (process.argv[2] === 'baselines') {
+  const result = await runBaselinesCli(process.argv.slice(3));
   console.log(result.stdout);
   if (result.stderr) console.error(result.stderr);
   process.exitCode = result.code;

@@ -4,7 +4,7 @@ import type { QueryProgress } from '../query-progress.js';
 
 export interface DashboardData { version: string; records: QueryRecord[]; settings: { egress: EgressMode; geo: string; cache: boolean } }
 export interface DashboardView {
-  tab: 'overview' | 'query' | 'records'; state: DashboardData | null; loading: boolean; error: string; fieldError: string;
+  tab: 'query' | 'records'; state: DashboardData | null; loading: boolean; error: string; fieldError: string;
   days: number; text: string; geo: string; time: string; reuse: boolean; result: SavedQuery | null; metric: string;
   search: string; status: string; source: string; page: number; selected: string[];
   operation: (QueryProgress & { terms: string[] }) | null;
@@ -33,8 +33,8 @@ function session(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
 
 /** Owned by the browser plugin, so leaving its main panel does not cancel work. */
 export class DashboardController {
-  private value: DashboardView = { tab: 'overview', state: null, loading: false, error: '', fieldError: '', days: 30,
-    text: '', geo: 'US', time: 'now 1-d', reuse: true, result: null, metric: 'interest', search: '', status: 'all', source: 'all', page: 1, selected: [], operation: null };
+  private value: DashboardView = { tab: 'query', state: null, loading: false, error: '', fieldError: '', days: 7,
+    text: '', geo: 'US', time: 'now 7-d', reuse: true, result: null, metric: 'interest', search: '', status: 'all', source: 'all', page: 1, selected: [], operation: null };
   private listeners = new Set<() => void>();
   private queryController: AbortController | null = null;
   private loadController: AbortController | null = null;
@@ -47,7 +47,7 @@ export class DashboardController {
   constructor(private storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = session()) {
     try {
       const saved = row(JSON.parse(storage?.getItem(SESSION_KEY) ?? '{}'));
-      if (['overview', 'query', 'records'].includes(String(saved.tab))) this.value.tab = saved.tab as DashboardView['tab'];
+      if (['query', 'records'].includes(String(saved.tab))) this.value.tab = saved.tab as DashboardView['tab'];
       if ([7, 30].includes(Number(saved.days))) this.value.days = Number(saved.days);
       if (typeof saved.text === 'string' && saved.text.length <= 520) this.value.text = saved.text;
       if (typeof saved.geo === 'string' && /^(?:[A-Z]{2}|)$/.test(saved.geo)) { this.value.geo = saved.geo; this.restored = true; }
@@ -148,9 +148,12 @@ export class DashboardController {
     const id = this.value.result?.record.id;
     if (!id || !ID.test(id)) return;
     await this.operate(action === 'batch' ? this.value.result!.record.terms : [term], async (signal, requestId) => {
-      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action, id, ...(action === 'batch' ? {} : {term}), requestId }, signal);
+      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action, id, ...(action === 'batch' ? {} : { term }), requestId }, signal);
       if (this.disposed || signal.aborted) return;
-      this.commit({ result: reply.saved, metric: action === 'batch' ? 'interest' : 'traffic' }, true);
+      const batchSeries = Array.isArray(row(reply.saved.result.batchVolume).series)
+        ? (row(reply.saved.result.batchVolume).series as Record<string, unknown>[]) : [];
+      const hasBatchTraffic = batchSeries.some(item => typeof row(item.traffic).average === 'number' || Boolean(row(item.range).low != null && row(item.range).high != null));
+      this.commit({ result: reply.saved, metric: action === 'batch' ? (hasBatchTraffic ? 'traffic' : 'interest') : 'traffic' }, true);
       await this.refresh();
     });
   }

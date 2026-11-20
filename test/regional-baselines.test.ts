@@ -15,18 +15,18 @@ type RecordedComparison = {
 const recorded = (file: string): RecordedComparison => JSON.parse(readFileSync(new URL(`../validation/2026-11-16-regional-baselines/${file}`, import.meta.url), 'utf8'));
 
 describe('regional calibration', () => {
-  it('selects verified regional anchors while retaining US window defaults', () => {
+  it('selects verified MEKA regional anchors across all supported regions', () => {
     expect(defaultAnchorFor('now 1-d')).toBe('sudoku');
-    expect(defaultAnchorFor('now 7-d')).toBe('gpts');
+    expect(defaultAnchorFor('now 7-d')).toBe('sudoku');
     for (const time of ['now 1-d', 'now 7-d']) {
       expect(defaultAnchorFor(time, undefined, ' ca ')).toBe('sudoku');
-      expect(defaultAnchorFor(time, undefined, 'JP')).toBe('ナンプレ');
-      expect(defaultAnchorFor(time, undefined, 'IN')).toBe('calculator');
-      expect(defaultAnchorFor(time, undefined, '')).toBe('sudoku');
+      expect(defaultAnchorFor(time, undefined, 'JP')).toBe('テトリス');
+      expect(defaultAnchorFor(time, undefined, 'GB')).toBe('crossword solver');
+      expect(defaultAnchorFor(time, undefined, '')).toBe('stopwatch');
     }
-    expect(findAnchor(undefined, 'sudoku', 'CA')?.dailySearches).toBe(12000);
-    expect(findAnchor(undefined, 'sudoku', '')?.dailySearches).toBe(220000);
-    expect(findAnchor(undefined, 'sudoku', 'US')?.dailySearches).toBe(63000);
+    expect(findAnchor(undefined, 'sudoku', 'CA')?.dailySearches).toBe(15000);
+    expect(findAnchor(undefined, 'stopwatch', '')?.dailySearches).toBe(160000);
+    expect(findAnchor(undefined, 'sudoku', 'US')?.dailySearches).toBe(88000);
     expect(findAnchor(undefined, 'sudoku', 'SG')).toBeUndefined();
     expect(findAnchor(undefined, 'gpts', 'CA')).toBeUndefined();
   });
@@ -34,22 +34,22 @@ describe('regional calibration', () => {
   it('allows explicit Worldwide overrides without treating a missing geo as Worldwide', () => {
     const custom = parseBaselines({ version: 2, anchors: [{ term: 'sudoku', geo: '', dailySearches: 1000 }] });
     expect(findAnchor(custom, 'sudoku', '')?.dailySearches).toBe(1000);
-    expect(findAnchor(custom, 'sudoku', 'US')?.dailySearches).toBe(63000);
+    expect(findAnchor(custom, 'sudoku', 'US')?.dailySearches).toBe(88000);
     expect(() => parseBaselines({ version: 2, anchors: [{ term: 'sudoku', dailySearches: 1000 }] })).toThrow('invalid baseline anchor');
     expect(findAnchor(custom, 'sudoku', '', { category: 1, property: 'web' })).toBeUndefined();
   });
 
   it('pins country defaults into Actor requests without a default empty-geo row', () => {
-    const custom = parseBaselines({ version: 2, anchors: [{ term: 'sudoku', geo: ' ca ', dailySearches: 1234 }], windowAnchors: { short: 'gpts' } });
+    const custom = parseBaselines({ version: 2, anchors: [{ term: 'sudoku', geo: ' ca ', dailySearches: 1234 }], windowAnchors: { short: 'stopwatch' } });
     const request = baselinesForActor('CA', custom);
-    expect(request.windowAnchors).toEqual({ short: 'gpts', long: 'sudoku' });
+    expect(request.windowAnchors).toEqual({ short: 'stopwatch', long: 'sudoku' });
     expect(request.anchors.some(anchor => anchor.geo === '')).toBe(false);
     expect(findAnchor(request, 'sudoku', 'CA')?.dailySearches).toBe(1234);
     expect(() => parseBaselines(request)).not.toThrow();
     const worldwide = baselinesForActor('');
-    expect(findAnchor(worldwide, 'sudoku', '')?.dailySearches).toBe(220000);
-    expect(worldwide.windowAnchors).toEqual({ short: 'sudoku', long: 'sudoku' });
-    expect(baselinesForActor('JP').windowAnchors).toEqual({ short: 'ナンプレ', long: 'ナンプレ' });
+    expect(findAnchor(worldwide, 'stopwatch', '')?.dailySearches).toBe(160000);
+    expect(worldwide.windowAnchors).toEqual({ short: 'stopwatch', long: 'stopwatch' });
+    expect(baselinesForActor('JP').windowAnchors).toEqual({ short: 'テトリス', long: 'テトリス' });
   });
 
   it('keeps source periods separate from source-check dates and has no duplicate term/geo keys', () => {
@@ -61,15 +61,15 @@ describe('regional calibration', () => {
       expect(anchor.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       for (const source of anchor.sources) expect(new URL(source.url).protocol).toBe('https:');
     }
-    expect(catalogForGeo('')[0].sources[0]).toMatchObject({ monthlySearches: 6640000, dataPeriod: '2026-07' });
-    expect(catalogForGeo('CA')[0].sources[0].dataPeriod).toBeNull();
+    expect(catalogForGeo('').length).toBe(10);
+    expect(catalogForGeo('CA').length).toBe(7);
     expect(catalogForGeo('SG')).toEqual([]);
   });
 
-  for (const geo of ['CA', 'GB', 'AU', 'DE', 'FR', 'JP', 'IN', '']) {
+  for (const geo of ['CA', 'GB', 'DE', 'FR', 'JP', '']) {
     for (const time of ['now 1-d', 'now 7-d']) {
       it(`replays the real ${geo || 'Worldwide'} ${time} comparison through the snapshot path`, async () => {
-        const suffix = time === 'now 7-d' ? '7d' : geo === 'IN' ? '1d-calculator' : '1d';
+        const suffix = time === 'now 7-d' ? '7d' : '1d';
         const data = recorded(`trends-${geo.toLowerCase() || 'world'}-${suffix}.json`);
         expect(data.ok).toBe(true);
         expect(data.filter).toEqual({ geo, time });

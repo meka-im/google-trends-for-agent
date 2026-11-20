@@ -1,6 +1,6 @@
 import { nullTraffic, type CalibrationPoint } from './calibration.js';
 import { supportsVolumeWindow, type TrafficEstimate, type VolumeReason, type VolumeSeries } from './volume-types.js';
-import { MEKA_BASELINE_VERSION, mekaAnchorsFor } from './dsh-baselines.js';
+import { currentMekaBaselineVersion, mekaAnchorsFor } from './dsh-baselines.js';
 import { settledPoints, type TrendsFilter } from './filter.js';
 import { markGaps } from './gaps.js';
 import { anchorDailySearches, findAnchor, SHORT_WINDOWS, type Anchor, type Baselines } from './traffic.js';
@@ -146,7 +146,7 @@ export function volumeCalibration(series: VolumeSeries[], reason: VolumeReason =
   return {
     status: count === 0 ? 'unavailable' : count === series.length ? 'ok' : 'partial',
     reasonCode: count ? 'ok' : series[0]?.reason ?? reason,
-    catalogVersion: MEKA_BASELINE_VERSION,
+    catalogVersion: currentMekaBaselineVersion(),
     settledOnly: true,
     anchor,
     series,
@@ -155,7 +155,7 @@ export function volumeCalibration(series: VolumeSeries[], reason: VolumeReason =
 
 export function calibratedSnapshot(result: Record<string, unknown>, input: Record<string, unknown>, settings: VolumeSettings) {
   if (!result.ok) return result;
-  const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 1-d'));
+  const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 7-d'));
   const series = row(result.series), anchorName = row(result.anchor).term;
   const pin = typeof input.anchor === 'string' ? { ...settings, anchor: input.anchor } : settings;
   const anchor = typeof anchorName === 'string' ? volumeReferences(filter, pin).lookup(anchorName) : undefined;

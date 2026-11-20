@@ -55,7 +55,7 @@ export function retryAnchors(target: CalibrationPoint[], reference: CalibrationP
 export async function singleVolume(input: Envelope, settings: VolumeSettings, previous: SavedQuery | null,
   execute: Execute, calibrating: () => void): Promise<Envelope> {
   const term = String(input.term);
-  const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 1-d'));
+  const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 7-d'));
   const pinned = typeof input.anchor === 'string' ? { ...settings, anchor: input.anchor } : settings;
   const refs = volumeReferences(filter, pinned);
   const snapshotRefs = volumeReferences(filter, pinned, 'now 7-d');

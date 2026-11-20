@@ -6,18 +6,22 @@ import { queryTrends } from './api.js';
 import { loadBaselinesFromEnv, type Baselines } from './traffic.js';
 import { resolveTimeZone } from './timezone.js';
 import { DEFAULT_EXPLORE_TIMEOUT_MS } from './client.js';
+import { createTools } from './tools.js';
+import { resolveRuntimeEgress, wrapToolsWithEgress } from './egress.js';
 
 export const snapshotHelp = `Usage: gtfa snapshot <term> [options]
   One term + a shared-scale anchor comparison -> calibrated searches/day estimate,
   traffic series, related queries, verdict, and chart file paths for the requested
   window plus an always-on now 7-d curve (chart7d / traffic7d); --svg embeds SVG text.
-  --geo US --time "now 1-d"          Explore filter (all categories, web)
+  --geo US --time "now 7-d"          Explore filter (all categories, web)
   --anchor TERM                     Anchor override; default automatic by region and time window
   --fresh                           Force live data
   --max-age MIN                     Reuse saved snapshots younger than MIN minutes (default 360)
   --timeout MS                      Per-request timeout (integer 1000-60000; Explore default ${DEFAULT_EXPLORE_TIMEOUT_MS})
   --store DIR                       Snapshot storage (default .gtfa/snapshots)
   --chart-dir DIR                   SVG output directory (default .gtfa/charts)
+  --egress MODE                     local (default) | actor-public | actor-own (or GTFA_EGRESS)
+  --actor ID                        Apify Actor id for actor-own (or GTFA_APIFY_ACTOR)
   --tz <IANA>                       Chart time zone (default GTFA_TZ, then UTC)
   --svg                             Embed inline SVG text (default: svg is "", path is kept)
   --json                            Agent envelope JSON (same as trends_snapshot)
@@ -50,27 +54,58 @@ export async function runSnapshotCli(args: string[], options: { query?: typeof q
   try {
     const { values: v, positionals } = parseArgs({ args, allowPositionals: true, options: {
       geo: { type: 'string' }, time: { type: 'string' }, anchor: { type: 'string' }, 'max-age': { type: 'string' },
-      store: { type: 'string' }, 'chart-dir': { type: 'string' }, tz: { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
+      store: { type: 'string' }, 'chart-dir': { type: 'string' }, egress: { type: 'string' }, actor: { type: 'string' },
+      tz: { type: 'string' }, json: { type: 'boolean' }, pretty: { type: 'boolean' }, svg: { type: 'boolean' },
       fresh: { type: 'boolean' }, timeout: { type: 'string' }, help: { type: 'boolean' },
     } });
     json = v.json ?? false; pretty = v.pretty ?? false;
     if (v.help) return { code: 0, stdout: process.stdout.isTTY && !v.json ? snapshotHelp : JSON.stringify({ help: snapshotHelp }), stderr: '' };
     const timeoutMs = timeoutValue(v.timeout);
-    const query = withTimeout(options.query ?? queryTrends, timeoutMs);
+    const runtimeEgress = resolveRuntimeEgress({ egress: v.egress as never, apifyActor: v.actor });
     const term = positionals.join(' ').trim();
     if (!term) throw new Error('provide a term');
-    const maxAgeMin = v['max-age'];
     const filter = resolveFilter({ geo: v.geo, time: v.time, category: 0, property: '' });
     const timeZone = resolveTimeZone(v.tz);
+    const baselines = options.baselines ?? await loadBaselinesFromEnv();
+    const chartDir = v['chart-dir'] ?? options.chartDir;
+    if (!options.query && runtimeEgress.egress !== 'local') {
+      const tool = wrapToolsWithEgress(createTools({
+        ...(baselines ? { baselines } : {}),
+        ...(v.store ? { snapshotDir: v.store } : {}),
+        ...(chartDir !== undefined ? { chartDir } : {}),
+      }), {
+        egress: runtimeEgress.egress,
+        apifyToken: runtimeEgress.apifyToken,
+        apifyActor: runtimeEgress.apifyActor,
+        ...(baselines ? { baselines } : {}),
+        ...(v.store ? { snapshotDir: v.store } : {}),
+        ...(chartDir !== undefined ? { chartDir } : {}),
+      }).find(item => item.name === 'trends_snapshot')!;
+      const envelope = await tool.execute({
+        term,
+        geo: filter.geo,
+        time: filter.time,
+        ...(v.anchor ? { anchor: v.anchor } : {}),
+        fresh: Boolean(v.fresh),
+        svg: v.svg === true,
+        ...(v.tz ? { tz: v.tz } : {}),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      }) as { ok?: boolean; status?: string; error?: { code?: string; message?: string } };
+      const code = !envelope.ok
+        ? (['BLOCKED', 'RATE_LIMITED'].includes(envelope.error?.code ?? '') ? 3 : envelope.error?.code === 'INVALID_INPUT' ? 4 : 1)
+        : envelope.status === 'partial' ? 2 : 0;
+      const stderr = !envelope.ok ? `${envelope.error?.code ?? 'ERROR'}: ${envelope.error?.message ?? envelope.status}` : '';
+      return { code, stdout: JSON.stringify(envelope, null, pretty ? 2 : undefined), stderr };
+    }
+    const query = withTimeout(options.query ?? queryTrends, timeoutMs);
+    const maxAgeMin = v['max-age'];
     const store = new SnapshotStore(v.store);
     const maxAge = maxAgeMin === undefined ? 360 : Number(maxAgeMin);
     if (!Number.isFinite(maxAge) || maxAge < 0) throw new Error('invalid max-age');
-    const baselines = options.baselines ?? await loadBaselinesFromEnv();
     const result = await fetchTrafficSnapshot(term, {
       filter, store, anchor: v.anchor, baselines, maxAgeMin: maxAge, query, timeZone,
       refresh: v.fresh ? 'always' : undefined,
     });
-    const chartDir = v['chart-dir'] ?? options.chartDir;
     const envelope = await trafficSnapshotEnvelope(result.snapshot, {
       cached: result.source === 'cache', ageMin: result.ageMin, baselines,
       week: result.week, timeZone, ...(result.weekError ? { weekError: result.weekError } : {}), ...(v.anchor ? { weekAnchor: v.anchor } : {}),
