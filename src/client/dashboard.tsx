@@ -1,5 +1,5 @@
 import type { BatchResult } from '../batch-types.js';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { ChoicePicker } from './choice-picker.js';
 import { Icon } from './icons.js';
@@ -39,7 +39,45 @@ const csvCell = (value: unknown) => {
 };
 
 export function TrendsMark({ size = 28 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#2563eb" /><path d="m14 42 10-13a3 3 0 0 1 4.7 0l5.1 6.6a2.9 2.9 0 0 0 4.9-.5L49 17" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" /><circle cx="49" cy="17" r="4.4" fill="#99f6e4" /></svg>;
+  const id = useId();
+  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+    <defs>
+      <linearGradient id={`${id}-s1`} x1="10" y1="50" x2="28" y2="20" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#1D4ED8" />
+        <stop offset="55%" stopColor="#2563EB" />
+        <stop offset="100%" stopColor="#38BDF8" />
+      </linearGradient>
+      <linearGradient id={`${id}-s2`} x1="22" y1="22" x2="39" y2="43" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#60A5FA" />
+        <stop offset="48%" stopColor="#4F46E5" />
+        <stop offset="100%" stopColor="#312E81" />
+      </linearGradient>
+      <linearGradient id={`${id}-s3`} x1="33" y1="43" x2="56" y2="12" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#0284C7" />
+        <stop offset="48%" stopColor="#06B6D4" />
+        <stop offset="100%" stopColor="#34D399" />
+      </linearGradient>
+      <linearGradient id={`${id}-sh1`} x1="28" y1="26" x2="17" y2="38" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#0B1120" stopOpacity="0.42" />
+        <stop offset="100%" stopColor="#0B1120" stopOpacity="0" />
+      </linearGradient>
+      <linearGradient id={`${id}-sh2`} x1="39" y1="38" x2="28" y2="27" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#0B1120" stopOpacity="0.46" />
+        <stop offset="100%" stopColor="#0B1120" stopOpacity="0" />
+      </linearGradient>
+      <linearGradient id={`${id}-hi`} x1="36" y1="36" x2="54" y2="14" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0" />
+        <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0.34" />
+        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.1" />
+      </linearGradient>
+    </defs>
+    <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke={`url(#${id}-s1)`} strokeWidth="12.4" strokeLinecap="round" />
+    <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke={`url(#${id}-sh1)`} strokeWidth="12.4" strokeLinecap="round" />
+    <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke={`url(#${id}-s2)`} strokeWidth="12.4" strokeLinecap="round" />
+    <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke={`url(#${id}-sh2)`} strokeWidth="12.4" strokeLinecap="round" />
+    <line x1="36.8" y1="39.5" x2="52.8" y2="16.2" stroke={`url(#${id}-s3)`} strokeWidth="12.4" strokeLinecap="round" />
+    <line x1="38.4" y1="36.8" x2="51.2" y2="18.2" stroke={`url(#${id}-hi)`} strokeWidth="4.2" strokeLinecap="round" />
+  </svg>;
 }
 
 function Button({ children, onClick, disabled, primary, ghost, compact, label, title }: {
