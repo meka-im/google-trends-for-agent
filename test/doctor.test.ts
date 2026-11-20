@@ -84,4 +84,11 @@ describe('gtfa doctor', () => {
     expect(transportTimeouts).toEqual([1500]);
     expect(queryTimeouts).toEqual([1500]);
   });
+
+  it('validates doctor CLI --timeout flags and keeps help usable', async () => {
+    const { runDoctorCli } = await import('../src/doctor-cli.js');
+    expect((await runDoctorCli(['--help', '--timeout', 'bogus'])).code).toBe(0);
+    expect((await runDoctorCli(['--timeout', '999', '--json'])).code).toBe(4);
+    expect((await runDoctorCli(['--timeout', '60001', '--json'])).code).toBe(4);
+  });
 });
