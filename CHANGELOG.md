@@ -4,6 +4,15 @@
 
 Initial release in preparation.
 
+- Automatically calibrate single-keyword dashboard queries in up to two rounds. The overview reports first-round success and actual Actor runs per estimate.
+- Use weak comparison signals to pick closer anchors for a manual follow-up. Keep estimates from sustained low keyword scores when the reference is strong.
+- Sync 59 published MEKA anchors. Use nearby tiers for the first dsh comparison and include daily-only anchors in eligible follow-up estimates.
+- Plot anchor disagreement as a per-sample range in the dsh search-volume chart. Restore missing samples from retained Actor results.
+
+- Estimate missing search volume on demand from a saved dsh result. One explicit follow-up uses the selected connection and records the result and any Actor cost.
+- Use matched, settled samples for dashboard estimates. Show an anchor range when eligible anchors disagree and display estimates at two significant digits.
+
+- Use the MEKA regional Google Ads catalog in dsh. Dashboard comparisons choose a usable anchor for each term within the same batch.
 - Unify the dsh query form for 1–5 terms, retain its draft/result across panel navigation, and show actual Actor progress with elapsed time.
 - Estimate multi-term traffic from one shared term-and-anchor batch. Five selected terms remain one batch; missing anchor space or weak baselines produce explicit null estimates.
 - Fix clipped dashboard select labels and show input errors beside the field.

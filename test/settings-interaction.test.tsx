@@ -456,22 +456,25 @@ describe('baseline editor', () => {
     render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
     const catalog = within(screen.getByRole('region', { name: t('baselineBuiltin') }));
     const table = () => within(catalog.getByRole('table'));
-    expect(table().getAllByRole('row')).toHaveLength(11);
-    for (const geo of ['CA', 'GB', 'AU', 'DE', 'FR', 'JP', 'IN']) {
-      expect(table().getByRole('rowheader', { name: regionLabel(geo, 'en') })).toBeTruthy();
+    expect(table().getAllByRole('row')).toHaveLength(60);
+    for (const geo of ['CA', 'GB', 'DE', 'FR', 'JP']) {
+      expect(table().getAllByRole('rowheader', { name: regionLabel(geo, 'en') }).length).toBeGreaterThan(0);
     }
-    expect(table().getByRole('rowheader', { name: t('geoWorldwide') })).toBeTruthy();
-    expect(table().getByText('220,000')).toBeTruthy();
+    for (const geo of ['AU', 'IN']) {
+      expect(table().queryByRole('rowheader', { name: regionLabel(geo, 'en') })).toBeNull();
+    }
+    expect(table().getAllByText('30d+')).toHaveLength(3);
+    expect(table().getAllByRole('rowheader', { name: t('geoWorldwide') })).toHaveLength(10);
     const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} sudoku` });
     await user.clear(daily); await user.type(daily, '50000');
     await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'research');
     await user.type(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` }), '1200');
     await pick(user, t('baselineBrowseGeo'), t('geoWorldwide'));
-    expect(table().getAllByRole('row')).toHaveLength(2);
-    expect(table().getByText('220,000')).toBeTruthy();
+    expect(table().getAllByRole('row')).toHaveLength(11);
+    expect(table().getByText('440,000')).toBeTruthy();
     await pick(user, t('baselineBrowseGeo'), regionLabel('JP', 'en'));
-    expect(table().getAllByRole('row')).toHaveLength(2);
-    expect(table().getByText('ナンプレ')).toBeTruthy();
+    expect(table().getAllByRole('row')).toHaveLength(9);
+    expect(table().getByText('テトリス')).toBeTruthy();
     expect((daily as HTMLInputElement).value).toBe('50000');
     expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).value).toBe(regionLabel('US', 'en'));
     expect(backend.saved().baselines).toEqual({ anchors });
@@ -487,10 +490,10 @@ describe('baseline editor', () => {
     const backend = host({}, false); api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
     const catalog = within(screen.getByRole('region', { name: t('baselineBuiltin') }));
-    expect(catalog.getAllByRole('row')).toHaveLength(11);
+    expect(catalog.getAllByRole('row')).toHaveLength(60);
     await pick(user, t('baselineBrowseGeo'), regionLabel('CA', 'en'));
-    expect(catalog.getAllByRole('row')).toHaveLength(2);
-    expect(catalog.getByText('12,000')).toBeTruthy();
+    expect(catalog.getAllByRole('row')).toHaveLength(8);
+    expect(catalog.getByText('15,000')).toBeTruthy();
     expect(screen.queryByRole('spinbutton', { name: `${t('anchorDaily')} gpts` })).toBeNull();
     expect(button('save').disabled).toBe(true);
     expect(backend.saved().baselines).toBeUndefined();
@@ -498,10 +501,9 @@ describe('baseline editor', () => {
   });
 
   it.each([
-    { geo: 'CA', anchor: 'sudoku', daily: '12000' },
-    { geo: 'JP', anchor: 'ナンプレ', daily: '22000' },
-    { geo: 'IN', anchor: 'calculator', daily: '300000' },
-    { geo: '', anchor: 'sudoku', daily: '220000' },
+    { geo: 'CA', anchor: 'sudoku', daily: '15000' },
+    { geo: 'JP', anchor: 'テトリス', daily: '18000' },
+    { geo: '', anchor: 'stopwatch', daily: '160000' },
   ])('seeds editable $geo baselines and preserves explicit regions on Save', async ({ geo, anchor, daily }) => {
     const backend = host({ geo }); api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
@@ -512,8 +514,20 @@ describe('baseline editor', () => {
     expect(backend.mutate).not.toHaveBeenCalled();
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
-      { term: anchor, geo, dailySearches: Number(daily), tolerance: 0.75 },
+      { term: anchor, geo, dailySearches: Number(daily), tolerance: 0.5 },
     ] }));
+  });
+
+  it('keeps India available for queries and saves a user baseline if supplied', async () => {
+    const backend = host({ geo: 'IN' }); api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    expect(screen.getByText(t('geoHint'))).toBeTruthy();
+    await user.click(screen.getByRole('switch', { name: t('overrideBaselines') }));
+    expect(screen.queryByRole('spinbutton', { name: `${t('anchorDaily')} chess` })).toBeNull();
+    await user.type(screen.getByRole('textbox', { name: t('newAnchorTerm') }), 'research');
+    await user.type(screen.getByRole('spinbutton', { name: `${t('anchorDaily')} ${t('newAnchorTerm')}` }), '1200');
+    await user.click(button('save'));
+    await waitFor(() => expect(backend.saved().baselines).toMatchObject({ anchors: [{ term: 'research', geo: 'IN', dailySearches: 1200 }] }));
   });
 
   it('follows a changed default region for an empty new row but retains edited new rows', async () => {
@@ -536,30 +550,29 @@ describe('baseline editor', () => {
     render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
     const toggle = screen.getByRole('switch', { name: t('overrideBaselines') });
     await user.click(toggle);
-    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` }) as HTMLInputElement).value).toBe('3500');
-    const geo = screen.getByRole('combobox', { name: `${t('anchorGeo')} gpts` });
+    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} sudoku` }) as HTMLInputElement).value).toBe('88000');
+    const geo = screen.getByRole('combobox', { name: `${t('anchorGeo')} sudoku` });
     await user.click(geo);
     expect(screen.getByRole('option', { name: t('geoWorldwide') })).toBeTruthy();
     await user.type(geo, 'gb');
     await user.click(screen.getByRole('option', { name: regionLabel('GB', 'en') }));
-    const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` });
+    const daily = screen.getByRole('spinbutton', { name: `${t('anchorDaily')} sudoku` });
     await user.clear(daily); await user.type(daily, '4200');
-    const tolerance = screen.getByRole('combobox', { name: `${t('anchorTolerance')} gpts` }) as HTMLInputElement;
+    const tolerance = screen.getByRole('combobox', { name: `${t('anchorTolerance')} sudoku` }) as HTMLInputElement;
     await user.click(tolerance);
     expect(tolerance.readOnly).toBe(true);
     await user.keyboard('{ArrowUp}{Enter}');
     expect(tolerance.value).toBe('±25%');
-    await pick(user, t('windowShort'), /^gpts/);
+    await pick(user, t('windowShort'), /^sudoku/);
     await user.click(toggle); await user.click(toggle);
-    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} gpts` }) as HTMLInputElement).value).toBe('4200');
-    expect((screen.getByRole('combobox', { name: t('windowLong') }) as HTMLInputElement).value).toBe(`${t('windowDefault')} · gpts`);
+    expect((screen.getByRole('spinbutton', { name: `${t('anchorDaily')} sudoku` }) as HTMLInputElement).value).toBe('4200');
+    expect((screen.getByRole('combobox', { name: t('windowLong') }) as HTMLInputElement).value).toBe(`${t('windowDefault')} · sudoku`);
     expect(backend.saved().baselines).toBeUndefined();
     expect(backend.mutate).not.toHaveBeenCalled();
     await user.click(button('save'));
     await waitFor(() => expect(backend.saved().baselines).toEqual({ anchors: [
-      { term: 'gpts', geo: 'GB', dailySearches: 4200, tolerance: 0.25 },
-      { term: 'sudoku', geo: 'US', dailySearches: 63000, tolerance: 0.5 },
-    ], windowAnchors: { short: 'gpts' } }));
+      { term: 'sudoku', geo: 'GB', dailySearches: 4200, tolerance: 0.25 },
+    ], windowAnchors: { short: 'sudoku' } }));
   });
 
   it('adds and removes anchors, preserves custom tolerance and saves a pending new row', async () => {

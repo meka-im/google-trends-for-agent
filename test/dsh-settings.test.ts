@@ -495,17 +495,15 @@ describe('saving the new-anchor row', () => {
 });
 
 describe('US baseline overrides', () => {
-  it('starts with both editable US defaults and keeps saved rows and windows', () => {
+  it('starts with the MEKA US default and keeps saved rows and windows', () => {
     const empty = fromSnapshot(undefined);
     const draft = setBaselineOverride(empty, true);
     expect(draft.anchors).toEqual([
-      { term: 'gpts', geo: 'US', dailySearches: '3500', tolerance: '0.5' },
-      { term: 'sudoku', geo: 'US', dailySearches: '63000', tolerance: '0.5' },
+      { term: 'sudoku', geo: 'US', dailySearches: '88000', tolerance: '0.5' },
     ]);
 
     const html = render({ draft });
-    expect(html).toMatch(/aria-label="Searches\/day gpts"[^>]*value="3500"/);
-    expect(html).toMatch(/aria-label="Searches\/day sudoku"[^>]*value="63000"/);
+    expect(html).toMatch(/aria-label="Searches\/day sudoku"[^>]*value="88000"/);
 
     const saved = fromSnapshot({
       baselines: {

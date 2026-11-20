@@ -150,7 +150,8 @@ export const SETTINGS_CSS = `
 .gtfa-choice input::placeholder { color:var(--gtfa-quiet); font-size:12px; }
 .gtfa-choice-toggle { display:flex; align-items:center; justify-content:center; width:26px; height:28px; padding:0; flex-shrink:0; background:none; border:0; border-radius:5px; color:var(--gtfa-muted); cursor:pointer; }
 .gtfa-choice.open .gtfa-choice-toggle>svg { transform:rotate(180deg); }
-.gtfa-choice-popover { position:absolute; z-index:20; left:0; right:0; top:calc(100% + 7px); padding:5px; border:1px solid var(--gtfa-line); border-radius:11px; background:var(--gtfa-surface); box-shadow:0 7px 24px rgba(22,35,66,.13),0 2px 5px rgba(22,35,66,.06); }
+.gtfa-choice-popover { position:absolute; z-index:20; left:0; right:0; top:calc(100% + 7px); padding:5px; border:1px solid var(--gtfa-line); border-radius:12px; background:var(--gtfa-surface); box-shadow:0 16px 40px rgba(15,23,42,.14),0 2px 6px rgba(15,23,42,.06); animation:gtfa-pop .14s cubic-bezier(.16,1,.3,1); }
+@keyframes gtfa-pop { from { opacity:0; transform:translateY(-4px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .gtfa-choice-popover.above { top:auto; bottom:calc(100% + 7px); }
 .gtfa-choice-popover [role=listbox] { overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
 .gtfa-choice-option { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 10px; border-radius:7px; color:var(--gtfa-ink); cursor:pointer; }
@@ -223,10 +224,10 @@ export const SETTINGS_CSS = `
 .gtfa-catalog-table th,.gtfa-catalog-table td { padding:9px 14px; border-top:1px solid var(--gtfa-line); text-align:left; overflow-wrap:anywhere; }
 .gtfa-catalog-table thead th { background:var(--gtfa-soft); color:var(--gtfa-muted); font-size:10px; font-weight:400; }
 .gtfa-catalog-table th:first-child { width:31%; font-weight:500; }
-.gtfa-catalog-table th:nth-child(2) { width:25%; }
+.gtfa-catalog-table th:nth-child(2) { width:41%; }
 .gtfa-catalog-table th:nth-child(3) { width:28%; }
-.gtfa-catalog-table th:last-child { width:16%; }
 .gtfa-catalog-table td:nth-child(2) { font-family:var(--ds-font-family-code,Menlo,monospace); }
+.gtfa-catalog-window { margin-inline-start:6px; color:var(--gtfa-muted); white-space:nowrap; }
 .gtfa-catalog-table td:nth-child(n+3),.gtfa-catalog-table th:nth-child(n+3) { text-align:right; font-variant-numeric:tabular-nums; }
 .gtfa-catalog-table td:nth-child(n+3) { white-space:nowrap; }
 .gtfa-baseline-editor { border:1px solid var(--gtfa-line); border-radius:11px; }

@@ -2,7 +2,13 @@
 
 Calibration is an estimate of Google web searches across all categories. A baseline applies to its exact region, including the explicit empty geo `""` for Worldwide. It does not restrict which regions can be queried. Regions without a matching baseline still return relative interest and related queries; their numeric traffic fields stay `null`.
 
-## Built-in coverage
+## MEKA baselines in dsh
+
+dsh includes 59 Google Ads Keyword Planner anchors from the MEKA catalog dated 2026-11-19. It covers Worldwide, the US, Canada, the UK, Germany, France, and Japan. Queries for other regions return relative interest by default. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
+
+For a new comparison without a known or fixed anchor, the dashboard fills available slots with regional anchors near 10,000 searches/day. This keeps common keywords and anchors visible on the shared scale. The follow-up estimate for a weak keyword uses the two lowest eligible anchors. Anchors marked `30d+` qualify for 30-day, 90-day, and 12-month comparisons and follow-up estimates. A native single-term snapshot uses an hourly-qualified anchor for both its requested window and the companion 7-day chart. Fixed eligible anchors and custom values for the same term take priority. If the data is too sparse, the dashboard shows an unavailable estimate. The catalog snapshot ships with the plugin.
+
+## Built-in defaults for CLI, MCP and Actor
 
 Sources reviewed on **2026-11-16**. Review dates are separate from the providers' measurement periods below. The US calibration is retained; the other entries are rounded regional estimates.
 
@@ -41,6 +47,22 @@ New daily values use `monthly / (365.25 / 12)` rounded to two significant digits
 The seodata API provides keyword-volume estimates but omits the measurement range and close-variant list. Its `cached_at` timestamp is not a measurement date. [Google Ads documents](https://developers.google.com/google-ads/api/docs/keyword-planning/generate-historical-metrics) that historical keyword metrics can combine close variants. Do not treat these estimates as exact counts for a literal search string. The Japanese number is retained in the search index of Semrush's German-language September report; the current English-language October top-five table no longer lists that keyword. The global figure is the publisher's reported Ahrefs export, not a live Ahrefs API response. Both source periods remain explicit in the catalog.
 
 The wider ±75% band acknowledges these limitations and disagreement with cross-keyword checks. Separate calculator-based estimates and 3-month Trends ratios were examined; they were not substituted for direct regional keyword volumes. The Worldwide calculator/translate checks imply roughly 3.3–7.8 million monthly sudoku searches, showing why the global figure should not be presented as precise. US derivation and its original sources are in [the reference](reference.md#calibration-and-the-anchor).
+
+### Reading search-volume estimates in dsh
+
+A dashboard comparison starts one batch of up to five terms, including any
+available reference slots. If an estimate is missing, **Estimate separately**
+uses the saved region and time preset with a smaller group of regional anchors.
+Each click starts one comparison through the current connection. Actor runs are
+metered and their returned usage is included in the local cost card. History
+shows the saved follow-up. A shifted rolling window appears with its own dates.
+
+Dashboard estimates multiply a regional reference's historical daily baseline
+by the target-to-reference mean interest ratio from matched, settled samples.
+Sparse series and weak anchors leave the estimate blank. When usable anchors
+give estimates more than 2× apart, the dashboard displays their spread. Short
+intervals are expressed as daily equivalents. The year-long baseline is applied
+to windows up to a year.
 
 ## Validation evidence
 

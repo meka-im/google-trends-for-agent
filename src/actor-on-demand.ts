@@ -62,7 +62,23 @@ export class OnDemandActorClient {
     if (!response.ok) throw new GTrendsError('NETWORK_ERROR', `Apify API returned HTTP ${response.status}.`);
   }
 
-  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void) {
+  private async readOutput(storeId: unknown, token: string, signal: AbortSignal, protocol: ActorToolRequest['protocol']) {
+    if (typeof storeId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
+    const output = await this.request(`/key-value-stores/${encodeURIComponent(storeId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
+    if (output.protocol !== protocol || typeof row(output.result).ok !== 'boolean') {
+      throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${protocol}. Rebuild the Actor.`);
+    }
+    return output;
+  }
+
+  /** Read a completed run already billed to this account. */
+  async readCompletedResult(token: string, runId: string, signal: AbortSignal): Promise<Record<string, unknown>> {
+    const run = row((await this.request(`/actor-runs/${encodeURIComponent(runId)}`, token, signal)).data);
+    if (run.id !== runId || run.status !== 'SUCCEEDED') throw new GTrendsError('NETWORK_ERROR', 'Saved Apify result is unavailable.');
+    return row((await this.readOutput(run.defaultKeyValueStoreId, token, signal, ACTOR_REQUEST_PROTOCOL)).result);
+  }
+
+  async call(token: string, actorId: string, input: ActorToolRequest, callerSignal?: AbortSignal, progress?: (phase: QueryPhase) => void, started?: (id: string) => void) {
     throwIfAborted(callerSignal);
     if (!actorId.trim()) throw new GTrendsError('INVALID_INPUT', 'Select or deploy your google-trends-for-agent Actor in Plugins → Google Trends.');
     const deadline = AbortSignal.timeout(this.options.deadlineMs ?? 330_000);
@@ -74,6 +90,7 @@ export class OnDemandActorClient {
       let run = row((await this.request(`/acts/${encodeURIComponent(actorId)}/runs?timeout=${ACTOR_RUN_TIMEOUT_SECS}&memory=${ACTOR_RUN_MEMORY_MB}&waitForFinish=0`, token, signal, 'POST', { toolRequest: input })).data);
       if (typeof run.id !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no run id.');
       runId = run.id;
+      started?.(runId);
       while (ACTIVE.has(String(run.status))) {
         progress?.(run.status === 'READY' ? 'queued' : 'running');
         await new Promise<void>((done, reject) => {
@@ -87,10 +104,8 @@ export class OnDemandActorClient {
       if (!TERMINAL.has(String(run.status))) throw new GTrendsError('NETWORK_ERROR', 'Apify returned an unknown run state.');
       terminal = true;
       if (run.status !== 'SUCCEEDED') throw new GTrendsError(run.status === 'TIMED-OUT' ? 'TRENDS_TIMEOUT' : 'NETWORK_ERROR', `Apify run ended with ${String(run.status)}. Update the Actor if it does not support on-demand tool requests.`);
-      if (typeof run.defaultKeyValueStoreId !== 'string') throw new GTrendsError('NETWORK_ERROR', 'Apify returned no result store.');
       progress?.('reading');
-      const output = await this.request(`/key-value-stores/${encodeURIComponent(run.defaultKeyValueStoreId)}/records/${ACTOR_RESPONSE_KEY}`, token, signal);
-      if (output.protocol !== input.protocol || typeof row(output.result).ok !== 'boolean') throw new GTrendsError('INVALID_INPUT', `This Actor build does not support on-demand protocol v${input.protocol}. Rebuild the Actor.`);
+      const output = await this.readOutput(run.defaultKeyValueStoreId, token, signal, input.protocol);
       return { result: row(output.result), runtime: parseActorRuntime(output.runtime), snapshots: Array.isArray(output.snapshots) ? output.snapshots : [], runId,
         ...(typeof run.usageTotalUsd === 'number' && Number.isFinite(run.usageTotalUsd) && run.usageTotalUsd >= 0 ? { usageUsd: run.usageTotalUsd } : {}) };
     } catch (error) {
@@ -111,7 +126,7 @@ export class OnDemandActorClient {
 /** Local result reuse avoids starting an Actor at all on a snapshot cache hit. */
 export async function callActorTool(client: OnDemandActorClient, options: {
   token: string; actorId: string; name: GtfaTool['name']; input: Record<string, unknown>;
-  settings: ToolLiveSettings; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
+  settings: ToolLiveSettings; started?: (id: string) => void; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
 }) {
   throwIfAborted(options.signal);
   const { input, settings, name } = options;
@@ -151,7 +166,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
     const output = await client.call(options.token, options.actorId, {
       protocol: ACTOR_REQUEST_PROTOCOL, name, input: name === 'trends_snapshot' ? { ...input, svg: true } : input,
       settings: cloudSettings, history: history.slice(0, 12),
-    }, options.signal, options.progress);
+    }, options.signal, options.progress, options.started);
     throwIfAborted(options.signal);
     result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime,
       ...(output.usageUsd !== undefined ? { actorUsageUsd: output.usageUsd } : {}) } };

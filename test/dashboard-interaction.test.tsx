@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard, resultSeries } from '../src/client/dashboard.js';
+import { TrendChart } from '../src/client/trend-chart.js';
 import { DashboardController } from '../src/client/dashboard-state.js';
 import { DASHBOARD_EN } from '../src/client/dashboard-locale.js';
 import type { QueryRecord, SavedQuery } from '../src/query-history-types.js';
@@ -96,6 +97,28 @@ describe('dashboard interactions', () => {
     const saved = { record: { terms: ['ChatGPT'] }, result: { series: { points: [{ t: '2026-01-01', score: 80, traffic: null }, { t: '2026-01-02', score: 0, traffic: null, gap: true }] }, traffic: { average: null, latest: null, peak: null } } } as unknown as SavedQuery;
     expect(resultSeries(saved, true)[0]).toMatchObject({ average: null, latest: null, peak: null, points: [{ value: null }, { value: null }] });
     expect(resultSeries(saved)[0]!.points.map(point => point.value)).toEqual([80, null]);
+  });
+  it('keeps an updated follow-up window off the original chart', () => {
+    const saved = { record: { terms: ['Alpha'], tool: 'trends_compare' }, result: { series: [] },
+      volumeChecks: [{ keyword: 'Alpha', sameWindow: false, estimate: { traffic: { average: 1000 }, points: [{ t: '2026-11-19', value: 1000 }] } }],
+    } as unknown as SavedQuery;
+    expect(resultSeries(saved, true)[0]).toMatchObject({ average: null, points: [] });
+    saved.volumeChecks![0]!.sameWindow = true;
+    expect(resultSeries(saved, true)[0]).toMatchObject({ average: 1000, points: [{ t: '2026-11-19', value: 1000 }] });
+  });
+  it('renders a saved per-day band with its large comparison on a readable scale', () => {
+    const dates = Array.from({ length: 5 }, (_, i) => new Date(Date.UTC(2026, 10, i + 1)).toISOString());
+    const band = dates.map((t, i) => ({ t, low: i === 2 ? null : 700, high: i === 2 ? null : 1600 }));
+    const saved = { record: { tool: 'trends_compare', terms: ['Alpha', 'Beta'] }, result: { series: [], calibration: { series: [
+      { keyword: 'Beta', traffic: { average: 500000 }, points: dates.map(t => ({ t, value: 500000 })) },
+    ] } }, volumeChecks: [{ keyword: 'Alpha', sameWindow: true, estimate: { traffic: { average: null }, points: [],
+      range: { low: 700, high: 1600, points: band } } }],
+    } as unknown as SavedQuery;
+    const series = resultSeries(saved, true).map((term, index) => ({ ...term, color: index === 0 ? 'blue' : 'purple' }));
+    const { container } = render(<TrendChart series={series} traffic label="Volume" empty="No curve" logLabel="Log scale" />);
+    expect(screen.getByRole('img', { name: 'Volume · Log scale' })).toBeDefined();
+    expect(container.querySelectorAll('path[fill="blue"]')).toHaveLength(2);
+    expect(container.querySelectorAll('path[stroke="purple"]')).toHaveLength(1);
   });
   it('keeps one in-flight query alive across leaving and reopening the panel, including real progress', async () => {
     let finish!: () => void;

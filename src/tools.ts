@@ -51,7 +51,13 @@ export function zodRejectionEnvelope(error: z.ZodError) {
 }
 
 /** Context supplied by each transport adapter for one tool invocation. */
-export interface ToolCallContext { signal?: AbortSignal; /** Internal connection probes never retry. */ maxRetries?: 0 }
+export interface ToolCallContext {
+  signal?: AbortSignal;
+  /** Internal connection probes never retry. */
+  maxRetries?: 0;
+  /** dsh resolves its calibration references before selecting the egress. */
+  settings?: ToolLiveSettings;
+}
 
 /** Options read at call time by the dsh plugin so `.volatile()` settings apply without a restart. */
 export interface ToolLiveSettings {
@@ -82,7 +88,7 @@ export interface ToolsOptions extends ClientOptions {
   /** Server-wide anchor for validate/trends_snapshot (a per-call trends_snapshot anchor still wins); unset = automatic by window. */
   anchor?: string;
   /** Live values for the dsh settings UI; overrides the static fields above per call. */
-  settings?: () => ToolLiveSettings;
+  settings?: (geo?: string) => ToolLiveSettings;
 }
 
 /** One transport-neutral agent tool: the single source for MCP and dsh. */
@@ -185,8 +191,8 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   const limiter = options.limiter ?? new RateLimiter({ ...options, minIntervalMs: options.minIntervalMs ?? 1500 });
   const defaultGeo = options.defaultGeo !== undefined ? options.defaultGeo.trim() : DEFAULTS.geo;
   const anchorOverride = options.anchor?.trim() || undefined;
-  const live = (): Required<Pick<ToolLiveSettings, 'defaultGeo' | 'cache' | 'snapshotDir' | 'chartDir'>> & Pick<ToolLiveSettings, 'anchor' | 'baselines'> => {
-    const values = options.settings?.() ?? {};
+  const live = (geo?: string, context?: ToolCallContext): Required<Pick<ToolLiveSettings, 'defaultGeo' | 'cache' | 'snapshotDir' | 'chartDir'>> & Pick<ToolLiveSettings, 'anchor' | 'baselines'> => {
+    const values = context?.settings ?? options.settings?.(geo) ?? {};
     return {
       defaultGeo: values.defaultGeo !== undefined ? values.defaultGeo.trim() : defaultGeo,
       anchor: values.anchor?.trim() || anchorOverride,
@@ -197,7 +203,6 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
     };
   };
   const geoField = options.settings ? z.string().trim().optional() : z.string().default(defaultGeo);
-  const storeFor = () => new SnapshotStore(live().snapshotDir);
   const scoped = (context: ToolCallContext | undefined, timeoutMs?: number) => {
     throwIfAborted(context?.signal);
     const signal = context?.signal ?? options.signal;
@@ -228,9 +233,10 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const parsed = ask.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
       const { term, geo, time: range, fresh, validate, points, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; fresh: boolean; validate: boolean; points: boolean; timeoutMs?: number };
-      const settings = live();
+      const settings = live(geo, context);
       const { query, shared } = scoped(context, timeoutMs);
-      const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = new SnapshotStore(settings.snapshotDir);
+      const filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       const refresh = fresh || settings.cache === false ? 'always' : undefined;
       let snap: TermSnapshot | undefined, history: TermSnapshot[] | undefined, cached = false, ageMin = 0, verdict: Record<string, unknown> | undefined, validationWarnings: string[] = [];
       if (validate) {
@@ -268,9 +274,10 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const parsed = snapshot.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
       const { term, geo, time: range, anchor, fresh, svg, tz, timeoutMs } = parsed.data as { term: string; geo?: string; time: (typeof TIME_RANGES)[number]; anchor?: string; fresh: boolean; svg: boolean; tz?: string; timeoutMs?: number };
-      const settings = live();
+      const settings = live(geo, context);
       const { query } = scoped(context, timeoutMs);
-      const store = storeFor(), filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
+      const store = new SnapshotStore(settings.snapshotDir);
+      const filter = { geo: geo !== undefined ? geo.trim() : settings.defaultGeo, time: range, category: DEFAULTS.category, property: DEFAULTS.property };
       try {
         const forcedAnchor = anchor ?? settings.anchor;
         const refresh = fresh || settings.cache === false ? 'always' : undefined;
@@ -297,7 +304,7 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
       const parsed = compare.inputSchema.safeParse(raw ?? {});
       if (!parsed.success) return zodRejectionEnvelope(parsed.error);
       const { keywords, geo, time: range, timeoutMs } = parsed.data as { keywords: string[]; geo?: string; time: (typeof TIME_RANGES)[number]; timeoutMs?: number };
-      const geoValue = (geo !== undefined ? geo.trim() : live().defaultGeo).toUpperCase();
+      const geoValue = (geo !== undefined ? geo.trim() : live(undefined, context).defaultGeo).toUpperCase();
       const { client } = scoped(context, timeoutMs);
       const dup = findDuplicateKeyword(keywords);
       if (dup !== undefined) return response({ ok: false, schemaVersion: SCHEMA_VERSION, status: 'error', filter: { geo: geoValue, time: range }, series: [], error: { code: 'INVALID_INPUT', message: `duplicate keyword: "${dup.trim()}"; each keyword must be unique` }, meta: { fetchedAt: new Date().toISOString(), upstreamRequests: 0, durationMs: 0, warnings: [] } });

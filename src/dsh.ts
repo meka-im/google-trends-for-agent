@@ -1,3 +1,4 @@
+import { estimateBatch } from './dashboard-batch.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -15,7 +16,11 @@ import { createDefaultTransport, throwIfAborted, type Transport } from './transp
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
-import { calibratedComparison } from './dashboard-comparison.js';
+import { singleVolume } from './dashboard-single.js';
+import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
+import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
+import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
+import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
 type SchemaFactory = (typeof import('@deepseek-ai/schemastery'))['default'];
@@ -306,19 +311,46 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const onDemand = new OnDemandActorClient(overrides.onDemand);
   const tools = createTools({
     transport,
-    settings: () => {
-      const snapshot = settings();
-      return {
-        defaultGeo: snapshot.geo,
-        anchor: snapshot.anchor,
-        baselines: snapshot.baselines,
-        cache: snapshot.cache,
-        snapshotDir: snapshot.snapshotDir,
-        chartDir: snapshot.chartDir,
-      };
-    },
     minIntervalMs: overrides.minIntervalMs ?? 1500,
   });
+  const execute = async (tool: GtfaTool, input: Record<string, unknown>, current: GtfaRuntimeSettings,
+    signal?: AbortSignal, progress?: (phase: QueryPhase) => void, started?: (id: string) => void): Promise<Record<string, unknown>> => {
+    throwIfAborted(signal);
+    progress?.('requesting');
+    const snapshot = tool.name === 'trends_snapshot';
+    const calibrates = snapshot || tool.name === 'trends_ask' && input.validate === true;
+    const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+    // A native snapshot reuses its anchor in the companion 7-day series.
+    const referenceTime = snapshot ? 'now 7-d' : filter.time;
+    const pin = snapshot && typeof input.anchor === 'string' ? { ...current, anchor: input.anchor } : current;
+    const refs = calibrates ? volumeReferences(filter, pin, referenceTime) : undefined;
+    const automatic = refs ? mekaDefaultAnchor(filter.geo, referenceTime) : undefined;
+    const reference = refs && (refs.pinned ? refs.lookup(refs.pinned)
+      : refs.lookup(automatic?.term ?? '') ?? refs.available.at(Math.floor((refs.available.length - 1) / 2)));
+    const relative = calibrates && !reference;
+    // Comparing a term with itself preserves its raw series on older Actors.
+    const anchor = refs ? reference?.term ?? refs.pinned ?? String(input.term) : current.anchor;
+    const queryInput = snapshot ? { ...input, anchor, ...(!input.tz && process.env.GTFA_TZ ? { tz: process.env.GTFA_TZ } : {}) } : input;
+    const executionSettings = { defaultGeo: current.geo, anchor,
+      baselines: reference ? { version: 2 as const, anchors: [reference] } : current.baselines,
+      cache: current.cache, snapshotDir: current.snapshotDir, chartDir: relative ? null : current.chartDir,
+    };
+    let result: Record<string, unknown>;
+    if (current.egress !== 'local' && !overrides.transport) {
+      const resolved = await oauth.resolveToken(current.apifyToken);
+      if (!resolved.token) {
+        const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
+        return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
+      }
+      result = await callActorTool(onDemand, {
+        token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
+        name: tool.name, input: queryInput, settings: executionSettings, signal, progress, started,
+      });
+    } else {
+      result = await tool.execute(queryInput, { signal, settings: executionSettings });
+    }
+    return relative ? relativeDshResult(result, snapshot, filter.geo) : result;
+  };
   const run = async (tool: GtfaTool, args: unknown, signal: AbortSignal | undefined, source: QueryRecord['source'], progress?: (phase: QueryPhase) => void) => {
     throwIfAborted(signal);
     const current = settings(), startedAt = Date.now();
@@ -326,28 +358,19 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     if (!parsed.success) return zodRejectionEnvelope(parsed.error);
     const input = parsed.data as Record<string, unknown>;
     if (tool.name === 'trends_compare' && findDuplicateKeyword(input.keywords as string[])) return invalidInputEnvelope('Compare keywords must be distinct.');
+    const single = source === 'manual' && tool.name === 'trends_snapshot';
+    const actorIds: string[] = [];
     let result: Record<string, unknown>;
     try {
-      const execute = async (input: Record<string, unknown>): Promise<Record<string, unknown>> => {
-        progress?.('requesting');
-        if (current.egress !== 'local' && !overrides.transport) {
-          const resolved = await oauth.resolveToken(current.apifyToken);
-          if (!resolved.token) {
-            const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
-            return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
-          }
-          if (tool.name === 'trends_snapshot' && !input.tz && process.env.GTFA_TZ) input.tz = process.env.GTFA_TZ;
-          return callActorTool(onDemand, {
-            token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-            name: tool.name, input, settings: { defaultGeo: current.geo, anchor: current.anchor, baselines: current.baselines,
-              cache: current.cache, snapshotDir: current.snapshotDir, chartDir: current.chartDir }, signal, progress,
-          });
-        }
-        return tool.execute(input, { signal });
-      };
-      result = source === 'manual' && tool.name === 'trends_compare'
-        ? await calibratedComparison(input, current, execute, () => progress?.('calibrating'))
-        : await execute(input);
+      if (single) {
+        const filter = volumeFilter(String(input.geo ?? current.geo), String(input.time ?? 'now 1-d'));
+        const previous = await new QueryHistoryStore(current.snapshotDir).previousCalibration(String(input.term), filter.geo, filter.time).catch(() => null);
+        result = await singleVolume(input, current, previous, (name, args) =>
+          execute(tools.find(t => t.name === name)!, args, current, signal, progress, id => actorIds.push(id)), () => progress?.('calibrating'));
+      } else {
+        result = await execute(tool, input, current, signal, progress);
+        if (source === 'manual') result = { ...result, onDemand: true };
+      }
       throwIfAborted(signal);
     } catch (error) {
       result = { ok: false, schemaVersion: 1, status: 'error', meta: { fetchedAt: new Date().toISOString() },
@@ -356,7 +379,19 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     }
     try {
       progress?.('saving');
-      const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, egress: current.egress, defaultGeo: current.geo, startedAt });
+      const calibration = row(result.calibration), reading = rows(calibration.series)[0];
+      const hasEstimate = Boolean(reading?.anchor || reading?.range);
+      const rounds = Array.isArray(calibration.rounds) ? calibration.rounds.length : 1;
+      const singleVolumeStats: QueryRecord['singleVolume'] = single && current.egress !== 'local' ? {
+        calls: actorIds.length, hit: hasEstimate ? rounds === 1 ? 'first' : 'second' : 'none',
+      } : undefined;
+      const retry = row(row(result.meta).calibrationRetry);
+      const primaryId = row(result.meta).cached ? undefined : row(result.meta).actorRunId;
+      const volumeRuns = actorIds.filter(id => id !== primaryId).map(id => ({
+        actorRunId: id, createdAt: new Date(startedAt).toISOString(),
+        costUsd: retry.actorRunId === id && typeof retry.actorUsageUsd === 'number' ? retry.actorUsageUsd : null,
+      }));
+      const record = await new QueryHistoryStore(current.snapshotDir).save({ tool: tool.name, input, result, source, singleVolume: singleVolumeStats, volumeRuns, egress: current.egress, defaultGeo: current.geo, startedAt });
       const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : {};
       result = { ...result, meta: { ...meta, queryRecordId: record.id } };
     } catch {
@@ -369,7 +404,8 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   for (const tool of tools) {
     ctx.tools.register({
       name: tool.name,
-      description: tool.description,
+      description: tool.description.replace(REGIONAL_CALIBRATION_GUIDANCE,
+        `dsh uses regional Google Ads baselines from ${MEKA_BASELINES_URL} for estimated searches/day. Explicit anchor and baseline overrides take priority. Sparse samples retain null traffic.`),
       parameters: dshParameters(tool.inputSchema),
       output: {
         schema: { type: 'object' },
@@ -384,10 +420,39 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
-    dashboard: { settings, execute: async (name, input, signal, progress) => {
-      const tool = tools.find(tool => tool.name === name)!;
-      return run(tool, input, signal, 'manual', progress);
-    } },
+    dashboard: {
+      settings,
+      execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),
+      batch: async (saved, requestId, signal, progress, publish) => {
+        const current = settings(), tool = tools.find(t => t.name === 'trends_compare')!;
+        const history = new QueryHistoryStore(current.snapshotDir);
+        return estimateBatch(saved, current, requestId, keywords => execute(tool, {
+          keywords, geo: saved.record.geo, time: saved.record.time, timeoutMs: 60000,
+        }, current, signal, progress), publish, term => current.cache
+          ? history.previousCalibration(term,saved.record.geo,saved.record.time) : Promise.resolve(null));
+      },
+      estimate: async (saved, term, requestId, startedAt, egress, signal, progress) => {
+        const current = { ...settings(), egress };
+        const request = estimateRequest(saved, term, current);
+        if (!request) return undefined;
+        const tool = tools.find(tool => tool.name === 'trends_compare')!;
+        const input = tool.inputSchema.parse({
+          keywords: [request.keyword, ...request.references.map(anchor => anchor.term)],
+          geo: request.filter.geo, time: request.filter.time, timeoutMs: 60000,
+        }) as Record<string, unknown>;
+        const result = await execute(tool, input, current, signal, progress);
+        progress('calibrating');
+        return finishEstimate(request, result, egress, requestId, new Date(startedAt).toISOString());
+      },
+      restore: async (saved, check, signal) => {
+        if (!check.actorRunId) return undefined;
+        const current = settings();
+        const { token } = await oauth.resolveToken(current.apifyToken);
+        if (!token) return undefined;
+        const output = await onDemand.readCompletedResult(token, check.actorRunId, signal);
+        return restoreEstimateBand(saved, check, output, current);
+      },
+    },
     ...(overrides.routes?.fetch ? { fetch: overrides.routes.fetch } : {}),
     ...(localTransport ? { localTransport } : {}),
     ...(overrides.routes?.relayTransport ? { relayTransport: overrides.routes.relayTransport } : {}),

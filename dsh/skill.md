@@ -13,12 +13,7 @@ If `interest.average` < 1 and both Popular/Rising tables are empty, treat the re
 
 ## Anchors
 
-Automatic calibration matches the query region and time window. CA, GB, AU, DE, FR and Worldwide use their own sudoku baselines for both windows; JP uses ナンプレ and IN uses calculator. New regional estimates use a broad ±75% assumption band, not a statistical confidence interval. Sources, data periods and validation: https://github.com/meka-im/google-trends-for-agent/blob/main/docs/baselines.md. The US defaults are:
-
-`trends_snapshot` and `trends_ask` with `validate: true` calibrate relative interest into estimated searches/day:
-
-- short windows (`now 1-H`, `now 4-H`, `now 1-d`): `sudoku` at **63,000/day** (US, ±50%)
-- `now 7-d` and longer: `gpts` at **3,500/day** (US, ±50%)
+`trends_snapshot` and `trends_ask` with `validate: true` use MEKA's Google Ads Keyword Planner baselines. The automatic snapshot anchor comes from the middle of the selected region's volume tiers. Configured anchors and custom values take priority. The dsh dashboard uses spare slots to compare with anchors of different sizes in the same batch. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
 
 Built-in and version 2 user baselines apply only to web search in category 0. CLI filters using another property/category can still return relative interest, but the `traffic` object remains with numeric fields `null` and an explanation. Geo matching trims and uppercases the code; `""` remains Worldwide, including in an explicit baseline row; missing file geos are invalid. Pass `anchor` only to force a different term for both windows that run. Numeric traffic is `null` when calibration is unavailable or the anchor reliability gate fails; do not substitute a guess. Only snapshot Popular/Rising `estDaily` fields are compatibility placeholders and always `null`; ask tables omit the field. These are anchor-based estimates, not measured Google volume.
 

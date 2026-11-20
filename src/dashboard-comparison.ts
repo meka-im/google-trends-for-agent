@@ -1,59 +1,67 @@
-import { calibrateTraffic, nullTraffic } from './calibration.js';
-import { anchorDailySearches, defaultAnchorFor, findAnchor, type Baselines } from './traffic.js';
-import type { TrendsFilter } from './filter.js';
+import { supportsVolumeWindow } from './volume-types.js';
 import { summarizeInterest } from './gaps.js';
+import { estimateVolume, normalizeTerm, pointsOf, row, rows, volumeCalibration, volumeFilter, volumeReferences, type VolumeSettings } from './dashboard-volume.js';
+import { anchorDailySearches, type Anchor } from './traffic.js';
 
-const row = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const rows = (value: unknown) => Array.isArray(value) ? value.map(row) : [];
-const norm = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+// Start near the middle of the expected range for ordinary keyword research.
+// Adding a top-tier anchor can hide both smaller references and user terms.
+const INITIAL_DAILY_SEARCHES = 10_000;
 
-/** One shared comparison request, including an anchor when an item slot is available. */
-export async function calibratedComparison(input: Record<string, unknown>, settings: { geo: string; anchor?: string; baselines?: Baselines },
-  execute: (input: Record<string, unknown>) => Promise<Record<string, unknown>>, calibrating: () => void) {
-  const keywords = input.keywords as string[], geo = String(input.geo ?? settings.geo).trim().toUpperCase(), time = String(input.time ?? 'now 1-d');
-  // Match trends_compare's scope; CLI config files and environment defaults do
-  // not change this tool's web/all-categories requests.
-  const filter: TrendsFilter = { geo, time, category: 0, property: '' };
-  let anchor = settings.anchor || defaultAnchorFor(time, settings.baselines, geo);
-  if (!settings.anchor && keywords.length === 5 && !keywords.some(term => norm(term) === norm(anchor))) {
-    anchor = keywords.find(term => { const known = findAnchor(settings.baselines, term, geo, filter); return known && anchorDailySearches(known) !== null; }) ?? anchor;
+function selectReferences(keywords: string[], refs: ReturnType<typeof volumeReferences>): Anchor[] {
+  const { pinned, lookup, available } = refs;
+  if (pinned) {
+    const known = lookup(pinned);
+    return known ? [known] : [];
   }
-  const baseline = findAnchor(settings.baselines, anchor, geo, filter), daily = baseline ? anchorDailySearches(baseline) : null;
-  const containsAnchor = keywords.some(term => norm(term) === norm(anchor));
-  const canCalibrate = daily !== null && (keywords.length < 5 || containsAnchor);
-  const sent = canCalibrate && !containsAnchor ? [...keywords, anchor] : keywords;
-  const result = await execute({ ...input, keywords: sent });
-  calibrating();
-  const all = rows(result.series), selected = keywords.map(keyword => all.find(series => norm(String(series.keyword)) === norm(keyword)) ?? { keyword, points: [] });
-  const anchorPoints = rows(all.find(series => norm(String(series.keyword)) === norm(anchor))?.points)
-    .map(point => ({ time: String(point.t), value: Number(point.value) }));
-  const warnings = new Set<string>();
-  const reason = daily === null ? `No calibration baseline for ${geo || 'Worldwide'}; search-volume estimates omitted.`
-    : !canCalibrate ? 'All five comparison slots are occupied. Include a known anchor or query at most four terms to estimate search volume in one request.' : '';
-  if (reason) warnings.add(reason);
-  const trafficSeries = selected.map((series, index) => {
-    const points = rows(series.points).map(point => ({ time: String(point.t), value: Number(point.value) }));
-    const lowSample = points.length === 0 || (summarizeInterest(points, filter).average ?? 0) < 1;
-    if (!result.ok || !canCalibrate || lowSample) {
-      if (lowSample && canCalibrate && result.ok) warnings.add(`${keywords[index]}: insufficient samples for calibrated search volume.`);
-      return { keyword: keywords[index], traffic: nullTraffic(), points: points.map(point => ({ t: point.time, value: null })) };
-    }
-    const estimate = calibrateTraffic(points, anchorPoints, { filter, dailySearches: daily, tolerance: baseline?.tolerance ?? .5 });
-    if (estimate.warning) warnings.add(`${keywords[index]}: ${estimate.note}`);
-    return { keyword: keywords[index], traffic: estimate.traffic,
-      points: estimate.termMarked.map((point, i) => ({ t: point.time, value: point.gap ? null : estimate.seriesTraffic[i], ...(point.gap ? { gap: true } : {}) })) };
+  const included = keywords.flatMap(term => {
+    const known = lookup(term);
+    return known ? [known] : [];
   });
-  // The anchor is a calibration reference, not an extra selected keyword. Keep
-  // the displayed interest scale normalized across the user's selected terms.
-  const maximum = Math.max(0, ...selected.flatMap(series => rows(series.points).map(point => Number(point.value))));
-  const suppressed = sent.length !== keywords.length && selected.every(series => (summarizeInterest(rows(series.points).map(point => ({ time: String(point.t), value: Number(point.value) })), filter).average ?? 0) < 1);
-  const factor = sent.length !== keywords.length && maximum > 0 && !suppressed ? 100 / maximum : 1;
-  const scale = (value: unknown) => typeof value === 'number' ? Math.round(value * factor * 10) / 10 : value;
-  const series = selected.map((source, index) => ({ ...source, keyword: keywords[index],
-    average: scale(source.average), latest: scale(source.latest), peak: scale(source.peak),
-    points: rows(source.points).map(point => ({ ...point, value: scale(point.value) })) }));
-  const hasVolume = trafficSeries.some(series => series.traffic.average !== null);
-  return { ...result, summary: `${keywords.join(' vs ')} (${geo || 'Worldwide'} · ${time})`, ...(result.ok && (maximum === 0 || suppressed) ? { status: 'no_data' } : {}), series,
-    calibration: { status: hasVolume ? 'ok' : 'unavailable', reason, reasonCode: hasVolume ? 'ok' : daily === null ? 'baseline' : !canCalibrate ? 'capacity' : 'samples', anchor: { term: anchor, dailySearches: daily, tolerance: daily === null ? null : baseline?.tolerance ?? .5 }, series: trafficSeries },
-    meta: { ...row(result.meta), ...(warnings.size ? { warnings: [...(Array.isArray(row(result.meta).warnings) ? row(result.meta).warnings as unknown[] : []), ...warnings] } : {}) } };
+  if (included.length) return included;
+  const distance = (anchor: Anchor) => Math.abs(Math.log(anchorDailySearches(anchor)! / INITIAL_DAILY_SEARCHES));
+  return [...available].sort((a, b) => distance(a) - distance(b)).slice(0, 5 - keywords.length);
+}
+
+/** Prefer shared-batch estimates so an ordinary comparison needs one Actor run. */
+export async function calibratedComparison(
+  input: Record<string, unknown>, settings: VolumeSettings,
+  execute: (input: Record<string, unknown>) => Promise<Record<string, unknown>>, calibrating: () => void,
+) {
+  const keywords = input.keywords as string[];
+  const filter = volumeFilter(String(input.geo ?? settings.geo), String(input.time ?? 'now 1-d'));
+  const refs = volumeReferences(filter, settings);
+  const candidates = supportsVolumeWindow(filter.time) ? selectReferences(keywords, refs) : [];
+  const requested = new Set(keywords.map(normalizeTerm));
+  const added = candidates.filter(anchor => !requested.has(normalizeTerm(anchor.term))).slice(0, 5 - keywords.length);
+  const result = await execute({ ...input, keywords: [...keywords, ...added.map(anchor => anchor.term)] });
+  calibrating();
+
+  const byTerm = new Map(rows(result.series).map(series => [normalizeTerm(String(series.keyword)), series]));
+  const selected = keywords.map(keyword => ({ keyword, points: pointsOf(byTerm.get(normalizeTerm(keyword))?.points) }));
+  const references = candidates.filter(anchor => byTerm.has(normalizeTerm(anchor.term))).map(anchor => ({
+    anchor, points: pointsOf(byTerm.get(normalizeTerm(anchor.term))?.points),
+  }));
+  const reason = !(refs.pinned ? refs.lookup(refs.pinned) : refs.available.length) ? 'baseline' : keywords.length === 5 ? 'capacity' : 'anchor';
+  const estimates = result.ok ? selected.map(({ keyword, points }) => estimateVolume(keyword, points, references, filter, reason)) : [];
+  const maximum = Math.max(0, ...selected.flatMap(series => series.points.map(point => point.value)));
+  const weakComparison = added.length > 0 && maximum > 0 && maximum < 10;
+  const scale = added.length && maximum >= 10 ? 100 / maximum : 1;
+  const series = selected.map(({ keyword, points }) => {
+    const summary = summarizeInterest(points, filter);
+    // An all-zero result is a censored curve. Keep the timestamps for a possible follow-up.
+    const visible = points.some(point => point.value > 0);
+    const index = (value: number | null) => value === null || !visible ? null : Math.round(value * scale * 10) / 10;
+    return {
+      keyword, average: index(summary.average), latest: index(summary.settledLatest), peak: index(summary.peak),
+      points: summary.points.map(point => ({ t: point.time, value: index(point.value), ...(point.gap ? { gap: true } : {}) })),
+    };
+  });
+  return {
+    ...result,
+    summary: keywords.join(' vs ') + ' (' + (filter.geo || 'Worldwide') + ' · ' + filter.time + ')',
+    ...(result.ok && maximum === 0 ? { status: 'no_data' } : {}),
+    series,
+    calibration: { ...volumeCalibration(estimates, reason), ...(weakComparison ? { weakComparison } : {}) },
+    meta: row(result.meta),
+  };
 }

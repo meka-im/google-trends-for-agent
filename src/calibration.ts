@@ -1,20 +1,10 @@
 import { settledPoints, type TrendsFilter } from './filter.js';
 import { markGaps, type GapPoint } from './gaps.js';
+import type { TrafficEstimate } from './volume-types.js';
+export type { TrafficEstimate } from './volume-types.js';
 
 /** A shared-scale (0–100) point from a Trends comparison. */
 export interface CalibrationPoint { time: string; value: number }
-
-/** Daily traffic block shared by trends_ask (validate) and trends_snapshot. */
-export interface TrafficEstimate {
-  unit: 'searches/day';
-  average: number | null;
-  latest: number | null;
-  settledLatest: number | null;
-  peak: number | null;
-  low: number | null;
-  high: number | null;
-  gapCount: number;
-}
 
 export interface CalibrationOptions {
   filter: TrendsFilter;
