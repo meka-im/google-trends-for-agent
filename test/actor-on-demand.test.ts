@@ -229,3 +229,61 @@ describe('one-off native tool request', () => {
     expect(result).toMatchObject({ protocol: 1, result: { interest: { latest: 50 }, diff: null } });
   });
 });
+
+describe('own Actor updates and runtime metadata', () => {
+  const API = 'https://api.apify.com/v2';
+  const SOURCE = 'https://github.com/meka-im/google-trends-for-agent';
+  function backend(source: string = SOURCE, owned = true) {
+    return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url).slice(API.length);
+      if (path === '/acts?my=1&limit=1000') return Response.json({ data: { items: owned ? [{ id: 'mine', name: 'google-trends-for-agent' }] : [] } });
+      if (path === '/acts/mine/builds?desc=1&limit=1') return Response.json({ data: { items: [] } });
+      if (path === '/acts/mine/versions/0.1') return Response.json({ data: { sourceType: 'GIT_REPO', gitRepoUrl: source, envVars: [{ name: 'CUSTOM', value: 'keep' }] } });
+      if (path === '/acts/mine/builds?version=0.1&tag=latest' && init?.method === 'POST') return Response.json({ data: { id: 'new-build' } });
+      throw new Error('Unexpected request');
+    });
+  }
+
+  it('starts one official-source build and refuses custom/pinned or unowned Actors without leaking secrets', async () => {
+    const { ApifyActorClient } = await import('../src/apify-actor.js');
+    const fetchOk = backend();
+    expect(await new ApifyActorClient({ fetch: fetchOk as typeof globalThis.fetch }).updateActor('secret', 'mine')).toEqual({ ok: true, actorId: 'mine', buildId: 'new-build' });
+    expect(fetchOk.mock.calls.filter(([, init]) => init?.method !== 'GET')).toHaveLength(1);
+
+    for (const badSource of [`${SOURCE}#fixed-sha`, 'https://github.com/someone/custom']) {
+      const f = backend(badSource);
+      expect(await new ApifyActorClient({ fetch: f as typeof globalThis.fetch }).updateActor('secret', 'mine')).toMatchObject({ ok: false, code: 'unsupported-source' });
+      expect(f.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+    }
+
+    const unowned = backend(SOURCE, false);
+    expect(await new ApifyActorClient({ fetch: unowned as typeof globalThis.fetch }).updateActor('secret', 'mine')).toMatchObject({ ok: false });
+
+    const failing = backend();
+    const orig = failing.getMockImplementation()!;
+    failing.mockImplementation(async (url, init) => { if (init?.method === 'POST') throw new Error('secret'); return orig(url, init); });
+    const err = await new ApifyActorClient({ fetch: failing as typeof globalThis.fetch }).updateActor('secret', 'mine');
+    expect(err).toMatchObject({ ok: false, code: 'network' });
+    expect(JSON.stringify(err)).not.toContain('secret');
+  });
+
+  it('reports and normalizes Actor runtime metadata without guessing from buildNumber', async () => {
+    const { parseActorRuntime } = await import('../src/actor-runtime.js');
+    const { VERSION } = await import('../src/version.js');
+    const { BASELINE_CATALOG_REVISION } = await import('../src/baseline-catalog.js');
+    const req = await runToolRequest({ protocol: 1, name: 'trends_compare', input: {} }, {
+      snapshotDir: '/unused', chartDir: '/unused',
+      create: () => [{ name: 'trends_compare', execute: async () => ({ ok: true }) } as unknown as GtfaTool],
+    });
+    expect(req).toMatchObject({ runtime: { version: VERSION, baselineCatalogRevision: BASELINE_CATALOG_REVISION } });
+
+    for (const runtime of [undefined, { version: 'secret', baselineCatalogRevision: 'today' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-19' }]) {
+      const fetch = vi.fn(async (url: string | URL | Request) => String(url).includes('/runs?')
+        ? Response.json({ data: { id: 'run', status: 'SUCCEEDED', buildNumber: '0.1.1', defaultKeyValueStoreId: 'store' } })
+        : Response.json({ protocol: 1, runtime, result: { ok: true }, snapshots: [] }));
+      const output = await new OnDemandActorClient({ fetch: fetch as typeof globalThis.fetch }).call('secret', 'mine', { protocol: 1, name: 'trends_compare', input: {} });
+      expect(output.runtime).toEqual(parseActorRuntime(runtime));
+      expect(JSON.stringify(output)).not.toContain('secret');
+    }
+  });
+});

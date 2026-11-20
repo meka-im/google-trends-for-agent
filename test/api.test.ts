@@ -22,7 +22,7 @@ describe('public API', () => {
     expect(result.data?.interestOverTime).toBeTruthy();
     expect(result.meta.upstreamRequests).toBe(3);
   });
-  it('stops after a block and can explicitly continue', async () => {
+  it('stops after a block or rate limit and can explicitly continue', async () => {
     const transport = vi.fn<Transport>().mockResolvedValue(response('captcha'));
     const items = [{ queries: ['x'] }, { queries: ['y'] }];
     const batch = await batchTrends(items, { transport, minIntervalMs: 0 });
@@ -31,6 +31,11 @@ describe('public API', () => {
     expect(transport).toHaveBeenCalledTimes(1);
     await batchTrends(items, { transport, minIntervalMs: 0, sleep: async () => {}, stopOnBlocked: false });
     expect(transport).toHaveBeenCalledTimes(3);
+
+    const limited = vi.fn<Transport>().mockResolvedValue(response('', 429, { 'retry-after': '7' }));
+    const stopped = await batchTrends([{ queries: ['a'], maxRetries: 0 }, { queries: ['b'], maxRetries: 0 }], { transport: limited, minIntervalMs: 0 });
+    expect(limited).toHaveBeenCalledTimes(1);
+    expect(stopped.results[1]?.error).toMatchObject({ code: 'RATE_LIMITED', retryAfterSec: 7 });
   });
   it('shares the request limiter across sequential queries', async () => {
     let now = 0;

@@ -14,12 +14,22 @@ const run = (command, args, cwd = temporary) => execFileSync(command, args, {
 try {
   const [packed] = JSON.parse(run(npm, ['pack', '--json', '--ignore-scripts', '--pack-destination', temporary], root));
   const paths = new Set(packed.files.map(file => file.path));
-  for (const path of ['dist/index.js', 'dist/dsh-client.js', 'dsh/skill.md', 'icon.svg',
+  for (const path of ['dist/index.js', 'dist/dsh-client.js', 'dsh/skill.md', 'icon.svg', '.actor/README.md',
     'locale/en.json', 'locale/zh.json', 'README.md', 'README.zh-CN.md']) assert.ok(paths.has(path), `Missing package file: ${path}`);
+  const hasBundled = name => [...paths].some(p => p === `${name}/package.json` || p.endsWith(`/${name}/package.json`));
+  for (const required of ['apify', 'apify-client', '@crawlee/core', 'minimatch']) {
+    assert.ok(hasBundled(required), `Missing bundled runtime package: ${required}`);
+  }
+  for (const forbidden of ['basic-ftp', 'vitest', 'typescript']) {
+    assert.ok(!hasBundled(forbidden), `Forbidden package found in tarball: ${forbidden}`);
+  }
   await writeFile(join(temporary, 'package.json'), JSON.stringify({ name: 'gtfa-consumer-check', private: true, type: 'module' }));
   run(npm, ['install', '--ignore-scripts', '--omit=dev', '--no-fund', '--no-audit', join(temporary, packed.filename)]);
   const installed = join(temporary, 'node_modules', 'google-trends-for-agent');
   const manifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
+  assert.deepEqual(manifest.bundleDependencies, ['apify']);
+  const bundledMinimatch = JSON.parse(await readFile(join(installed, 'node_modules', 'minimatch', 'package.json'), 'utf8'));
+  assert.ok(Number(bundledMinimatch.version.split('.')[0]) >= 11, `Expected minimatch >= 11, got ${bundledMinimatch.version}`);
   for (const [language, document] of [['en', 'README.md'], ['zh', 'README.zh-CN.md']]) {
     const locale = JSON.parse(await readFile(join(installed, 'locale', `${language}.json`), 'utf8'));
     assert.equal(locale.meta.detail, document);

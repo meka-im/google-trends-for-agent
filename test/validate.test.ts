@@ -383,3 +383,32 @@ it('returns null and an explanation for incompatible or unusable history', async
     expect(snapshotDiff(current, [current, { ...current, id: 'old', status }])).toEqual({ diff: null, diffReason: 'No usable prior successful snapshot' });
   }
 });
+
+it('propagates --timeout and --pretty in ask CLI and stops multi-batch comparisons on RATE_LIMITED', async () => {
+  const seenTimeouts: Array<number | undefined> = [];
+  const baseQuery = mock([20, 25, 30, 35, 40, 45, 50]);
+  const s = await store();
+  const pretty = await runAskCli(['Astra', '--json', '--pretty', '--fresh', '--store', s.dir, '--timeout', '1500'], {
+    query: async input => {
+      seenTimeouts.push((input as { timeoutMs?: number }).timeoutMs);
+      return baseQuery(input);
+    },
+  });
+  expect(pretty.code).toBe(0);
+  expect(seenTimeouts).toEqual([1500]);
+  expect(pretty.stdout).toContain('\n  "ok": true');
+  expect((await runAskCli(['Astra', '--timeout', '999'])).code).toBe(4);
+  expect((await runAskCli(['Astra', '--help', '--timeout', 'bad', '--json'])).code).toBe(0);
+
+  let comparisons = 0;
+  const limitedQuery = vi.fn<typeof queryTrends>(async input => {
+    const queries = (input as { queries: string[] }).queries;
+    if (queries.includes('sudoku') && ++comparisons === 2) {
+      return { status: 'error', input, error: { code: 'RATE_LIMITED', message: 'slow down', retryAfterSec: 23 }, meta: { upstreamRequests: 1, durationMs: 0, warnings: [], fetchedAt: new Date().toISOString() } };
+    }
+    return baseQuery(input);
+  });
+  const rows = await validateTerms(['a', 'b', 'c', 'd', 'e', 'f'], { store: await store(), query: limitedQuery });
+  expect(rows.slice(0, 4).every(r => r.verdict !== 'blocked')).toBe(true);
+  expect(rows.slice(4).every(r => r.verdict === 'blocked' && r.retryAfterSec === 23)).toBe(true);
+});

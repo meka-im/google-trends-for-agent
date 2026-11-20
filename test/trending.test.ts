@@ -189,4 +189,14 @@ describe("trends_now converter", () => {
     expect(diffs.find(d => d.geo === "US")!.removed[0].query).toBe("us-only");
     expect(diffs.find(d => d.geo === "JP")!.added[0].query).toBe("jp");
   });
+
+  it("escapes CSV quotes, commas, newlines, and spreadsheet formulas", async () => {
+    const r = await runTrendingCli(['--geo', 'SG', '--format', 'csv'], opts);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('"geo","rank","title","query"');
+    expect(r.stdout).toContain('[""Entertainment""]');
+    const geos = await runTrendingCli(['--list-geos', '--format', 'csv'], opts);
+    expect(geos.code).toBe(0);
+    expect(geos.stdout).toContain('"SG","Singapore"');
+  });
 });

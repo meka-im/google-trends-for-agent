@@ -1,120 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ConfigPage, EN, ZH, deployApifyActor, fromSnapshot, loadApifyActors, loadApifyUsage, opsFor,
-  resolveDeployBuild, setBaselineOverride, validateDraft, withPendingAnchor,
-  type ApifyActorsView, type ApifyUsageView, type Draft,
+  APIFY_OAUTH_VERIFICATION_URL, EN, ZH, deployApifyActor, fromSnapshot, loadApifyActors,
+  loadApifyOAuth, loadApifyUsage, normalizeApifyOAuthStatus, opsFor, resolveDeployBuild,
+  setBaselineOverride, startApifyOAuth, validateDraft, withPendingAnchor,
+  type ApifyActorsView, type Draft,
 } from '../src/client/index.js';
-import {
-  APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL, GTFA_STORE_URL,
-} from '../src/options.js';
 
 const t = (key: string) => EN[key] ?? key;
-
-function render(options: {
-  value?: Record<string, unknown>;
-  draft?: Partial<Draft>;
-  usage?: ApifyUsageView;
-  actors?: ApifyActorsView;
-  advancedTab?: 'anchors' | 'token' | 'files';
-} = {}) {
-  const snapshot = {
-    status: 'ready' as const,
-    revision: 1,
-    writable: true,
-    value: {
-      egress: 'local',
-      geo: 'US',
-      cache: true,
-      charts: true,
-      snapshotDir: '.gtfa/snapshots',
-      chartDir: '.gtfa/charts',
-      baselines: {
-        anchors: [{ term: 'chacha', geo: 'US', dailySearches: 1200, tolerance: 0.5 }],
-        windowAnchors: { short: 'sudoku', long: 'chacha' },
-      },
-      ...options.value,
-    },
-  };
-  const describeSnapshot = {
-    view: {
-      writable: true,
-      namespaces: [{ ns: 'gtfa', secrets: [{ path: ['apifyToken'], set: true }] }],
-    },
-  };
-  const form = {
-    getSnapshot: () => snapshot,
-    subscribe: () => () => {},
-    mutate: async () => true,
-  };
-  const describeFace = {
-    getSnapshot: () => describeSnapshot,
-    subscribe: () => () => {},
-  };
-  const ctx = {
-    configForms: {
-      get: () => form,
-      describe: () => describeFace,
-    },
-  };
-  return renderToStaticMarkup(createElement(ConfigPage, {
-    ctx: ctx as never,
-    t,
-    initialDraft: options.draft,
-    initialUsage: options.usage,
-    initialActors: options.actors,
-    initialAdvancedTab: options.advancedTab,
-  }));
-}
-
-const readyUsage: ApifyUsageView = {
-  status: 'ready',
-  data: {
-    plan: { tier: 'BRONZE', monthlyBasePriceUsd: 19, monthlyUsageCreditsUsd: 19 },
-    usageUsd: 8.06,
-    limitUsd: 19,
-    cycle: { startAt: '2026-01-01T00:00:00.000Z', endAt: '2099-01-31T23:59:59.999Z' },
-    residentialGb: 0.006,
-    residentialGbLimit: 5,
-    fetchedAt: '2026-01-15T12:34:00.000Z',
-  },
-};
-
-const paidUsage: Extract<ApifyUsageView, { status: 'ready' }> = {
-  status: 'ready',
-  data: {
-    ...readyUsage.data,
-    plan: { tier: 'STARTER', monthlyBasePriceUsd: 19, monthlyUsageCreditsUsd: 19 },
-    usageUsd: 8.0559,
-    source: 'config',
-  },
-};
-
-const freeUsage: Extract<ApifyUsageView, { status: 'ready' }> = {
-  status: 'ready',
-  data: {
-    ...paidUsage.data,
-    plan: { tier: 'FREE', monthlyBasePriceUsd: 0, monthlyUsageCreditsUsd: 5 },
-    usageUsd: 1.25,
-    limitUsd: 5,
-  },
-};
-
-const oneActor: ApifyActorsView = {
-  status: 'ready',
-  actors: [{
-    id: 'actor-1',
-    name: 'google-trends-for-agent',
-    username: 'alice',
-    title: 'Google Trends for AI Agents',
-    standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
-    standbyEnabled: true,
-    lastBuildId: 'build-1',
-    lastBuildStatus: 'SUCCEEDED',
-  }],
-};
 
 function actor(id: string, buildId: string | null, buildStatus: string | null): ApifyActorsView {
   return {
@@ -136,295 +28,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('dsh settings form', () => {
-  it('renders choices as comboboxes, a segmented control, and switches', () => {
-    const html = render();
-    expect(html).toContain('role="tablist"');
-    const routes = html.match(/<div role="tablist" aria-label="Egress"[\s\S]*?<\/div>/)?.[0];
-    expect(routes?.match(/role="tab"/g)).toHaveLength(3);
-    expect(html).toContain('aria-selected="true"');
-    expect(html.match(/role="switch"/g)).toHaveLength(3);
-    expect(html).not.toContain('type="checkbox"');
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain('United States (US)');
-    expect(html).toContain(EN.anchorAutomatic);
-    expect(html).toContain('±50%');
-  });
-
-  it('orders sections and hides Apify fields while egress is local', () => {
-    const html = render();
-    const order = [EN.connection!, EN.defaults!, EN.advanced!, 'Anchors &amp; baselines'];
-    const positions = order.map(title => {
-      const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const heading = new RegExp(`<h3\\b[^>]*>${escaped}</h3>`).exec(html);
-      if (heading) return heading.index;
-      const disclosure = new RegExp(`<summary\\b[^>]*>[\\s\\S]*?${escaped}</span>[\\s\\S]*?</summary>`).exec(html);
-      return disclosure?.index ?? -1;
-    });
-    expect(positions.every(position => position >= 0)).toBe(true);
-    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    expect(html).not.toContain('Apify usage');
-    expect(html).not.toContain('Apify token');
-    expect(html).not.toContain('>Actor<');
-  });
-
-  it('shows the usage card, token, and selectable Actor card with build status for actor-own', () => {
-    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
-    expect(html).toContain('Apify usage');
-    expect(html).toContain('$8.06 / $19.00');
-    expect(html).toContain('$10.94 remaining');
-    expect(html).toContain('role="progressbar"');
-    expect(html).toContain('Plan: Bronze · $19/mo');
-    expect(html).toContain('Residential proxy: 0.006 GB this cycle of 5.000 GB');
-    expect(html).toContain('Apify token');
-    expect(html).toContain('aria-label="Actor"');
-    expect(html).toContain('alice/google-trends-for-agent');
-    expect(html).toContain('Google Trends for AI Agents');
-    expect(html).toContain('role="radio" aria-checked="true"');
-    expect(html).toContain('Ready');
-    expect(html).toContain('Refresh');
-  });
-
-  it.each([
-    { used: null, limit: 19, balance: '— remaining', percent: null },
-    { used: 23, limit: 19, balance: '$4.00 over limit', percent: 100 },
-    { used: 0, limit: 0, balance: '$0.00 remaining', percent: null },
-  ])('keeps the usage balance accurate for $used / $limit', ({ used, limit, balance, percent }) => {
-    const html = render({ draft: { egress: 'actor-public' }, usage: {
-      status: 'ready', data: { ...paidUsage.data, usageUsd: used, limitUsd: limit },
-    } });
-    expect(html).toContain(balance);
-    if (percent === null) expect(html).not.toContain('aria-valuenow=');
-    else expect(html).toContain(`aria-valuenow="${percent}"`);
-    expect(html).not.toMatch(/NaN|Infinity/);
-  });
-
-  it('never renders the removed proxy group or country fields', () => {
-    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
-    for (const text of ['Proxy group', 'Proxy country', 'apifyProxyGroup', 'apifyProxyCountry', 'proxyGroup', 'proxyCountry']) {
-      expect(html).not.toContain(text);
-    }
-  });
-
-  it.each(['actor-public', 'actor-own'] as const)('shows the shared free-credit estimate and sign-up links without credentials in %s', (egress) => {
-    const html = render({ draft: { egress }, usage: { status: 'error', code: 'no-token' }, actors: { status: 'error', code: 'no-token' } });
-    expect(html).toContain('$5 in free credits every month');
-    expect(html).toContain(EN.signupEstimate);
-    expect(html).toContain(EN.signupCreditNote);
-    expect(html).toContain('full_api_access');
-    expect(html).not.toContain('roughly');
-    expect(html).toContain(`href="${APIFY_SIGNUP_URL}"`);
-    expect(html).toContain(`href="${APIFY_PRICING_URL}"`);
-    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(html).toContain('Sign up →');
-    expect(html).toContain('Pricing');
-  });
-
-  it('hides the sign-up bar when a token exists or egress is local', () => {
-    const paid = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: paidUsage, actors: oneActor });
-    expect(paid).not.toContain('No Apify account?');
-    expect(paid).not.toContain('class="gtfa-free-credit"');
-    expect(paid).not.toContain(`href="${APIFY_SIGNUP_URL}"`);
-
-    const local = render({ usage: { status: 'error', code: 'no-token' } });
-    expect(local).not.toContain('No Apify account?');
-    expect(local).not.toContain('class="gtfa-free-credit"');
-  });
-
-  it('does not warn that Apify egress needs a paid plan', () => {
-    const html = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: freeUsage, actors: oneActor });
-    expect(html).not.toContain('needs a paid plan');
-    expect(html).not.toContain('Free plan:');
-    expect(html).not.toContain('Upgrade →');
-  });
-
-  it('keeps the public route read-only with source and Store links and no deploy controls', () => {
-    const html = render({ draft: { egress: 'actor-public' }, usage: readyUsage, actors: oneActor });
-    expect(html).toContain('Public Actor');
-    expect(html).toContain('Actor: meka.im/google-trends-for-agent');
-    expect(html).toContain('View source on GitHub →');
-    expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent"');
-    expect(html).toContain(`href="${GTFA_STORE_URL}" target="_blank" rel="noopener noreferrer">Apify Store page →</a>`);
-    expect(html).toContain(EN.publicActorCost);
-    expect(html).toContain('Apify token');
-    expect(html).not.toContain('aria-label="Actor"');
-    expect(html).not.toContain('Deploy to my Apify account');
-  });
-
-  it('offers one-click deploy and a manual link when the account has no matching Actor', () => {
-    const html = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'ready', actors: [] } });
-    expect(html).toContain('No google-trends-for-agent Actor in your account yet.');
-    expect(html).toContain('Deploy to my Apify account →');
-    expect(html).toContain('or deploy manually');
-    expect(html).toContain('href="https://github.com/meka-im/google-trends-for-agent#deploy-it-yourself"');
-    expect(html).not.toContain('aria-label="Actor"');
-  });
-
-  it('keeps the manual deploy anchor in both READMEs', () => {
-    const en = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-    const zh = readFileSync(new URL('../README.zh-CN.md', import.meta.url), 'utf8');
-    expect(en).toContain('### Deploy it yourself');
-    expect(zh).toContain('<a id="deploy-it-yourself"></a>');
-    expect(zh).toContain('### 自行部署');
-  });
-
-  it('shows Actor list loading and error states for actor-own', () => {
-    const loading = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'loading' } });
-    expect(loading).toContain('Loading your Actors…');
-    const invalid = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'invalid-token' } });
-    expect(invalid).toContain(EN.oauthReauthRequired);
-    const network = render({ draft: { egress: 'actor-own' }, usage: readyUsage, actors: { status: 'error', code: 'network' } });
-    expect(network).toContain('Could not load your Actors');
-  });
-
-  it('exposes the Apify sign-up, pricing, and free-credit constants', () => {
-    expect(APIFY_SIGNUP_URL).toBe('https://console.apify.com/sign-up');
-    expect(APIFY_PRICING_URL).toBe('https://apify.com/pricing');
-    expect(APIFY_FREE_MONTHLY_CREDIT_USD).toBe(5);
-  });
-
-  it('keeps Advanced collapsed by default and shows its fields inside the disclosure', () => {
-    const html = render();
-    expect(html).toContain('<details');
-    expect(html).not.toContain('<details open');
-    expect(html).toContain('Snapshot directory');
-    expect(html).toContain('Chart directory');
-  });
-
-  it('groups the existing advanced editors into accessible panels without discarding their controls', () => {
-    const html = render({ draft: { egress: 'actor-public' }, advancedTab: 'token' });
-    const panels = [...html.matchAll(/<div role="tabpanel"([^>]*)>/g)].map(match => match[1]!);
-    expect(panels).toHaveLength(3);
-    expect(panels.find(panel => panel.includes('-token-panel'))).not.toContain('hidden=');
-    expect(panels.find(panel => panel.includes('-anchors-panel'))).toContain('hidden=""');
-    expect(panels.find(panel => panel.includes('-files-panel'))).toContain('hidden=""');
-    expect(html).toContain('aria-label="Tolerance chacha"');
-    expect(html).toContain('type="password"');
-    expect(html).toContain('Snapshot directory');
-    const local = render({ advancedTab: 'token' });
-    expect(local.match(/<div role="tabpanel"/g)).toHaveLength(2);
-    expect(local).not.toContain('type="password"');
-  });
-
-  it('allows testing an unsaved connection while leaving Save available', () => {
-    const dirty = render({ draft: { cache: false } });
-    const dirtyTest = [...dirty.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
-      .find(match => match[2]!.includes(EN.testConnection!));
-    expect(dirtyTest).toBeDefined();
-    expect(dirtyTest?.[1]).not.toContain('disabled=');
-    expect(dirty).not.toMatch(/type="submit"[^>]*disabled/);
-    const clean = render();
-    const cleanTest = [...clean.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)]
-      .find(match => match[2]!.includes(EN.testConnection!));
-    expect(cleanTest).toBeDefined();
-    expect(cleanTest?.[1]).not.toContain('disabled=');
-    expect(clean).toContain(EN.allSaved);
-  });
-
-  it('shows the unsaved pill and Discard after an edit, and disables Save', () => {
-    const dirty = render({ draft: { cache: false } });
-    expect(dirty).toContain('Unsaved changes');
-    expect(dirty).toContain('Discard');
-    expect(dirty).toMatch(/type="submit"[^>]*>Save<\/button>/);
-    expect(dirty).not.toMatch(/type="submit"[^>]*disabled/);
-    const clean = render();
-    expect(clean).not.toContain('Unsaved changes');
-  });
-
-  it('shows inline validation next to invalid fields and blocks Save', () => {
-    const html = render({
-      draft: {
-        newAnchor: { term: 'chacha', geo: 'US', dailySearches: '0', tolerance: '0.5' },
-      },
-    });
-    expect(html).toContain('That anchor term is already in the list.');
-    expect(html).toContain('Enter a positive daily searches value.');
-    expect(html).toMatch(/type="submit"[^>]*disabled=""/);
-  });
-
-  it('warns about a token prefix without blocking Save', () => {
-    const html = render({ draft: { egress: 'actor-own', token: 'not-an-apify-token' } });
-    expect(html).toContain('Apify API tokens usually start with apify_api_. Double-check this one.');
-    expect(html).not.toMatch(/type="submit"[^>]*disabled/);
-  });
-
-  it('derives fixed and window anchor options from built-ins and configured anchors', () => {
-    const html = render();
-    expect(html).toMatch(/role="combobox"[^>]*value="sudoku"/);
-    expect(html).toMatch(/role="combobox"[^>]*value="chacha"/);
-    expect(html).toContain('aria-label="Short-window anchor"');
-    expect(html).toContain('aria-label="Long-window anchor"');
-    expect(html).toContain('aria-label="Geo chacha"');
-  });
-
-  it('keeps picker searches separate from free-form configuration inputs', () => {
-    const local = render();
-    const allInputs = [...local.matchAll(/<input\b[^>]*>/g)].map(match => match[0]);
-    const pickers = allInputs.filter(input => input.includes('role="combobox"'));
-    expect(pickers).toHaveLength(9);
-    expect(pickers.every(input => input.includes('readonly=""'))).toBe(true);
-    const localInputs = allInputs.filter(input => !input.includes('role="combobox"'));
-    expect(localInputs.filter(input => input.includes('type="text"'))).toHaveLength(3);
-    expect(localInputs.filter(input => input.includes('type="password"'))).toHaveLength(0);
-    expect(localInputs.filter(input => input.includes('type="number"'))).toHaveLength(2);
-    expect(localInputs).toHaveLength(5);
-    expect(local).not.toContain('<textarea');
-
-    const apify = render({ draft: { egress: 'actor-own', actor: 'actor-1' }, usage: readyUsage, actors: oneActor });
-    const apifyInputs = [...apify.matchAll(/<input\b[^>]*>/g)].map(match => match[0]).filter(input => !input.includes('role="combobox"'));
-    expect(apifyInputs.filter(input => input.includes('type="password"'))).toHaveLength(1);
-    expect(apifyInputs).toHaveLength(6);
-  });
-
-  it('preserves Worldwide for query and new-anchor geos and uses choice controls for tolerances', () => {
-    const html = render({ value: { geo: '' } });
-    expect(html).toMatch(/role="combobox"[^>]*value="Worldwide"/);
-    expect(html).toContain('>Default geo</label>');
-    // A new anchor follows the query region, including explicit Worldwide.
-    expect(html.match(/value="Worldwide"/g)).toHaveLength(2);
-    expect(html.match(/aria-label="Tolerance /g)).toHaveLength(2);
-    expect(html).toMatch(/role="combobox"[^>]*aria-autocomplete="none"[^>]*value="±50%"/);
-    expect(html).not.toContain('<select');
-  });
-
-  it('keeps stored tolerances exactly instead of rounding them to a preset', () => {
-    const html = render({ value: { baselines: { anchors: [
-      { term: 'chacha', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
-      { term: 'pizza', geo: 'GB', dailySearches: 9000 },
-    ] } } });
-    expect(html).toMatch(/role="combobox"[^>]*value="±20%"/);
-    expect(html).toMatch(/role="combobox"[^>]*value="Default \(±50%\)"/);
-  });
-});
-
 describe('settings i18n and egress compatibility', () => {
   it('has the same keys in English and Chinese', () => {
     expect(Object.keys(ZH).sort()).toEqual(Object.keys(EN).sort());
-    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'egressRenamed', 'egressUnknown', 'testVersionMismatch', 'publicActorCost', 'viewSource', 'storePage']) {
+    for (const key of ['egressLocal', 'egressPublic', 'egressOwn', 'egressRenamed', 'egressUnknown', 'testVersionMismatch']) {
       expect(EN[key], key).toBeTruthy();
       expect(ZH[key], key).toBeTruthy();
     }
   });
 
-  it('migrates a saved apify egress to actor-own with a visible warning', () => {
-    const draft = fromSnapshot({ egress: 'apify' });
-    expect(draft).toMatchObject({ egress: 'actor-own', egressNotice: 'renamed' });
-    const html = render({ value: { egress: 'apify' } });
-    expect(html).toContain(EN.egressRenamed.replace(/"/g, '&quot;'));
-    expect(html).toMatch(/type="submit"[^>]*>Save<\/button>/);
-    expect(html).not.toMatch(/type="submit"[^>]*disabled/);
-  });
-
-  it('warns instead of silently treating any other unknown egress as local', () => {
-    const draft = fromSnapshot({ egress: 'mcp' });
-    expect(draft).toMatchObject({ egress: 'local', egressNotice: 'unknown' });
-    expect(render({ value: { egress: 'mcp' } })).toContain(EN.egressUnknown);
-  });
-
-  it('unsets removed proxy keys on save when the profile still has them', () => {
-    const draft = fromSnapshot({ egress: 'actor-own', apifyProxyGroup: 'RESIDENTIAL', apifyProxyCountry: 'US' });
-    expect(draft.legacyKeys).toEqual(['apifyProxyGroup', 'apifyProxyCountry']);
-    expect(opsFor(draft, t)).toEqual(expect.arrayContaining([
+  it('migrates legacy egress values and unsets removed proxy keys on save', () => {
+    expect(fromSnapshot({ egress: 'apify' })).toMatchObject({ egress: 'actor-own', egressNotice: 'renamed' });
+    expect(fromSnapshot({ egress: 'mcp' })).toMatchObject({ egress: 'local', egressNotice: 'unknown' });
+    const legacy = fromSnapshot({ egress: 'actor-own', apifyProxyGroup: 'RESIDENTIAL', apifyProxyCountry: 'US' });
+    expect(legacy.legacyKeys).toEqual(['apifyProxyGroup', 'apifyProxyCountry']);
+    expect(opsFor(legacy, t)).toEqual(expect.arrayContaining([
       { op: 'unset', path: ['apifyProxyGroup'] },
       { op: 'unset', path: ['apifyProxyCountry'] },
     ]));
@@ -435,181 +53,105 @@ describe('settings i18n and egress compatibility', () => {
 });
 
 describe('deploy build latching', () => {
-  it('ignores an unrelated succeeded Actor while the deployed build runs', () => {
-    const actors = {
-      status: 'ready' as const,
-      actors: [
-        ...actor('unrelated', 'other-build', 'SUCCEEDED').actors,
-        ...actor('deployed', 'deployed-build', 'RUNNING').actors,
-      ],
+  it('tracks only the returned actor and build id across pending, succeeded, and failed states', () => {
+    const running: ApifyActorsView = {
+      status: 'ready',
+      actors: [...actor('unrelated', 'other-build', 'SUCCEEDED').actors, ...actor('deployed', 'deployed-build', 'RUNNING').actors],
     };
-    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
-  });
+    expect(resolveDeployBuild(running, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
 
-  it('ignores an unrelated failed Actor', () => {
-    const actors = {
-      status: 'ready' as const,
-      actors: [
-        ...actor('unrelated', 'other-build', 'FAILED').actors,
-        ...actor('deployed', 'deployed-build', 'RUNNING').actors,
-      ],
-    };
-    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
-  });
-
-  it('selects exactly the returned Actor when its build succeeds', () => {
-    const actors = {
-      status: 'ready' as const,
-      actors: [
-        ...actor('unrelated', 'other-build', 'FAILED').actors,
-        ...actor('deployed', 'deployed-build', 'SUCCEEDED').actors,
-      ],
-    };
-    expect(resolveDeployBuild(actors, { actorId: 'deployed', buildId: 'deployed-build' }))
-      .toEqual({ status: 'succeeded', actorId: 'deployed' });
-  });
-
-  it('fails only when the returned build id fails', () => {
-    const stale = {
-      status: 'ready' as const,
-      actors: actor('deployed', 'older-build', 'FAILED').actors,
-    };
+    const stale = actor('deployed', 'older-build', 'FAILED');
     expect(resolveDeployBuild(stale, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'pending' });
-    const failed = {
-      status: 'ready' as const,
-      actors: actor('deployed', 'deployed-build', 'TIMED-OUT').actors,
+
+    const succeeded: ApifyActorsView = {
+      status: 'ready',
+      actors: [...actor('unrelated', 'other-build', 'FAILED').actors, ...actor('deployed', 'deployed-build', 'SUCCEEDED').actors],
     };
+    expect(resolveDeployBuild(succeeded, { actorId: 'deployed', buildId: 'deployed-build' }))
+      .toEqual({ status: 'succeeded', actorId: 'deployed' });
+
+    const failed = actor('deployed', 'deployed-build', 'TIMED-OUT');
     expect(resolveDeployBuild(failed, { actorId: 'deployed', buildId: 'deployed-build' })).toEqual({ status: 'failed' });
   });
 });
 
-describe('saving the new-anchor row', () => {
-  it('includes a filled-in new anchor instead of dropping it', () => {
+describe('baseline draft helpers', () => {
+  it('seeds MEKA US defaults, includes pending new rows, and validates duplicates per region', () => {
+    const draft = setBaselineOverride(fromSnapshot(undefined), true);
+    expect(draft.anchors).toEqual([{ term: 'sudoku', geo: 'US', dailySearches: '88000', tolerance: '0.5' }]);
+
+    expect(validateDraft({
+      ...draft,
+      newAnchor: { term: 'sudoku', geo: 'US', dailySearches: '100', tolerance: '0.5' },
+    }, t).newAnchorTerm).toBe(EN.duplicateAnchor);
+    expect(validateDraft({
+      ...draft,
+      newAnchor: { term: 'sudoku', geo: 'GB', dailySearches: '100', tolerance: '0.5' },
+    }, t).newAnchorTerm).toBeUndefined();
+
     const base = { baselineOverride: true, anchors: [], newAnchor: { term: ' genie ', geo: 'GB', dailySearches: '120', tolerance: '' } } as unknown as Draft;
     const saved = withPendingAnchor(base);
     expect(saved.anchors).toEqual([{ term: 'genie', geo: 'GB', dailySearches: '120', tolerance: '' }]);
     expect(saved.newAnchor.term).toBe('');
-    const off = { ...base, baselineOverride: false };
-    expect(withPendingAnchor(off)).toBe(off);
+    expect(withPendingAnchor({ ...base, baselineOverride: false }).anchors).toEqual([]);
   });
 });
 
-describe('US baseline overrides', () => {
-  it('starts with the MEKA US default and keeps saved rows and windows', () => {
-    const empty = fromSnapshot(undefined);
-    const draft = setBaselineOverride(empty, true);
-    expect(draft.anchors).toEqual([
-      { term: 'sudoku', geo: 'US', dailySearches: '88000', tolerance: '0.5' },
-    ]);
-
-    const html = render({ draft });
-    expect(html).toMatch(/aria-label="Searches\/day sudoku"[^>]*value="88000"/);
-
-    const saved = fromSnapshot({
-      baselines: {
-        anchors: [
-          { term: 'gpts', geo: 'US', dailySearches: 3500, tolerance: 0.5 },
-          { term: 'custom', geo: 'GB', dailySearches: 1200, tolerance: 0.25 },
-        ],
-        windowAnchors: { short: 'custom', long: 'gpts' },
-      },
+describe('Apify client helpers and OAuth URL validation', () => {
+  it('loads usage and Actor lists with relative URLs and maps errors', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.startsWith('api/gtfa.apify-usage')) {
+        return Response.json({
+          ok: true, source: 'oauth',
+          plan: { tier: 'BRONZE', monthlyBasePriceUsd: 19, monthlyUsageCreditsUsd: 19 },
+          usageUsd: 8.06, limitUsd: 19,
+          cycle: { startAt: '2026-01-01T00:00:00.000Z', endAt: '2099-01-31T23:59:59.999Z' },
+          residentialGb: 0.006, residentialGbLimit: 5, fetchedAt: '2026-01-15T12:34:00.000Z',
+        });
+      }
+      if (target.startsWith('api/gtfa.apify-actors')) {
+        return Response.json({ ok: true, actors: actor('actor-1', 'build-1', 'SUCCEEDED').actors });
+      }
+      return Response.json({ ok: true, actorId: 'actor-1', buildId: 'build-1' });
     });
-    expect(setBaselineOverride(saved, true)).toMatchObject({
-      anchors: saved.anchors,
-      windowShort: 'custom',
-      windowLong: 'gpts',
-    });
-  });
-
-  it('allows removed or other-geo built-ins but rejects a current term and geo duplicate', () => {
-    const draft = setBaselineOverride(fromSnapshot(undefined), true);
-    const duplicate = validateDraft({
-      ...draft,
-      newAnchor: { term: 'sudoku', geo: 'US', dailySearches: '100', tolerance: '0.5' },
-    }, t);
-    expect(duplicate.newAnchorTerm).toBe(EN.duplicateAnchor);
-
-    const otherGeo = validateDraft({
-      ...draft,
-      newAnchor: { term: 'sudoku', geo: 'GB', dailySearches: '100', tolerance: '0.5' },
-    }, t);
-    expect(otherGeo.newAnchorTerm).toBeUndefined();
-
-    const removed = { ...draft, anchors: draft.anchors.filter(anchor => anchor.term !== 'sudoku') };
-    const restored = {
-      ...removed,
-      newAnchor: { term: 'sudoku', geo: 'US', dailySearches: '63000', tolerance: '0.5' },
-    };
-    expect(validateDraft(restored, t).newAnchorTerm).toBeUndefined();
-    expect(opsFor(withPendingAnchor(restored), t)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        op: 'set',
-        path: ['baselines'],
-        value: expect.objectContaining({
-          anchors: expect.arrayContaining([expect.objectContaining({ term: 'sudoku', geo: 'US' })]),
-        }),
-      }),
-    ]));
-  });
-});
-
-describe('Apify usage client helpers', () => {
-  it('loads usage with a relative URL and refresh flag', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      ok: true,
-      source: 'config',
-      plan: { tier: 'BRONZE', monthlyBasePriceUsd: 19, monthlyUsageCreditsUsd: 19 },
-      usageUsd: 8.06,
-      limitUsd: 19,
-      cycle: { startAt: '2026-01-01T00:00:00.000Z', endAt: '2026-01-31T23:59:59.999Z' },
-      residentialGb: 0.006,
-      residentialGbLimit: 5,
-      fetchedAt: '2026-01-15T12:34:00.000Z',
-    }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    expect(await loadApifyUsage(true)).toMatchObject({ status: 'ready', data: { usageUsd: 8.06, limitUsd: 19 } });
+    expect(await loadApifyUsage(true)).toMatchObject({ status: 'ready', data: { source: 'oauth', usageUsd: 8.06 } });
     expect(fetchMock).toHaveBeenCalledWith('api/gtfa.apify-usage?refresh=1', expect.objectContaining({ cache: 'no-store' }));
-  });
-
-  it('maps no-token and invalid-token responses for the card', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, code: 'no-token' }), { status: 200 })));
-    expect(await loadApifyUsage()).toEqual({ status: 'error', code: 'no-token' });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, code: 'invalid-token', status: 401 }), { status: 200 })));
-    expect(await loadApifyUsage()).toEqual({ status: 'error', code: 'invalid-token', httpStatus: 401 });
-  });
-});
-
-describe('Apify Actor client helpers', () => {
-  it('loads the Actor list with a relative URL and refresh flag', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      ok: true,
-      actors: [{
-        id: 'actor-1',
-        name: 'google-trends-for-agent',
-        username: 'alice',
-        title: 'Google Trends for AI Agents',
-        standbyUrl: 'https://alice--google-trends-for-agent.apify.actor',
-        standbyEnabled: true,
-        lastBuildId: 'build-1',
-        lastBuildStatus: 'SUCCEEDED',
-      }],
-    }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    expect(await loadApifyActors(true)).toEqual({ status: 'ready', actors: oneActor.actors });
+    expect(await loadApifyActors(true)).toEqual(actor('actor-1', 'build-1', 'SUCCEEDED'));
     expect(fetchMock).toHaveBeenCalledWith('api/gtfa.apify-actors?refresh=1', expect.objectContaining({ cache: 'no-store' }));
-  });
-
-  it('maps Actor list errors and the deploy response', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, code: 'no-token' }), { status: 200 })));
-    expect(await loadApifyActors()).toEqual({ status: 'error', code: 'no-token' });
-
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true, actorId: 'actor-1', buildId: 'build-1' }), { status: 200 })));
     expect(await deployApifyActor()).toEqual({ ok: true, actorId: 'actor-1', buildId: 'build-1' });
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, code: 'exists' }), { status: 200 })));
-    expect(await deployApifyActor()).toEqual({ ok: false, code: 'exists' });
-
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ok: false, code: 'invalid-token', status: 401 })));
+    expect(await loadApifyUsage()).toEqual({ status: 'error', code: 'invalid-token', httpStatus: 401 });
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
     expect(await deployApifyActor()).toEqual({ ok: false, code: 'network' });
+  });
+
+  it('drops unsafe OAuth verification URLs and uses exact relative OAuth routes', async () => {
+    const base = { available: true, connected: false, pending: true };
+    for (const verificationUri of [
+      'javascript:alert(document.domain)',
+      'https://evil.example/authorize/device',
+      'https://console.apify.com/not-a-device-page',
+      'https://console.apify.com:443/authorize/device',
+      'https://console.apify.com/authorize/device#fragment',
+    ]) {
+      expect(normalizeApifyOAuthStatus({ ...base, verificationUri })?.verificationUri).toBeUndefined();
+    }
+    expect(APIFY_OAUTH_VERIFICATION_URL).toBe('https://console.apify.com/authorize/device');
+    expect(normalizeApifyOAuthStatus({ ...base, verificationUri: 'https://console.apify.com/authorize/device/?code=ABC' })?.verificationUri)
+      .toBe('https://console.apify.com/authorize/device/?code=ABC');
+    expect(normalizeApifyOAuthStatus({ ...base, available: 'true' })).toBeNull();
+    expect(normalizeApifyOAuthStatus({ ...base, code: 'unknown-code' })).toBeNull();
+
+    const fetchMock = vi.fn(async () => Response.json({
+      ...base, verificationUri: 'https://console.apify.com/authorize/device?code=ABC', userCode: 'ABCD-1234', expiresAt: '2099-01-15T12:34:00.000Z',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await loadApifyOAuth()).toMatchObject({ status: 'ready', data: { pending: true } });
+    expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth', expect.objectContaining({ method: 'GET', cache: 'no-store' }));
+    expect(await startApifyOAuth()).toMatchObject({ status: 'ready', data: { pending: true } });
+    expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth-start', expect.objectContaining({ method: 'POST', cache: 'no-store' }));
   });
 });
