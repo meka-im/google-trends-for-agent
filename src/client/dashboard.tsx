@@ -15,7 +15,7 @@ import { TrendChart, hasChartPoints } from './trend-chart.js';
 type Translate = (key: string) => string;
 const TIME_KEYS = [['now 1-H', 'dashTime1h'], ['now 4-H', 'dashTime4h'], ['now 1-d', 'dashTime24h'], ['now 7-d', 'dashTime7d'],
   ['today 1-m', 'dashTime1m'], ['today 3-m', 'dashTime3m'], ['today 12-m', 'dashTime1y'], ['today 5-y', 'dashTime5y'], ['all', 'dashTimeAll']] as const;
-const colors = ['#7297ec', '#b39cdb', '#79b9b4', '#daae84', '#9eb389'];
+const colors = ['#3972ea', '#9775d6', '#25967d', '#cf8544', '#ce6582'];
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const array = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.map(object) : [];
@@ -239,14 +239,37 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   const { record, result } = saved;
   if (result.onDemand && result.ok && supportsVolumeWindow(record.time)) {
     const batch = result.batchVolume as BatchResult | undefined;
-    return <section className="gd-volume-list" aria-live="polite"><h4>{t('dashCompareVolume')}</h4>
-      {(!batch?.complete || batch.error) && <button className="gd-button primary" style={{width:'100%'}} disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(busy ? 'dashRunning' : batch?.error ? 'dashRetryEstimate' : 'dashBatchEstimate')}</button>}
-      {batch?.series.filter(s => !batch.error || s.traffic.average !== null || s.below != null).map(s => <div className="gd-volume-row" key={s.keyword}><span>{s.keyword}</span>
-        <strong>{s.traffic.average !== null ? formatVolume(s.traffic.average) : s.below ? t('dashBelowFloor')+'（'+formatNumber(s.below)+' '+t('dashPerDay')+'）' : t(reasonKey[s.reason??'samples']??'dashEstimateMissing')}</strong>
-        {s.reused ? <small>{t('dashCached')}</small> : s.via || s.anchor ? <small>{t(s.via?'dashVia':'dashEstimateAnchor')} · {s.via??s.anchor?.term}</small> : null}
-      </div>)}
-      {batch?.rounds.map(step=><div className="gd-volume-row" key={step.round}><span>{t('dashRound')} {step.round} · {step.anchor} · {formatNumber(step.daily)} {t('dashPerDay')}</span><small>{step.targets.join('、')}{step.error ? ' · '+step.error : ''}</small></div>)}
-      {batch?.error && <small role="alert">{t(batch.error === 'NETWORK_ERROR' ? 'dashBatchNetwork' : 'dashEstimateFailed')} · {batch.error}</small>}
+    const current = batch?.rounds.at(-1);
+    const running = busy && batch && !batch.complete && !batch.error;
+    return <section className="gd-estimate" aria-live="polite">
+      <h4>{t('dashDailyVolume')}</h4>
+      {running && current && <p role="status" className="gd-estimate-step"><Icon name="refresh" size={14} />{t('dashRound')} {current.round} · {current.targets.join('、')}</p>}
+      {batch && record.terms.map((term, index) => {
+        const reading = batch.series.find(item => item.keyword === term);
+        const daily = reading?.traffic.average;
+        const round = [...batch.rounds].reverse().find(step => step.targets.includes(term));
+        if (batch.error && daily == null && !reading?.below) return null;
+        const anchor = reading?.anchor?.term ?? round?.anchor;
+        const value = daily != null ? '≈ ' + formatNumber(daily) + ' ' + t('dashPerDay')
+          : reading?.below ? t('dashBelowFloor') + '（' + formatNumber(reading.below) + ' ' + t('dashPerDay') + '）'
+          : running ? t('dashPhaseCalibrating') : t(reasonKey[reading?.reason ?? 'samples'] ?? 'dashEstimateMissing');
+        return <div className="gd-estimate-line" key={term}>
+          <span className="gd-estimate-term"><i style={{background: colors[index]}}/>{term}</span>
+          <div><strong className={daily == null ? 'gd-muted' : undefined}>{value}</strong>
+            {reading?.reused ? <small>{t('dashCached')}</small> : reading?.via || anchor ? <small>{t(reading?.via ? 'dashVia' : 'dashEstimateAnchor')} · {reading?.via ?? anchor}</small> : null}
+          </div>
+        </div>;
+      })}
+      {batch && batch.rounds.length > 0 && <div className="gd-anchor-list">
+        <div className="gd-anchor-head"><b>{t('dashEstimateAnchor')}</b><small>{t('dashAnchorBaseline')}</small></div>
+        {batch.rounds.map(step => <div className="gd-anchor-line" key={step.round}>
+          <span>{t('dashRound')} {step.round}</span>
+          <div><b>{step.anchor}</b>{record.terms.length > 1 && <small>{step.targets.join('、')}</small>}{step.error && <small>{step.error}</small>}</div>
+          <span>{formatNumber(step.daily)} {t('dashPerDay')}</span>
+        </div>)}
+      </div>}
+      {batch?.error && <p role="alert" className="gd-error-code">{t(batch.error === 'NETWORK_ERROR' ? 'dashBatchNetwork' : 'dashEstimateFailed')} · {batch.error}</p>}
+      {(!batch?.complete || batch.error) && !running && <button className="gd-button primary gd-estimate-action" disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(batch?.error ? 'dashRetryEstimate' : 'dashBatchEstimate')}</button>}
     </section>;
   }
   if (record.tool !== 'trends_compare' && record.tool !== 'trends_snapshot' && !result.onDemand) return null;
@@ -308,10 +331,11 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
     <div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div>
     <div className="gd-result-grid">
       <article className="gd-card">
-        <div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')}</h3>{(!result.onDemand || hasTraffic) && <div className="gd-actions">
-          <Button primary={currentMetric === 'interest'} onClick={() => { focusTerm(null); setMetric('interest'); }}>{t('dashInterest')}</Button>
-          <Button disabled={!hasTraffic} primary={currentMetric === 'traffic'} onClick={() => { focusTerm(null); setMetric('traffic'); }}>{t('dashTraffic')}</Button>
-        </div>}</div>
+        <div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashBatchEstimate' : 'dashInterest')}</h3>{(!result.onDemand || hasTraffic) &&
+          <div className="gd-metric-switch">{(['interest','traffic'] as const).map(value =>
+            <button type="button" key={value} aria-pressed={currentMetric === value} disabled={value === 'traffic' && !hasTraffic}
+              onClick={() => { focusTerm(null); setMetric(value); }}>{t(value === 'interest' ? 'dashInterest' : 'dashTraffic')}</button>
+          )}</div>}</div>
         <TrendChart series={visible} traffic={currentMetric === 'traffic'}
           label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
         {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?
@@ -337,12 +361,15 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
       </article>
       <aside className="gd-card gd-result-info">
         <h3>{t('dashResultInfo')}</h3>
-        <dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+        <dl><div><dt>{t('dashGeo')}</dt><dd>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')}</dd></div>
+          <div><dt>{t('dashWindow')}</dt><dd>{timeLabel(record.time,t)}</dd></div>
+          <div><dt>{t('dashDataSource')}</dt><dd>{egressLabel(record.egress,t)}</dd></div></dl>
         <VolumeCards saved={saved} t={t} busy={busy} egress={egress} estimate={estimate} />
         {typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}
       </aside>
     </div>
     {typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}
+    <details className="gd-warnings gd-query-details"><summary>{t('dashQueryDetails')}</summary><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></details>
     {warnings.length ? <details className="gd-warnings"><summary>{t('dashResultInfo')} · {warnings.length}</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}
     {!comparison ? <div className="gd-related">{['popular', 'rising'].map(key => <article className="gd-card" key={key}><h3>{t(key === 'popular' ? 'dashPopular' : 'dashRising')}</h3>{array(tables[key]).slice(0, 10).map((row, i) => <p key={i}><span>{String(row.query ?? '')}</span><strong>{String(row.formattedValue ?? row.value ?? '—')}</strong></p>)}{!array(tables[key]).length ? <p className="gd-muted">{t('dashNoRelated')}</p> : null}</article>)}</div> : null}
   </div>;
