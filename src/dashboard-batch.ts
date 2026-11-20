@@ -6,6 +6,7 @@ import type { SavedQuery } from './query-history-types.js';
 import { supportsVolumeWindow } from './volume-types.js';
 import type { CalibrationPoint } from './calibration.js';
 
+import { GTrendsError } from './core.js';
 import type { BatchResult, BatchRound, BatchReading } from './batch-types.js';
 
 function original(saved: SavedQuery, keyword: string) {
@@ -61,14 +62,29 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
     !best || Math.abs(Math.log(anchorDailySearches(a)!/value)) < Math.abs(Math.log(anchorDailySearches(best)!/value)) ? a : best, undefined);
   let anchor = refs.pinned ? pinned : nearest(1600);
   for (let round = 1; supportsVolumeWindow(filter.time) && batch.length && anchor && round <= 2; round++) {
-    const info = { round, anchor: anchor.term, daily: anchorDailySearches(anchor)!, targets: batch.map(t => t.keyword), completed: [...latest.values()].filter(done).length };
+    const info: BatchRound = { round, anchor: anchor.term, daily: anchorDailySearches(anchor)!, targets: batch.map(t => t.keyword), completed: [...latest.values()].filter(done).length };
     state.rounds.push(info);
     await store(info);
     const keywords = [...new Set([...batch.map(t => normalizeTerm(t.keyword)), normalizeTerm(anchor.term)])];
-    const output = await compare(keywords.map(key => batch.find(t => normalizeTerm(t.keyword) === key)?.keyword ?? anchor!.term));
+    let output: Record<string, unknown>;
+    try {
+      output = await compare(keywords.map(key => batch.find(t => normalizeTerm(t.keyword) === key)?.keyword ?? anchor!.term));
+    } catch (error) {
+      // A transport exception can leave Actor creation ambiguous. Retry only
+      // when a completed query explicitly reports an upstream network failure.
+      if (!(error instanceof GTrendsError)) throw error;
+      info.error = state.error = error.code;
+      break;
+    }
     const meta = row(output.meta);
     if (typeof meta.actorRunId === 'string') state.runs.push({ actorRunId: meta.actorRunId, costUsd: typeof meta.actorUsageUsd === 'number' ? meta.actorUsageUsd : null, createdAt: new Date().toISOString() });
-    if (!output.ok || output.status === 'blocked') { state.error = String(row(output.error).code ?? 'NETWORK_ERROR'); break; }
+    if (!output.ok || output.status === 'blocked') {
+      const code = String(row(output.error).code ?? 'NETWORK_ERROR');
+      info.error = code;
+      if (round === 1 && code === 'NETWORK_ERROR' && typeof meta.actorRunId === 'string' && output.status !== 'blocked') continue;
+      state.error = code;
+      break;
+    }
     const byTerm = new Map(rows(output.series).map(s => [normalizeTerm(String(s.keyword)), pointsOf(s.points)]));
     const base = byTerm.get(normalizeTerm(anchor.term)) ?? [];
     const settledBase = settledNonGapPoints(base, filter);
@@ -101,7 +117,7 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
     if (refs.pinned || next?.term === anchor.term) break;
     anchor = next;
   }
-  for (const term of terms) if (!latest.has(normalizeTerm(term.keyword))) {
+  for (const term of terms) if (!state.error && !latest.has(normalizeTerm(term.keyword))) {
     put(estimateVolume(term.keyword, [], [], filter, state.rounds.length ? 'samples' : 'baseline'));
   }
   state.complete = !state.error;

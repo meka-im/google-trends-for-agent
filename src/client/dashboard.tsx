@@ -240,13 +240,13 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   if (result.onDemand && result.ok && supportsVolumeWindow(record.time)) {
     const batch = result.batchVolume as BatchResult | undefined;
     return <section className="gd-volume-list" aria-live="polite"><h4>{t('dashCompareVolume')}</h4>
-      {(!batch?.complete || batch.error) && <button className="gd-button primary" style={{width:'100%'}} disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(busy ? 'dashRunning' : 'dashBatchEstimate')}</button>}
-      {batch?.series.map(s => <div className="gd-volume-row" key={s.keyword}><span>{s.keyword}</span>
+      {(!batch?.complete || batch.error) && <button className="gd-button primary" style={{width:'100%'}} disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(busy ? 'dashRunning' : batch?.error ? 'dashRetryEstimate' : 'dashBatchEstimate')}</button>}
+      {batch?.series.filter(s => !batch.error || s.traffic.average !== null || s.below != null).map(s => <div className="gd-volume-row" key={s.keyword}><span>{s.keyword}</span>
         <strong>{s.traffic.average !== null ? formatVolume(s.traffic.average) : s.below ? t('dashBelowFloor')+'（'+formatNumber(s.below)+' '+t('dashPerDay')+'）' : t(reasonKey[s.reason??'samples']??'dashEstimateMissing')}</strong>
         {s.reused ? <small>{t('dashCached')}</small> : s.via || s.anchor ? <small>{t(s.via?'dashVia':'dashEstimateAnchor')} · {s.via??s.anchor?.term}</small> : null}
       </div>)}
-      {batch?.rounds.map(step=><div className="gd-volume-row" key={step.round}><span>{t('dashRound')} {step.round} · {step.anchor} · {formatNumber(step.daily)} {t('dashPerDay')}</span><small>{step.targets.join('、')}</small></div>)}
-      {batch?.error && <small role="alert">{t('dashEstimateFailed')} · {batch.error}</small>}
+      {batch?.rounds.map(step=><div className="gd-volume-row" key={step.round}><span>{t('dashRound')} {step.round} · {step.anchor} · {formatNumber(step.daily)} {t('dashPerDay')}</span><small>{step.targets.join('、')}{step.error ? ' · '+step.error : ''}</small></div>)}
+      {batch?.error && <small role="alert">{t(batch.error === 'NETWORK_ERROR' ? 'dashBatchNetwork' : 'dashEstimateFailed')} · {batch.error}</small>}
     </section>;
   }
   if (record.tool !== 'trends_compare' && record.tool !== 'trends_snapshot' && !result.onDemand) return null;
