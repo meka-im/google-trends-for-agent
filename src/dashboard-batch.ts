@@ -18,6 +18,41 @@ function aligned(a: CalibrationPoint[], b: CalibrationPoint[]) {
 }
 const mean = (points: CalibrationPoint[]) => points.reduce((sum, p) => sum + p.value, 0) / points.length;
 
+/** Older completed comparisons retained the shared interest curves even when
+ * the volume gate discarded a dense low-scoring term. Recover its scale
+ * from a directly calibrated peer in this record, on matching time buckets.
+ */
+export function recoverComparisonCurves(saved: SavedQuery) {
+  const batch = saved.result.batchVolume as BatchResult | undefined;
+  if (!batch?.complete || batch.error || saved.record.tool !== 'trends_compare') return;
+  const filter = volumeFilter(saved.record.geo, saved.record.time);
+  const bases = batch.series.filter(s => !s.via && s.anchor && s.traffic.average && s.points.length);
+  for (const [index, missing] of batch.series.entries()) {
+    if (missing.reason !== 'samples' || missing.below || missing.traffic.average !== null) continue;
+    const target = original(saved, missing.keyword);
+    for (const basis of bases) {
+      const ref = original(saved, basis.keyword);
+      if (!aligned(target, ref)) continue;
+      const measured = new Map(basis.points.map(p => [Date.parse(p.t), p.value]));
+      const settled = settledNonGapPoints(ref, filter);
+      const matching = settled.flatMap(p => {
+        const daily = measured.get(Date.parse(p.time));
+        return daily != null && p.value > 0 ? [daily] : [];
+      });
+      if (matching.length < 3 || matching.length < .9 * settled.length) continue;
+      const pairedReference = ref.filter(p => measured.get(Date.parse(p.time)) != null ||
+        Date.parse(p.time) > Date.parse(settled.at(-1)!.time));
+      const dailySearches = matching.reduce((sum, v) => sum + v, 0) / matching.length;
+      const inferred = estimateVolume(missing.keyword, target, [{points: pairedReference, anchor: {
+        term: basis.keyword, geo: filter.geo, dailySearches, tolerance: basis.anchor!.tolerance,
+      }}], filter);
+      if (inferred.traffic.average === null) continue;
+      batch.series[index] = {...inferred, via: basis.keyword, anchor: basis.anchor};
+      break;
+    }
+  }
+}
+
 export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings, requestId: string,
   compare: (keywords: string[]) => Promise<Record<string, unknown>>,
   publish: (state: BatchResult, round?: BatchRound) => Promise<void>,

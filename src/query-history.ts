@@ -1,3 +1,4 @@
+import { recoverComparisonCurves } from './dashboard-batch.js';
 import type { BatchResult } from './batch-types.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
@@ -72,7 +73,9 @@ export class QueryHistoryStore {
       const result = JSON.parse(await readFile(join(this.directory, `${id}.json`), 'utf8')) as Record<string, unknown>;
       if (record.id !== id) return null;
       const volumeChecks = await this.volumeChecks(id);
-      return { record, result, ...(volumeChecks.length ? { volumeChecks } : {}) };
+      const saved = { record, result, ...(volumeChecks.length ? { volumeChecks } : {}) };
+      recoverComparisonCurves(saved);
+      return saved;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return null;
       throw error;

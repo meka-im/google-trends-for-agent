@@ -50,7 +50,11 @@ const positive = (points: readonly CalibrationPoint[]) => points.filter(point =>
 const peak = (points: readonly CalibrationPoint[]) => Math.max(0, ...points.map(point => point.value));
 
 export function hasVolumeSignal(points: readonly CalibrationPoint[]): boolean {
-  return positive(points) >= Math.max(3, points.length / 4) && mean(points) >= 3;
+  const nonzero = positive(points), average = mean(points);
+  // At an average score of two, integer rounding can move the mean by up
+  // to 25%. Accept this coarser estimate only with sustained observations.
+  return (nonzero >= Math.max(3, points.length / 4) && average >= 3) ||
+    (points.length >= 24 && nonzero >= .9 * points.length && average > 2);
 }
 
 function estimateAgainst(

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { estimateBatch } from '../src/dashboard-batch.js';
+import { estimateBatch, recoverComparisonCurves } from '../src/dashboard-batch.js';
 import type { SavedQuery } from '../src/query-history-types.js';
 
 const terms = ['One','Two','Three','Four','Five'];
@@ -23,6 +23,17 @@ describe('on-demand calibration',()=>{
     expect(compare.mock.calls[1]![0]).toEqual(['Five','psi to bar']);
     expect(state.series.find(row=>row.keyword==='Five')).toMatchObject({reason:'samples',traffic:{average:null}});
     expect(state.series.find(row=>row.keyword==='Five')?.below).toBeUndefined();
+  });
+  it('preserves densely observed low-score curves and recovers older completed comparisons',async()=>{
+    const scores = terms.slice(0,2).map((keyword,i) => ({keyword,points:dates.map((t,n)=>({t,value:i ? 2+n%2 : 50}))}));
+    const input = {...saved,record:{...saved.record,tool:'trends_compare' as const,terms:['One','Two']},result:{series:scores}};
+    const state=await estimateBatch(input,{geo:'US'},'id',async keywords=>({ok:true,series:keywords.map(keyword=>
+      scores.find(s=>s.keyword===keyword)??{keyword,points:points(25)})}),async()=>{},async()=>null);
+    const weak=state.series.find(s=>s.keyword==='Two')!;
+    expect(weak.traffic.average).toBe(160);
+    weak.traffic.average=null; weak.points=[]; weak.reason='samples'; delete weak.anchor;
+    recoverComparisonCurves({...input,result:{...input.result,batchVolume:state}});
+    expect(state.series.find(s=>s.keyword==='Two')).toMatchObject({via:'One',traffic:{average:160}});
   });
   it('runs another calibration only on a new estimate request after an upstream error', async()=>{
     const one={...saved,record:{...saved.record,terms:['One']}};
