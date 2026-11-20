@@ -20,6 +20,7 @@ import { singleVolume } from './dashboard-single.js';
 import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
+import { createMekaBaselinesSync, type MekaBaselineBoundary } from './dsh-baselines-sync.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
@@ -149,6 +150,12 @@ export interface RegisterOverrides {
   oauth?: ApifyOAuthManager;
   /** Test seam: OAuth HTTP fetch; production uses global fetch. */
   oauthFetch?: typeof globalThis.fetch;
+  /** Test seam / lifecycle control for MEKA baselines sync. */
+  baselinesSync?: {
+    autoSync?: boolean;
+    fetch?: typeof globalThis.fetch;
+    boundary?: MekaBaselineBoundary;
+  };
 }
 
 /** Runtime values after unwrapping dsh's volatile refs and applying defaults. */
@@ -417,9 +424,15 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     });
   }
   registerSkill(ctx);
+  const baselinesSync = overrides.baselinesSync?.boundary ?? createMekaBaselinesSync({
+    getSnapshotDir: () => settings().snapshotDir,
+    ...(overrides.baselinesSync?.fetch ? { fetch: overrides.baselinesSync.fetch } : {}),
+  });
+  if (overrides.baselinesSync?.autoSync) baselinesSync.ensureInitialSync();
   const localTransport = overrides.routes?.localTransport ?? overrides.transport;
   registerRoutes(ctx, settings, {
     oauth,
+    baselines: baselinesSync,
     dashboard: {
       settings,
       execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),
@@ -463,5 +476,5 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
 
 /** Cordis entrypoint. */
 export async function apply(ctx: DshContext, config: GtfaConfig = {}) {
-  await register(ctx, config);
+  await register(ctx, config, { baselinesSync: { autoSync: true } });
 }

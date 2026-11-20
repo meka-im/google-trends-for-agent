@@ -21,14 +21,17 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Icon } from './icons.js';
 import { ChoicePicker } from './choice-picker.js';
-import { BaselineCatalog } from './baseline-catalog.js';
+import { BaselineCatalog, type BaselineSyncFeedback } from './baseline-catalog.js';
 import { SETTINGS_CSS } from './theme.js';
 import { Dashboard, TrendsMark } from './dashboard.js';
 import { DashboardController } from './dashboard-state.js';
 import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
 import { parseActorRuntime } from '../actor-runtime.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
-import { mekaAnchorsFor, mekaDefaultAnchor } from '../dsh-baselines.js';
+import {
+  mekaAnchorsFor, mekaDefaultAnchor, setActiveMekaBaselines, summarizeMekaCatalog,
+  type MekaAnchor, type MekaBaselineStatus,
+} from '../dsh-baselines.js';
 import { CONNECTION_KEYWORDS, type ConnectionCode, type ConnectionResult, type DataCheck } from '../connection-check.js';
 import {
   APIFY_FREE_MONTHLY_CREDIT_USD, APIFY_PRICING_URL, APIFY_SIGNUP_URL,
@@ -47,6 +50,8 @@ const ACTORS_URL = 'api/gtfa.apify-actors';
 const DEPLOY_URL = 'api/gtfa.apify-deploy';
 const UPDATE_URL = 'api/gtfa.apify-update';
 const TEST_URL = 'api/gtfa.test-connection';
+const BASELINES_URL = 'api/gtfa.baselines';
+const BASELINES_SYNC_URL = 'api/gtfa.baselines-sync';
 export const APIFY_OAUTH_STATUS_URL = 'api/gtfa.apify-oauth';
 export const APIFY_OAUTH_START_URL = 'api/gtfa.apify-oauth-start';
 export const APIFY_OAUTH_CANCEL_URL = 'api/gtfa.apify-oauth-cancel';
@@ -482,8 +487,19 @@ export const EN: Record<string, string> = {
   baselines: 'Anchors & baselines',
   baselinesDescription: 'Custom rows override the same term and region; other built-ins still apply.',
   baselinesHint: 'Using built-in regional baselines. Turn on to customize.',
-  baselineBuiltin: 'Built-in baselines',
-  baselineBuiltinHint: 'MEKA baselines from Google Ads Keyword Planner.',
+  baselineBuiltin: 'MEKA baselines',
+  baselineBuiltinHint: 'Google Ads Keyword Planner',
+  baselineSync: 'Sync now',
+  baselineSyncing: 'Syncing…',
+  baselineSourceSynced: 'Synced',
+  baselineSourceBundled: 'Bundled',
+  baselineMeta: '{regions} regions · {count} anchors',
+  baselineSyncedAt: 'Synced {time}',
+  baselineSyncPolicy: 'Auto-synced on install; manual afterwards',
+  baselineSyncUpdated: 'Updated to MEKA baselines {version} ({count} anchors).',
+  baselineSyncCurrent: 'Already up to date ({version}).',
+  baselineSyncFailed: 'Could not sync from meka.im. Keeping current baselines.',
+  baselineInspect: 'View anchors',
   baselineDailyWindow: 'Daily comparisons and estimates for 30 days or longer',
   baselineAllRegions: 'All regions',
   baselineBrowseGeo: 'Browse baseline region',
@@ -766,8 +782,19 @@ export const ZH: Record<string, string> = {
   baselines: '锚点与基线',
   baselinesDescription: '自定义项覆盖相同词和地区，其余内置基准继续使用。',
   baselinesHint: '当前使用内置地区基线，开启后可自定义。',
-  baselineBuiltin: '内置基准',
-  baselineBuiltinHint: 'MEKA 基准来自 Google Ads Keyword Planner。',
+  baselineBuiltin: 'MEKA 校准基准',
+  baselineBuiltinHint: 'Google Ads Keyword Planner',
+  baselineSync: '手动同步',
+  baselineSyncing: '同步中…',
+  baselineSourceSynced: '已同步',
+  baselineSourceBundled: '内置快照',
+  baselineMeta: '{regions} 个地区 · {count} 个锚点',
+  baselineSyncedAt: '同步于 {time}',
+  baselineSyncPolicy: '安装时自动同步一次，后续手动更新',
+  baselineSyncUpdated: '已更新至 MEKA 基准 {version}（共 {count} 个锚点）。',
+  baselineSyncCurrent: '已是最新版本（{version}）。',
+  baselineSyncFailed: '无法连接 meka.im 同步，当前继续使用本地基准。',
+  baselineInspect: '查看基准明细',
   baselineDailyWindow: '用于 30 天及以上的日粒度对比和补估',
   baselineAllRegions: '全部地区',
   baselineBrowseGeo: '查看基准地区',
@@ -1460,6 +1487,51 @@ export async function deployApifyActor(signal?: AbortSignal, update?: { actorId:
   }
 }
 
+/** Parse a MEKA baseline status response from the Host route. */
+function parseBaselineStatus(raw: unknown): MekaBaselineStatus | null {
+  const row = record(raw);
+  const source = row.source === 'synced' ? 'synced' : row.source === 'bundled' ? 'bundled' : null;
+  const version = stringOrNull(row.version);
+  if (!source || !version || !Array.isArray(row.anchors) || !row.anchors.length) return null;
+  const anchors: MekaAnchor[] = [];
+  for (const item of row.anchors) {
+    const entry = record(item);
+    const term = stringOrNull(entry.term);
+    const dailySearches = numberOrNull(entry.dailySearches);
+    if (typeof entry.geo !== 'string' || !term || dailySearches === null || dailySearches <= 0) continue;
+    anchors.push({
+      geo: entry.geo.trim().toUpperCase(),
+      term,
+      dailySearches: Math.round(dailySearches),
+      dailyOnly: entry.dailyOnly === true,
+    });
+  }
+  if (!anchors.length) return null;
+  const syncedAt = stringOrNull(row.syncedAt);
+  return summarizeMekaCatalog({ source, version, syncedAt, anchors });
+}
+
+export async function loadMekaBaselines(signal?: AbortSignal): Promise<MekaBaselineStatus | null> {
+  try {
+    const response = await fetch(BASELINES_URL, { cache: 'no-store', headers: { accept: 'application/json' }, signal });
+    if (!response.ok) return null;
+    return parseBaselineStatus(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function syncMekaBaselines(signal?: AbortSignal): Promise<{ ok: boolean; updated?: boolean; status: MekaBaselineStatus | null }> {
+  try {
+    const response = await fetch(BASELINES_SYNC_URL, { method: 'POST', cache: 'no-store', headers: { accept: 'application/json' }, signal });
+    const body = record(await response.json());
+    const status = parseBaselineStatus(body.status);
+    return { ok: response.ok && body.ok === true, updated: body.updated === true, status };
+  } catch {
+    return { ok: false, status: null };
+  }
+}
+
 /** Resolve only the deployed Actor's exact build; unrelated Actors never affect it. */
 export function resolveDeployBuild(actors: ApifyActorsView, target: DeployTarget | null): DeployBuildResolution {
   if (!target || actors.status !== 'ready') return { status: 'pending' };
@@ -2033,6 +2105,12 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const [testResult, setTestResult] = useState<TestConnectionView | null>(null);
   const testAbort = useRef<AbortController | null>(null);
   useEffect(() => () => { testAbort.current?.abort(); testAbort.current = null; }, []);
+  const [mekaCatalog, setMekaCatalog] = useState<MekaBaselineStatus>(() => summarizeMekaCatalog());
+  const [syncingBaselines, setSyncingBaselines] = useState(false);
+  const [baselineFeedback, setBaselineFeedback] = useState<BaselineSyncFeedback | null>(null);
+  const baselinesLoaded = useRef(false);
+  const baselinesSyncAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => { baselinesSyncAbort.current?.abort(); baselinesSyncAbort.current = null; }, []);
   const [oauth, setOauth] = useState<ApifyOAuthView>(initialOAuth ?? { status: 'idle' });
   const [oauthBusy, setOauthBusy] = useState<ApifyOAuthAction | null>(null);
   const [oauthPoll, setOauthPoll] = useState({ id: 0, delay: 0, egress: draft.egress });
@@ -2064,6 +2142,53 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, []);
 
   useEffect(() => { if (draft.egress !== 'actor-own') resetDeployment(); }, [draft.egress, resetDeployment]);
+
+  useEffect(() => {
+    if (!advancedOpen || advancedTab !== 'anchors' || baselinesLoaded.current) return;
+    baselinesLoaded.current = true;
+    const controller = new AbortController();
+    void loadMekaBaselines(controller.signal).then(status => {
+      if (controller.signal.aborted || !status) return;
+      setActiveMekaBaselines({ source: status.source, version: status.version, syncedAt: status.syncedAt, anchors: status.anchors });
+      setMekaCatalog(status);
+    });
+    return () => controller.abort();
+  }, [advancedOpen, advancedTab]);
+
+  const syncBaselines = async () => {
+    if (syncingBaselines) return;
+    const controller = new AbortController();
+    baselinesSyncAbort.current = controller;
+    setSyncingBaselines(true);
+    setBaselineFeedback(null);
+    try {
+      const result = await syncMekaBaselines(controller.signal);
+      if (controller.signal.aborted) return;
+      if (result.status) {
+        setActiveMekaBaselines({
+          source: result.status.source,
+          version: result.status.version,
+          syncedAt: result.status.syncedAt,
+          anchors: result.status.anchors,
+        });
+        setMekaCatalog(result.status);
+      }
+      if (result.ok && result.status) {
+        setBaselineFeedback({
+          tone: 'ok',
+          text: template(t(result.updated ? 'baselineSyncUpdated' : 'baselineSyncCurrent'), {
+            version: result.status.version,
+            count: result.status.count,
+          }),
+        });
+      } else {
+        setBaselineFeedback({ tone: 'error', text: t('baselineSyncFailed') });
+      }
+    } finally {
+      if (baselinesSyncAbort.current === controller) baselinesSyncAbort.current = null;
+      setSyncingBaselines(false);
+    }
+  };
 
   const stopOAuthPolling = useCallback(() => {
     oauthPollGeneration.current++;
@@ -2409,11 +2534,11 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const fixedAnchorOptions = useMemo(() => [
     { value: '', label: t('anchorAutomatic'), description: t('anchorAutoOption'), badge: t('recommended') },
     ...anchorOptions,
-    ...mekaAnchorsFor(draft.geo)
+    ...mekaAnchorsFor(draft.geo, undefined, mekaCatalog.anchors)
       .filter(anchor => !anchorTerms.some(term => term.toLowerCase() === anchor.term.toLowerCase()))
       .map(anchor => ({ value: anchor.term, label: anchor.term, ...(anchor.dailyOnly ? { description: t('baselineDailyWindow') } : {}) })),
-  ], [anchorOptions, anchorTerms, draft.geo, t]);
-  const regionalAnchor = mekaDefaultAnchor(draft.geo)?.term;
+  ], [anchorOptions, anchorTerms, draft.geo, mekaCatalog.anchors, t]);
+  const regionalAnchor = mekaDefaultAnchor(draft.geo, 'now 7-d', mekaCatalog.anchors)?.term;
   const defaultWindowLabel = regionalAnchor ? `${t('windowDefault')} · ${regionalAnchor}` : t('windowDefault');
   const shortWindowOptions = useMemo(() =>
     [{ value: '', label: defaultWindowLabel }, ...anchorOptions], [anchorOptions, defaultWindowLabel]);
@@ -2549,7 +2674,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         <ChoicePicker label={t('anchor')} hint={t('anchorHint')} icon="sliders" placeholder={t('anchorSearch')} emptyText={t('choiceEmpty')} value={draft.anchor} disabled={!editable}
           options={fixedAnchorOptions} onChange={value => edit({ anchor: value })} />
       </div>
-      <p style={{ ...styles.hint, margin: 0 }}><a href="https://meka.im/datasets/google-trends-anchors" target="_blank" rel="noopener noreferrer">{t('baselineSources')}</a></p>
       <Toggle label={t('cache')} hint={t('cacheHint')} checked={draft.cache} disabled={!editable}
         onChange={checked => edit({ cache: checked })} />
     </section>
@@ -2557,7 +2681,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <details className="gtfa-advanced" open={advancedOpen}
       onToggle={event => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }}>
       <summary style={styles.summary}>
-        <span className="gtfa-section-icon"><Icon name="sliders" size={15} /></span>
+        <span className="gtfa-section-icon"><Icon name="wrench" size={15} /></span>
         <span style={{ display: 'grid', gap: 2 }}><span style={styles.sectionTitle}>{t('advanced')}</span>
           <span style={styles.sectionDescription}>{t('advancedDescription')}</span></span>
         <span className="gtfa-advanced-chevron" style={{ marginLeft: 'auto', color: 'var(--gtfa-quiet)' }}><Icon name="chevron" size={15} /></span>
@@ -2570,13 +2694,14 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       <div role="tabpanel" id={`${advancedId}-anchors-panel`} aria-labelledby={`${advancedId}-anchors-tab`}
         className="gtfa-advanced-panel" hidden={activeAdvancedTab !== 'anchors'} style={{ paddingBottom: 24 }}>
         <div className="gtfa-baseline-heading">
-          <SectionHeader icon="sliders" title={t('baselines')}
+          <SectionHeader title={t('baselines')}
             description={t(draft.baselineOverride ? 'baselinesDescription' : 'baselinesHint')} />
           <div className="gtfa-baseline-toggle"><span>{t('overrideBaselines')}</span>
             <Switch label={t('overrideBaselines')} checked={draft.baselineOverride} disabled={!editable}
               onChange={checked => edit(setBaselineOverride(draft, checked))} /></div>
         </div>
-        <BaselineCatalog t={t} locale={intlLocale} />
+        <BaselineCatalog t={t} locale={intlLocale} catalog={mekaCatalog} syncing={syncingBaselines}
+          feedback={baselineFeedback} onSync={() => { void syncBaselines(); }} />
         {validation.baselines ? <p style={styles.fieldError} role="alert">{validation.baselines}</p> : null}
         {draft.baselineOverride ? <>
           <h4 className="gtfa-custom-baseline-title">{t('baselineCustomRows')}</h4>

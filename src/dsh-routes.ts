@@ -22,6 +22,7 @@ import { VERSION } from './version.js';
 import type { ActorRuntime } from './actor-runtime.js';
 import { createTools } from './tools.js';
 import { dashboardRoute, type DashboardBoundary } from './dashboard-routes.js';
+import type { MekaBaselineBoundary } from './dsh-baselines-sync.js';
 import {
   CONNECTION_FILTER, CONNECTION_KEYWORDS, CONNECTION_PROBE_PROTOCOL, connectionErrorCode,
   emptyDataCheck, summarizeConnectionProbe, type ConnectionCode, type ConnectionDiagnostics, type ConnectionResult,
@@ -32,6 +33,8 @@ export const APIFY_ACTORS_PATH = '/api/gtfa.apify-actors';
 export const APIFY_DEPLOY_PATH = '/api/gtfa.apify-deploy';
 export const APIFY_UPDATE_PATH = '/api/gtfa.apify-update';
 export const TEST_CONNECTION_PATH = '/api/gtfa.test-connection';
+export const BASELINES_STATUS_PATH = '/api/gtfa.baselines';
+export const BASELINES_SYNC_PATH = '/api/gtfa.baselines-sync';
 
 const TRENDS_URL = 'https://trends.google.com/trends/';
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -44,6 +47,7 @@ export interface RouteSettings {
 
 export interface RouteOverrides {
   dashboard?: DashboardBoundary;
+  baselines?: MekaBaselineBoundary;
   /** Fetch implementation for the Apify REST API in tests. */
   fetch?: typeof globalThis.fetch;
   /** Local transport used by the local test-connection check in tests. */
@@ -523,6 +527,36 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
   };
 
   if (overrides.dashboard) disposers.push(service.fetch.register(dashboardRoute(overrides.dashboard, rejectCrossSite)));
+
+  if (overrides.baselines) {
+    disposers.push(service.fetch.register({
+      path: BASELINES_STATUS_PATH,
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async () => {
+        try {
+          return json(await overrides.baselines!.status());
+        } catch {
+          return json({ error: 'Could not read MEKA baselines status.' }, 500);
+        }
+      },
+    }));
+    disposers.push(service.fetch.register({
+      path: BASELINES_SYNC_PATH,
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async request => {
+        if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+        const rejected = rejectCrossSite(request);
+        if (rejected) return rejected;
+        try {
+          return json(await overrides.baselines!.sync(request.signal));
+        } catch {
+          return json({ ok: false, code: 'network', message: 'Could not reach meka.im to sync baselines.' }, 500);
+        }
+      },
+    }));
+  }
 
   if (overrides.oauth) {
     disposers.push(service.fetch.register({

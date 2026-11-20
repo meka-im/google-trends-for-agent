@@ -1,6 +1,6 @@
 import { nullTraffic, type CalibrationPoint } from './calibration.js';
 import { supportsVolumeWindow, type TrafficEstimate, type VolumeReason, type VolumeSeries } from './volume-types.js';
-import { MEKA_BASELINE_VERSION, mekaAnchorsFor } from './dsh-baselines.js';
+import { currentMekaBaselineVersion, mekaAnchorsFor } from './dsh-baselines.js';
 import { settledPoints, type TrendsFilter } from './filter.js';
 import { markGaps } from './gaps.js';
 import { anchorDailySearches, findAnchor, SHORT_WINDOWS, type Anchor, type Baselines } from './traffic.js';
@@ -146,7 +146,7 @@ export function volumeCalibration(series: VolumeSeries[], reason: VolumeReason =
   return {
     status: count === 0 ? 'unavailable' : count === series.length ? 'ok' : 'partial',
     reasonCode: count ? 'ok' : series[0]?.reason ?? reason,
-    catalogVersion: MEKA_BASELINE_VERSION,
+    catalogVersion: currentMekaBaselineVersion(),
     settledOnly: true,
     anchor,
     series,

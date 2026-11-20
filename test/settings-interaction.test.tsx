@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigPage, ConnectionTestResults, EN, type ConfigPageProps } from '../src/client/index.js';
 import { CONNECTION_FILTER, CONNECTION_KEYWORDS } from '../src/connection-check.js';
+import { setActiveMekaBaselines, summarizeMekaCatalog } from '../src/dsh-baselines.js';
 import { regionLabel } from '../src/options.js';
 
 type PathOp = { op: 'set' | 'unset'; path: string[]; value?: unknown };
@@ -64,6 +65,18 @@ function api() {
       const result = diagnostic();
       return Response.json({ ...result, egress, network: { ...result.network, egress } });
     }
+    if (path === 'api/gtfa.baselines') {
+      return Response.json(summarizeMekaCatalog());
+    }
+    if (path === 'api/gtfa.baselines-sync') {
+      const status = {
+        ...summarizeMekaCatalog(),
+        source: 'synced',
+        version: '2026-11-20',
+        syncedAt: '2026-11-20T07:30:00.000Z',
+      };
+      return Response.json({ ok: true, updated: true, status });
+    }
     throw new Error(`Unexpected request in interaction test: ${path}`);
   });
   vi.stubGlobal('fetch', fetch);
@@ -102,6 +115,7 @@ const tick = async (ms: number) => { await act(async () => { await vi.advanceTim
 
 afterEach(() => {
   cleanup();
+  setActiveMekaBaselines(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -497,6 +511,17 @@ describe('baseline editor', () => {
     expect(screen.queryByRole('spinbutton', { name: `${t('anchorDaily')} gpts` })).toBeNull();
     expect(button('save').disabled).toBe(true);
     expect(backend.saved().baselines).toBeUndefined();
+    expect(backend.mutate).not.toHaveBeenCalled();
+  });
+
+  it('syncs MEKA baselines manually on click and updates status without touching saved config', async () => {
+    const backend = host(); const network = api(); const user = userEvent.setup();
+    render(<ConfigPage ctx={backend.ctx} t={t} initialAdvancedOpen />);
+    await waitFor(() => expect(network.count('api/gtfa.baselines')).toBe(1));
+    await user.click(button('baselineSync'));
+    expect(await screen.findByText('Updated to MEKA baselines 2026-11-20 (59 anchors).')).toBeTruthy();
+    expect(screen.getByText('Synced · 2026-11-20')).toBeTruthy();
+    expect(network.count('api/gtfa.baselines-sync')).toBe(1);
     expect(backend.mutate).not.toHaveBeenCalled();
   });
 

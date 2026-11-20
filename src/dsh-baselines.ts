@@ -1,6 +1,26 @@
 export const MEKA_BASELINES_URL = "https://meka.im/data/google-trends-anchors/baselines/v1/index.json";
 export const MEKA_BASELINE_VERSION = "2026-11-19";
 
+export interface MekaAnchor {
+  geo: string;
+  term: string;
+  dailySearches: number;
+  dailyOnly: boolean;
+}
+
+export interface MekaCatalogState {
+  source: 'bundled' | 'synced';
+  version: string;
+  syncedAt: string | null;
+  anchors: readonly MekaAnchor[];
+}
+
+export interface MekaBaselineStatus extends MekaCatalogState {
+  bundledVersion: string;
+  regions: readonly string[];
+  count: number;
+}
+
 // Snapshot of the published v1 catalog. The optional flag marks anchors that
 // failed the 7-day hourly quality check and require daily or coarser buckets.
 const rows: readonly (readonly [geo: string, term: string, dailySearches: number, dailyOnly?: true])[] = [
@@ -65,15 +85,126 @@ const rows: readonly (readonly [geo: string, term: string, dailySearches: number
   ["JP", "youtube", 1500000],
 ];
 
-export const MEKA_BASELINES = rows.map(([geo, term, dailySearches, dailyOnly]) => ({ geo, term, dailySearches, dailyOnly: dailyOnly === true }));
+export const MEKA_BASELINES: readonly MekaAnchor[] = rows.map(([geo, term, dailySearches, dailyOnly]) => ({
+  geo, term, dailySearches, dailyOnly: dailyOnly === true,
+}));
 
-export function mekaAnchorsFor(geo: string, time?: string) {
-  const region = geo.trim().toUpperCase();
-  const daily = time === 'today 1-m' || time === 'today 3-m' || time === 'today 12-m';
-  return MEKA_BASELINES.filter(anchor => anchor.geo === region && (time === undefined || daily || !anchor.dailyOnly));
+const BUNDLED_CATALOG: MekaCatalogState = {
+  source: 'bundled',
+  version: MEKA_BASELINE_VERSION,
+  syncedAt: null,
+  anchors: MEKA_BASELINES,
+};
+
+let activeCatalog: MekaCatalogState = BUNDLED_CATALOG;
+
+export function getActiveMekaBaselines(): MekaCatalogState {
+  return activeCatalog;
 }
 
-export function mekaDefaultAnchor(geo: string, time = 'now 7-d') {
-  const anchors = mekaAnchorsFor(geo, time);
+export function currentMekaBaselineVersion(): string {
+  return activeCatalog.version;
+}
+
+export function setActiveMekaBaselines(next: MekaCatalogState | null): MekaCatalogState {
+  activeCatalog = next && next.anchors.length > 0 ? {
+    source: next.source,
+    version: next.version,
+    syncedAt: next.syncedAt,
+    anchors: [...next.anchors],
+  } : BUNDLED_CATALOG;
+  return activeCatalog;
+}
+
+export function summarizeMekaCatalog(state: MekaCatalogState = activeCatalog): MekaBaselineStatus {
+  const seen = new Set<string>();
+  const regions: string[] = [];
+  for (const anchor of state.anchors) {
+    if (!seen.has(anchor.geo)) {
+      seen.add(anchor.geo);
+      regions.push(anchor.geo);
+    }
+  }
+  return {
+    source: state.source,
+    version: state.version,
+    bundledVersion: MEKA_BASELINE_VERSION,
+    syncedAt: state.syncedAt,
+    anchors: state.anchors,
+    regions,
+    count: state.anchors.length,
+  };
+}
+
+/** Validate and flatten the published MEKA v1 baselines index JSON. */
+export function parseMekaBaselinesJson(raw: unknown): { version: string; anchors: MekaAnchor[] } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('MEKA baselines payload must be a JSON object.');
+  }
+  const doc = raw as Record<string, unknown>;
+  if (doc.schemaVersion !== 1) {
+    throw new Error(`Unsupported MEKA baselines schemaVersion: ${String(doc.schemaVersion)}`);
+  }
+  const version = typeof doc.version === 'string' ? doc.version.trim() : '';
+  if (!version || version.length > 64) {
+    throw new Error('MEKA baselines version must be a non-empty string.');
+  }
+  if (!Array.isArray(doc.regions) || doc.regions.length === 0) {
+    throw new Error('MEKA baselines regions must be a non-empty array.');
+  }
+  const anchors: MekaAnchor[] = [];
+  const seen = new Set<string>();
+  for (const regionValue of doc.regions) {
+    if (!regionValue || typeof regionValue !== 'object' || Array.isArray(regionValue)) {
+      throw new Error('MEKA baselines region entry must be an object.');
+    }
+    const region = regionValue as Record<string, unknown>;
+    if (typeof region.geo !== 'string') {
+      throw new Error('MEKA baselines region geo must be a string.');
+    }
+    const geo = region.geo.trim().toUpperCase();
+    if (geo !== '' && !/^[A-Z]{2}$/.test(geo)) {
+      throw new Error(`Invalid MEKA baselines region geo: ${geo}`);
+    }
+    if (!Array.isArray(region.anchors)) {
+      throw new Error(`MEKA baselines anchors for "${geo || 'Worldwide'}" must be an array.`);
+    }
+    for (const itemValue of region.anchors) {
+      if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
+      const item = itemValue as Record<string, unknown>;
+      const term = typeof item.term === 'string' ? item.term.trim() : '';
+      const dailySearches = typeof item.dailySearches === 'number' && Number.isFinite(item.dailySearches) && item.dailySearches > 0
+        ? Math.round(item.dailySearches) : null;
+      if (!term || term.length > 160 || dailySearches === null) continue;
+      const key = `${geo}\u0000${term.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const validation = item.validation && typeof item.validation === 'object' && !Array.isArray(item.validation)
+        ? (item.validation as Record<string, unknown>)['7d'] : undefined;
+      const v7 = validation && typeof validation === 'object' && !Array.isArray(validation)
+        ? validation as Record<string, unknown> : undefined;
+      const points = typeof v7?.pointCount === 'number' ? v7.pointCount : 0;
+      const nonzero = typeof v7?.nonzeroPoints === 'number' ? v7.nonzeroPoints : 0;
+      const dailyOnly = item.dailyOnly === true || !(points > 0) || (nonzero / points) < 0.8;
+      anchors.push({ geo, term, dailySearches, dailyOnly });
+      if (anchors.length > 2000) {
+        throw new Error('MEKA baselines payload exceeds maximum anchor limit.');
+      }
+    }
+  }
+  if (anchors.length === 0) {
+    throw new Error('MEKA baselines payload contained no valid anchors.');
+  }
+  return { version, anchors };
+}
+
+export function mekaAnchorsFor(geo: string, time?: string, catalog: readonly MekaAnchor[] = activeCatalog.anchors) {
+  const region = geo.trim().toUpperCase();
+  const daily = time === 'today 1-m' || time === 'today 3-m' || time === 'today 12-m';
+  return catalog.filter(anchor => anchor.geo === region && (time === undefined || daily || !anchor.dailyOnly));
+}
+
+export function mekaDefaultAnchor(geo: string, time = 'now 7-d', catalog: readonly MekaAnchor[] = activeCatalog.anchors) {
+  const anchors = mekaAnchorsFor(geo, time, catalog);
   return anchors.at(Math.floor((anchors.length - 1) / 2));
 }
