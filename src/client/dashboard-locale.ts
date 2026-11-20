@@ -60,6 +60,7 @@ export const DASHBOARD_EN: Record<string, string> = {
   dashTime1h: 'Past hour', dashTime4h: 'Past 4 hours', dashTime24h: 'Past 24 hours', dashTime7d: 'Past week',
   dashTime1m: 'Past month', dashTime3m: 'Past 3 months', dashTime1y: 'Past year', dashTime5y: 'Past 5 years', dashTimeAll: 'All time',
   dashCopySummary: 'Copy', dashCopiedSummary: 'Copied', dashExportCsv: 'CSV', dashAddCompare: 'Add to comparison', dashTryExamples: 'Try', dashVolumeEstimate: 'Est. daily',
+  dashRelated: 'Related queries', dashPopularShort: 'Top', dashRisingShort: 'Rising',
 };
 export const DASHBOARD_ZH: Record<string, string> = {
   dashPhaseRequesting: '正在请求趋势数据', dashPhaseStarting: '正在启动 Actor', dashPhaseQueued: '正在等待 Actor 排队', dashPhaseRunning: 'Actor 正在获取数据', dashPhaseReading: '正在读取查询结果', dashPhaseCache: '正在读取保存的结果', dashPhaseCalibrating: '正在计算估算搜索量', dashPhaseSaving: '正在保存结果',
@@ -120,4 +121,5 @@ export const DASHBOARD_ZH: Record<string, string> = {
   dashTime1h: '过去 1 小时', dashTime4h: '过去 4 小时', dashTime24h: '过去 24 小时', dashTime7d: '过去一周',
   dashTime1m: '过去一个月', dashTime3m: '过去 3 个月', dashTime1y: '过去 1 年', dashTime5y: '过去 5 年', dashTimeAll: '全部时间',
   dashCopySummary: '复制摘要', dashCopiedSummary: '已复制', dashExportCsv: '导出 CSV', dashAddCompare: '加入对比', dashTryExamples: '试试', dashVolumeEstimate: '日均估算',
+  dashRelated: '相关查询', dashPopularShort: '热门', dashRisingShort: '上升',
 };

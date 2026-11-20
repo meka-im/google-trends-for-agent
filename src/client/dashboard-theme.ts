@@ -301,24 +301,29 @@ export const DASHBOARD_CSS = `
 .gd-warnings p{margin-top:8px;overflow-wrap:anywhere}
 
 /* Compact Related Queries Card */
-.gd-related-card{padding:18px}
-.gd-related-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.gd-related-card{padding:16px 16px 14px}
+.gd-related-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px 10px}
 .gd-related-head h3{padding:0;font-size:13.5px;font-weight:650}
-.gd-related-tabs{display:inline-flex;padding:2px;gap:2px;border-radius:7px;background:var(--gtfa-soft)}
-.gd-related-tabs button{border:0;background:transparent;padding:3px 9px;border-radius:5px;font-size:11.5px;font-weight:500;color:var(--gtfa-muted)}
+.gd-related-tabs{display:inline-flex;padding:2px;gap:2px;border-radius:8px;background:var(--gtfa-soft)}
+.gd-related-tabs button{border:0;background:transparent;padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:500;color:var(--gtfa-muted);transition:color .14s,background .14s}
 .gd-related-tabs button[aria-selected=true]{background:var(--gtfa-surface);color:var(--gtfa-ink);font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.06)}
-.gd-related-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:7px;font-size:12px}
-.gd-related-row+.gd-related-row{border-top:1px solid color-mix(in srgb,var(--gtfa-line) 55%,transparent)}
-.gd-related-term{flex:1;min-width:0;border:0;background:none;padding:2px 4px;text-align:left;color:var(--gtfa-ink);border-radius:5px;display:flex}
+.gd-related-list{display:flex;flex-direction:column;gap:2px}
+.gd-related-row{position:relative;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;font-size:12.5px;overflow:hidden;transition:background .12s}
+.gd-related-row:hover{background:var(--gtfa-hover)}
+.gd-related-bar{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--gtfa-accent) 5.5%,transparent);pointer-events:none;border-radius:8px}
+.gd-related-rank{position:relative;z-index:1;width:16px;font-size:11px;font-weight:500;color:var(--gtfa-quiet);text-align:center;font-variant-numeric:tabular-nums;flex:none}
+.gd-related-term{position:relative;z-index:1;flex:1;min-width:0;border:0;background:none;padding:0;text-align:left;color:var(--gtfa-ink);font-weight:500;display:flex}
 .gd-related-term>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gd-related-term:not(:disabled):hover{color:var(--gtfa-accent);background:var(--gtfa-hover)}
-.gd-related-row>strong{font-weight:600;color:var(--gtfa-muted);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px}
+.gd-related-row:hover .gd-related-term:not(:disabled){color:var(--gtfa-accent)}
+.gd-related-row>strong{position:relative;z-index:1;font-weight:600;color:var(--gtfa-muted);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px}
+.gd-related-row>strong.rising{color:var(--gtfa-green)}
 .gd-related-add{
-  width:22px;height:22px;padding:0;border:1px solid var(--gtfa-line);border-radius:6px;
-  background:var(--gtfa-surface);color:var(--gtfa-muted);display:inline-flex;align-items:center;justify-content:center;flex:none;
-  font-size:13px;line-height:1;
+  position:relative;z-index:1;width:22px;height:22px;padding:0;border:0;border-radius:6px;
+  background:transparent;color:var(--gtfa-quiet);display:inline-flex;align-items:center;justify-content:center;flex:none;
+  opacity:.35;transition:opacity .12s,background .12s,color .12s;
 }
-.gd-related-add:not(:disabled):hover{border-color:var(--gtfa-accent);color:var(--gtfa-accent);background:var(--gtfa-accent-soft)}
+.gd-related-row:hover .gd-related-add,.gd-related-add:focus-visible{opacity:1;color:var(--gtfa-muted)}
+.gd-related-add:not(:disabled):hover{color:var(--gtfa-accent);background:var(--gtfa-accent-soft)}
 .gd-related{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
 .gd-related .gd-card{padding-bottom:10px}
 .gd-related p{display:flex;justify-content:space-between;gap:16px;padding:8px 20px;font-size:12px;border-top:1px solid var(--gtfa-soft)}

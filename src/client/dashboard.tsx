@@ -485,21 +485,29 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy, currentTe
         </div>
         {hasRelated ? <div className="gd-card gd-related-card">
           <div className="gd-related-head">
-            <h3>{t(relatedTab === 'popular' ? 'dashPopular' : 'dashRising')}</h3>
+            <h3>{t('dashRelated')}</h3>
             <div className="gd-related-tabs" role="tablist">
-              {(['popular', 'rising'] as const).map(key => <button key={key} type="button" role="tab" aria-selected={relatedTab === key} onClick={() => setRelatedTab(key)}>{t(key === 'popular' ? 'dashPopular' : 'dashRising')}</button>)}
+              {(['popular', 'rising'] as const).map(key => <button key={key} type="button" role="tab" aria-selected={relatedTab === key} onClick={() => setRelatedTab(key)}>{t(key === 'popular' ? 'dashPopularShort' : 'dashRisingShort')}</button>)}
             </div>
           </div>
-          {array(tables[relatedTab]).slice(0, 8).map((row, i) => {
-            const term = String(row.query ?? '');
-            const canAdd = Boolean(term && onAddCompare && currentTerms.length < 5 && !currentTerms.some(item => item.toLowerCase() === term.toLowerCase()));
-            return <div className="gd-related-row" key={i}>
-              <button type="button" className="gd-related-term" disabled={busy || !term} onClick={() => term && onRunRelated?.(term)}><span>{term}</span></button>
-              <strong>{String(row.formattedValue ?? row.value ?? '—')}</strong>
-              {canAdd ? <button type="button" className="gd-related-add" disabled={busy} aria-label={`${t('dashAddCompare')} ${term}`} title={t('dashAddCompare')} onClick={() => onAddCompare?.(term)}>+</button> : null}
-            </div>;
-          })}
-          {!array(tables[relatedTab]).length ? <p className="gd-muted" style={{ fontSize: 12 }}>{t('dashNoRelated')}</p> : null}
+          <div className="gd-related-list">
+            {array(tables[relatedTab]).slice(0, 8).map((row, i) => {
+              const term = String(row.query ?? '');
+              const rawVal = number(row.value);
+              const barPct = relatedTab === 'popular' && rawVal !== null ? Math.max(4, Math.min(100, rawVal)) : 0;
+              const canAdd = Boolean(term && onAddCompare && currentTerms.length < 5 && !currentTerms.some(item => item.toLowerCase() === term.toLowerCase()));
+              return <div className="gd-related-row" key={i}>
+                {barPct > 0 ? <i className="gd-related-bar" style={{ width: `${barPct}%` }} aria-hidden="true" /> : null}
+                <span className="gd-related-rank" aria-hidden="true">{i + 1}</span>
+                <button type="button" className="gd-related-term" disabled={busy || !term} onClick={() => term && onRunRelated?.(term)}><span>{term}</span></button>
+                <strong className={relatedTab === 'rising' ? 'rising' : undefined}>{String(row.formattedValue ?? row.value ?? '—')}</strong>
+                {canAdd ? <button type="button" className="gd-related-add" disabled={busy} aria-label={`${t('dashAddCompare')} ${term}`} title={t('dashAddCompare')} onClick={() => onAddCompare?.(term)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                </button> : null}
+              </div>;
+            })}
+          </div>
+          {!array(tables[relatedTab]).length ? <p className="gd-muted" style={{ fontSize: 12, padding: '8px 4px' }}>{t('dashNoRelated')}</p> : null}
         </div> : null}
       </aside>
     </div>
