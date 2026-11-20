@@ -825,53 +825,53 @@ export const ZH: Record<string, string> = {
 };
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'grid', gap: 18, width: '100%', minWidth: 0, maxWidth: 920, padding: '8px 0 24px' },
-  section: { display: 'grid', gap: 18, padding: 24, border: '1px solid var(--gtfa-line)', borderRadius: 16, background: 'var(--gtfa-surface)' },
-  sectionHeader: { display: 'grid', gap: 4 },
-  sectionTitle: { margin: 0, fontSize: 15, lineHeight: 1.5, fontWeight: 650 },
-  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
+  page: { display: 'grid', gap: 14, width: '100%', minWidth: 0, maxWidth: 820, padding: '4px 0 24px' },
+  section: { display: 'grid', gap: 16, padding: 20, border: '1px solid var(--gtfa-line)', borderRadius: 14, background: 'var(--gtfa-surface)', boxShadow: '0 1px 2px rgba(15,23,42,.03)' },
+  sectionHeader: { display: 'grid', gap: 2 },
+  sectionTitle: { margin: 0, fontSize: 14, lineHeight: 1.45, fontWeight: 650, letterSpacing: '-.015em' },
+  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--gtfa-muted)' },
   field: { display: 'grid', minWidth: 0 },
-  label: { marginBottom: 8, fontSize: 12, fontWeight: 550 },
-  hint: { margin: '6px 0 0', fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
-  fieldError: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
-  warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.6, color: 'var(--dsw-alias-state-warning-primary, #a87921)' },
+  label: { marginBottom: 6, fontSize: 12, fontWeight: 550 },
+  hint: { margin: '5px 0 0', fontSize: 11, lineHeight: 1.55, color: 'var(--gtfa-muted)' },
+  fieldError: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--dsw-alias-state-error-primary, #dc2626)' },
+  warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--dsw-alias-state-warning-primary, #d97706)' },
   input: { boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 36, padding: '7px 11px', border: '1px solid var(--gtfa-line)',
-    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13 },
-  segment: { position: 'relative', display: 'grid', gap: 12, padding: '14px 16px', minHeight: 102, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
-    borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 13, cursor: 'pointer' },
-  segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)', boxShadow: 'inset 0 0 0 .5px var(--gtfa-accent)' },
-  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, minHeight: 32, fontSize: 13 },
-  switch: { boxSizing: 'border-box', flex: '0 0 auto', width: 34, height: 20, padding: 2, border: 0, borderRadius: 12,
-    background: 'var(--gtfa-hover)', cursor: 'pointer' },
+    borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5 },
+  segment: { position: 'relative', display: 'grid', alignContent: 'start', gap: 8, padding: '12px 14px', minHeight: 78, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
+    borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5, cursor: 'pointer' },
+  segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)' },
+  switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 32, fontSize: 12.5 },
+  switch: { boxSizing: 'border-box', flex: '0 0 auto', width: 36, height: 20, padding: 2, border: 0, borderRadius: 12,
+    background: 'color-mix(in srgb,var(--gtfa-ink) 18%,var(--gtfa-surface))', cursor: 'pointer', transition: 'background 150ms ease' },
   switchOn: { background: 'var(--gtfa-accent)' },
-  switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.08)', transition: 'transform 120ms ease' },
-  switchThumbOn: { transform: 'translateX(14px)' },
-  readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '7px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
+  switchThumb: { display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(15,23,42,.2)', transition: 'transform 150ms cubic-bezier(.22,1,.36,1)' },
+  switchThumbOn: { transform: 'translateX(16px)' },
+  readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '4px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
     fontSize: 12, overflowWrap: 'anywhere' },
-  saveBar: { position: 'sticky', bottom: 12, zIndex: 2, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-    marginTop: 0, marginBottom: 12, padding: '14px 18px', border: '1px solid var(--gtfa-save-border)', borderRadius: 12,
-    background: 'var(--gtfa-save-surface)', boxShadow: 'var(--gtfa-save-shadow)' },
-  button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '7px 13px', minHeight: 34,
-    border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, cursor: 'pointer' },
-  buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
-    border: '1px solid var(--gtfa-line)', borderRadius: 7, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 11, cursor: 'pointer' },
+  saveBar: { position: 'sticky', bottom: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+    marginTop: 2, marginBottom: 8, padding: '11px 16px', border: '1px solid var(--gtfa-line)', borderRadius: 12,
+    background: 'color-mix(in srgb,var(--gtfa-surface) 92%,transparent)', backdropFilter: 'blur(10px)' },
+  button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', minHeight: 32,
+    border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, fontWeight: 550, cursor: 'pointer' },
+  buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px', minHeight: 28,
+    border: '1px solid var(--gtfa-line)', borderRadius: 7, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 11.5, fontWeight: 500, cursor: 'pointer' },
   primary: { background: 'var(--gtfa-accent)', borderColor: 'var(--gtfa-accent)', color: '#fff' },
-  pill: { display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 5, fontSize: 10, fontWeight: 500,
+  pill: { display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 550,
     color: 'var(--gtfa-green)', background: 'var(--gtfa-green-soft)' },
   status: { margin: 0, fontSize: 13 },
-  error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #c55151)' },
-  summary: { display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px', cursor: 'pointer' },
-  connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)' },
+  error: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-state-error-primary, #dc2626)' },
+  summary: { display: 'flex', alignItems: 'center', gap: 10, padding: '15px 20px', cursor: 'pointer' },
+  connectionPanel: { border: '1px solid var(--gtfa-line)', borderRadius: 12, background: 'var(--gtfa-soft)', overflow: 'hidden' },
   signupPrimary: { color: 'var(--gtfa-accent)', fontWeight: 550, textDecoration: 'none' },
   signupSecondary: { color: 'var(--gtfa-muted)', textDecoration: 'underline' },
   oauthCard: { display: 'grid', gap: 0 },
   oauthActions: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  oauthCode: { display: 'inline-block', padding: '7px 11px', borderRadius: 7, border: '1px solid var(--gtfa-line)',
-    background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 17, fontWeight: 600, letterSpacing: '.06em', overflowWrap: 'anywhere' },
-  oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 34, padding: '7px 13px',
+  oauthCode: { display: 'inline-block', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--gtfa-line)',
+    background: 'var(--gtfa-surface)', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)', fontSize: 16, fontWeight: 650, letterSpacing: '.06em', overflowWrap: 'anywhere' },
+  oauthLink: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 32, padding: '6px 12px',
     borderRadius: 8, background: 'var(--gtfa-accent)', color: '#fff', fontSize: 12, fontWeight: 550, textDecoration: 'none' },
-  usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gtfa-muted)' },
-  testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.6 },
+  usageMeta: { margin: 0, fontSize: 11, lineHeight: 1.55, color: 'var(--gtfa-muted)' },
+  testLine: { margin: '8px 0 0', fontSize: 12, lineHeight: 1.55 },
 };
 
 const TOLERANCE_OPTIONS = [
@@ -1936,12 +1936,12 @@ function Segmented<V extends string>({ label, value, options, onChange, disabled
         disabled={disabled} style={{ ...styles.segment, ...(active ? styles.segmentActive : null) }}
         onClick={() => { if (!active) onChange(option.value); }}>
         <span className="gtfa-route-card-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span className="gtfa-route-icon" style={{ color: active ? 'var(--gtfa-accent)' : 'var(--gtfa-muted)' }}><Icon name={option.icon ?? 'cloud'} size={22} /></span>
+          <span className="gtfa-route-icon" style={{ color: active ? 'var(--gtfa-accent)' : 'var(--gtfa-muted)' }}><Icon name={option.icon ?? 'cloud'} size={17} /></span>
           <span className="gtfa-route-radio" aria-hidden="true" />
         </span>
         <span className="gtfa-route-card-body">
           <span className="gtfa-route-title" style={{ fontWeight: 600 }}>{option.label}{option.recommended ? <span className="gtfa-recommended">{option.recommended}</span> : null}</span>
-          {option.description ? <span style={{ ...styles.hint, display: 'block', marginTop: 4 }}>{option.description}</span> : null}
+          {option.description ? <span style={{ ...styles.hint, display: 'block', marginTop: 3 }}>{option.description}</span> : null}
         </span>
       </button>;
     })}
@@ -1977,7 +1977,7 @@ function Toggle({ label, hint, checked, onChange, disabled }: {
 
 function SectionHeader({ title, description, icon }: { title: string; description: string; icon?: string }) {
   return <div className="gtfa-section-heading">
-    {icon ? <span className="gtfa-section-icon"><Icon name={icon} size={18} /></span> : null}
+    {icon ? <span className="gtfa-section-icon"><Icon name={icon} size={15} /></span> : null}
     <div style={styles.sectionHeader}><h3 style={styles.sectionTitle}>{title}</h3>
       <p style={styles.sectionDescription}>{description}</p></div>
   </div>;
@@ -2505,7 +2505,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
             connectionAction={testButton} connectionDescription={t(ownEgress ? 'oauthActiveOwn' : 'oauthActivePublic')}
             onStart={() => { void startOAuth(); }} onCancel={() => { void cancelOAuth(); }}
             onLogout={() => { void logoutOAuth(); }} onRetry={retryOAuth} />
-          {!oauthConnected && (tokenSet || usage.status === 'ready' || draft.token.trim()) ? <div style={{ padding: '0 18px 14px' }}>{testButton}</div> : null}
+          {!oauthConnected && (tokenSet || usage.status === 'ready' || draft.token.trim()) ? <div style={{ padding: '0 16px 14px' }}>{testButton}</div> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? null :
             <ApifyUsageCard state={usage} t={t} locale={intlLocale}
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
@@ -2557,8 +2557,8 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     <details className="gtfa-advanced" open={advancedOpen}
       onToggle={event => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }}>
       <summary style={styles.summary}>
-        <span className="gtfa-section-icon"><Icon name="sliders" size={18} /></span>
-        <span style={{ display: 'grid', gap: 4 }}><span style={{ fontSize: 13, fontWeight: 600 }}>{t('advanced')}</span>
+        <span className="gtfa-section-icon"><Icon name="sliders" size={15} /></span>
+        <span style={{ display: 'grid', gap: 2 }}><span style={styles.sectionTitle}>{t('advanced')}</span>
           <span style={styles.sectionDescription}>{t('advancedDescription')}</span></span>
         <span className="gtfa-advanced-chevron" style={{ marginLeft: 'auto', color: 'var(--gtfa-quiet)' }}><Icon name="chevron" size={15} /></span>
       </summary>
@@ -2681,7 +2681,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       </div>
     </details>
 
-    <div className="gtfa-save-bar" style={styles.saveBar}>
+    <div className={`gtfa-save-bar${dirty || blocking || failure ? ' active' : ''}`} style={styles.saveBar}>
       <span className={`gtfa-save-state${dirty ? ' dirty' : ''}`} role="status" aria-live="polite">
         {dirty ? <span aria-hidden="true">●</span> : <Icon name="check" size={12} />}
         {dirty ? t('unsaved') : notice ?? t('allSaved')}

@@ -93,7 +93,7 @@ export function ChoicePicker({ label, hint, icon, placeholder, emptyText, option
     <div ref={root} className={`gtfa-choice${visible ? ' open' : ''}${disabled ? ' disabled' : ''}`}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
       <div className="gtfa-choice-control">
-        {icon ? <span className="gtfa-choice-icon"><Icon name={icon} size={17} /></span> : null}
+        {icon ? <span className="gtfa-choice-icon"><Icon name={icon} size={14} /></span> : null}
         <input ref={input} id={`${id}-input`} role="combobox" type="text" autoComplete="off" spellCheck={false}
           aria-expanded={visible} aria-autocomplete={searchable ? 'list' : 'none'} aria-haspopup="listbox"
           aria-controls={visible ? `${id}-list` : undefined} aria-describedby={hint ? `${id}-hint` : undefined}
