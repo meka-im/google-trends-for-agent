@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { VolumeBandPoint } from '../volume-types.js';
 
 interface ChartSeries {
@@ -31,9 +32,10 @@ function segments<T>(points: (T | null)[]): T[][] {
 
 const tickText = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
 
-export function TrendChart({ series, traffic, label, empty, logLabel }: {
-  series: ChartSeries[]; traffic: boolean; label: string; empty: string; logLabel: string;
+export function TrendChart({ series, traffic, label, empty, logLabel, perDay = 'searches/day' }: {
+  series: ChartSeries[]; traffic: boolean; label: string; empty: string; logLabel: string; perDay?: string;
 }) {
+  const [hover, setHover] = useState<{ stamp: number; left: number } | null>(null);
   const curves = series.map(row => ({
     ...row,
     lines: segments<LineSample>(row.points.map(point => point.value !== null && validStamp(point.t)
@@ -65,7 +67,15 @@ export function TrendChart({ series, traffic, label, empty, logLabel }: {
   const dateText = (stamp: number) => days < 2 ? new Date(stamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
     : new Date(stamp).toLocaleDateString(undefined, days > 366 ? { year: 'numeric', month: 'short' } : { month: 'short', day: 'numeric' });
 
-  return <svg className="gd-trend-chart" viewBox="0 0 670 250" role="img" aria-label={logarithmic ? label + ' · ' + logLabel : label}>
+  const buckets = [...new Set(series.flatMap(row => [...row.points, ...(row.range?.points ?? [])]
+    .map(point => Date.parse(point.t)).filter(stamp => stamp >= start && stamp <= end)))];
+  const active = hover && buckets.includes(hover.stamp) ? hover : null;
+  const readings = active ? curves.map(row => ({
+    term: row.term, color: row.color,
+    value: row.lines.flat().find(point => point.stamp === active.stamp)?.value,
+    band: row.bands.flat().find(point => point.stamp === active.stamp),
+  })) : [];
+  return <div className="gd-chart-wrap"><svg className="gd-trend-chart" viewBox="0 0 670 250" role="img" aria-label={logarithmic ? label + ' · ' + logLabel : label}>
     {logarithmic ? <text x="50" y="12">{logLabel}</text> : null}
     {ticks.map(value => <g key={value}>
       <line x1="50" x2="635" y1={y(value)} y2={y(value)} stroke="var(--gtfa-line)" />
@@ -86,5 +96,30 @@ export function TrendChart({ series, traffic, label, empty, logLabel }: {
     </g>)}
     {xTicks.map(fraction => <text key={fraction} x={50 + 585 * fraction} y="235"
       textAnchor={fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle'}>{dateText(start + fraction * (end - start))}</text>)}
-  </svg>;
+    {active && <g pointerEvents="none">
+      <line x1={x(active.stamp)} x2={x(active.stamp)} y1="25" y2="205" stroke="var(--gtfa-muted)" strokeDasharray="3 3" />
+      {readings.map(row => row.value != null && <circle key={row.term} cx={x(active.stamp)} cy={y(row.value)}
+        r="3.5" fill={row.color} stroke="var(--gtfa-surface)" strokeWidth="1.5" />)}
+    </g>}
+    <rect x="50" y="25" width="585" height="180" fill="transparent" cursor="crosshair"
+      onPointerLeave={() => setHover(null)} onPointerMove={event => {
+        const plot = event.currentTarget.getBoundingClientRect();
+        const frame = event.currentTarget.ownerSVGElement!.getBoundingClientRect();
+        const target = start + (event.clientX - plot.left) / plot.width * (end - start);
+        const stamp = buckets.reduce((a, b) => Math.abs(a - target) <= Math.abs(b - target) ? a : b);
+        const left = (plot.left - frame.left + plot.width * (stamp - start) / (end - start || 1)) / frame.width * 100;
+        setHover(previous => previous?.stamp === stamp && previous.left === left ? previous : { stamp, left });
+      }} />
+  </svg>
+    {active && <div className="gd-chart-tooltip" role="tooltip" style={active.left < 50
+      ? { left: `calc(${active.left}% + 8px)` } : { right: `calc(${100 - active.left}% + 8px)` }}>
+      <time>{new Date(active.stamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time>
+      {readings.map(({ term, color, value, band }) => {
+        const reading = value != null ? value.toLocaleString()
+          : band ? band.low.toLocaleString() + '–' + band.high.toLocaleString() : null;
+        return <div key={term}><i style={{ background: color }} /><span>{term}</span>
+          <strong>{reading === null ? '—' : traffic ? '≈ ' + reading + ' ' + perDay : reading}</strong></div>;
+      })}
+    </div>}
+  </div>;
 }

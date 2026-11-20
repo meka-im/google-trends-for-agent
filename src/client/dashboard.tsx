@@ -336,7 +336,7 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
             <button type="button" key={value} aria-pressed={currentMetric === value} disabled={value === 'traffic' && !hasTraffic}
               onClick={() => { focusTerm(null); setMetric(value); }}>{t(value === 'interest' ? 'dashInterest' : 'dashTraffic')}</button>
           )}</div>}</div>
-        <TrendChart series={visible} traffic={currentMetric === 'traffic'}
+        <TrendChart perDay={t('dashPerDay')} series={visible} traffic={currentMetric === 'traffic'}
           label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
         {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?
           <p className="gd-chart-note">{t('dashWeakComparison')}</p> : null}
