@@ -70,8 +70,6 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
     try {
       output = await compare(keywords.map(key => batch.find(t => normalizeTerm(t.keyword) === key)?.keyword ?? anchor!.term));
     } catch (error) {
-      // A transport exception can leave Actor creation ambiguous. Retry only
-      // when a completed query explicitly reports an upstream network failure.
       if (!(error instanceof GTrendsError)) throw error;
       info.error = state.error = error.code;
       break;
@@ -81,7 +79,6 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
     if (!output.ok || output.status === 'blocked') {
       const code = String(row(output.error).code ?? 'NETWORK_ERROR');
       info.error = code;
-      if (round === 1 && code === 'NETWORK_ERROR' && typeof meta.actorRunId === 'string' && output.status !== 'blocked') continue;
       state.error = code;
       break;
     }

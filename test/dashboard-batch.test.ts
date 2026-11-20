@@ -24,19 +24,23 @@ describe('on-demand calibration',()=>{
     expect(state.series.find(row=>row.keyword==='Five')).toMatchObject({reason:'samples',traffic:{average:null}});
     expect(state.series.find(row=>row.keyword==='Five')?.below).toBeUndefined();
   });
-  it('retries a completed upstream network error once on the same anchor', async()=>{
+  it('runs another calibration only on a new estimate request after an upstream error', async()=>{
     const one={...saved,record:{...saved.record,terms:['One']}};
     const compare=vi.fn(async(keywords:string[])=>({ok:true,series:keywords.map(keyword=>({keyword,points:points(40)}))} as Record<string,unknown>));
     compare.mockResolvedValueOnce({ok:false,meta:{actorRunId:'one'},error:{code:'NETWORK_ERROR'}});
-    const state=await estimateBatch(one,{geo:'US'},'request',compare,async()=>{},async()=>null);
+    const failed=await estimateBatch(one,{geo:'US'},'request',compare,async()=>{},async()=>null);
+    expect(failed).toMatchObject({complete:false,error:'NETWORK_ERROR',series:[]});
+    expect(compare).toHaveBeenCalledTimes(1);
+    const state=await estimateBatch(one,{geo:'US'},'manual-retry',compare,async()=>{},async()=>null);
+    expect(compare).toHaveBeenCalledTimes(2);
     expect(compare.mock.calls[0]).toEqual(compare.mock.calls[1]);
     expect(state.series[0]?.traffic.average).toBe(1600);
     expect(state.complete).toBe(true);
   });
-  it.each([['NETWORK_ERROR',2],['RATE_LIMITED',1],['BLOCKED',1]])('never invents sample evidence on %s', async(code,n)=>{
+  it.each(['NETWORK_ERROR','RATE_LIMITED','BLOCKED'])('never invents sample evidence on %s', async(code)=>{
     const compare=vi.fn(async()=>({ok:false,meta:{actorRunId:'one'},error:{code}}));
     const state=await estimateBatch(saved,{geo:'US'},'request',compare,async()=>{},async()=>null);
-    expect(compare).toHaveBeenCalledTimes(n as number);
+    expect(compare).toHaveBeenCalledTimes(1);
     expect(state).toMatchObject({series:[],complete:false,error:code});
   });
 });
