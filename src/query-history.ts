@@ -11,6 +11,22 @@ export type { QueryRecord, SavedQuery } from './query-history-types.js';
 export const HISTORY_LIMIT = 1000;
 const ID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const object = (v: unknown): Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+const positiveNumber = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+function extractDailyVolume(result: Record<string, unknown>, checks?: readonly VolumeCheck[]): number | null {
+  for (const item of rows(row(result.batchVolume).series)) {
+    const avg = positiveNumber(row(item.traffic).average);
+    if (avg !== null) return avg;
+  }
+  for (const check of [...(checks ?? [])].reverse()) {
+    const avg = positiveNumber(check.estimate?.traffic?.average);
+    if (avg !== null) return avg;
+  }
+  for (const item of rows(row(result.calibration).series)) {
+    const avg = positiveNumber(row(item.traffic).average);
+    if (avg !== null) return avg;
+  }
+  return positiveNumber(row(result.traffic).average);
+}
 const queues = new Map<string, Promise<unknown>>();
 const VOLUME_SUFFIX = '.volume.json';
 const FILE_SUFFIXES = ['.json', '.meta.json', VOLUME_SUFFIX];
@@ -51,7 +67,8 @@ export class QueryHistoryStore {
           if (!includeVolume || !files.has(record.id + VOLUME_SUFFIX)) return record;
           const checks = await this.volumeChecks(record.id);
           const volumeRuns = checks.filter(check => check.actorRunId).map(({ actorRunId, costUsd, createdAt }) => ({ actorRunId, costUsd, createdAt }));
-          return { ...record, volumeRuns: [...(record.volumeRuns ?? []), ...volumeRuns] };
+          const checkedVolume = extractDailyVolume({}, checks);
+          return { ...record, ...(record.dailyVolume == null && checkedVolume !== null ? { dailyVolume: checkedVolume } : {}), volumeRuns: [...(record.volumeRuns ?? []), ...volumeRuns] };
         } catch { return null; }
       })));
     }
@@ -106,8 +123,17 @@ export class QueryHistoryStore {
       await writeJson(join(this.directory, id + '.json'), saved.result);
       const runs = new Map((saved.record.volumeRuns ?? []).map(run => [run.actorRunId, run]));
       for (const run of batch.runs) runs.set(run.actorRunId, run);
+      const dailyVolume = extractDailyVolume(saved.result, saved.volumeChecks);
+      let metaChanged = false;
       if (batch.runs.length) {
         saved.record.volumeRuns = [...runs.values()];
+        metaChanged = true;
+      }
+      if (dailyVolume !== null && saved.record.dailyVolume !== dailyVolume) {
+        saved.record.dailyVolume = dailyVolume;
+        metaChanged = true;
+      }
+      if (metaChanged) {
         await writeJson(join(this.directory, id + '.meta.json'), saved.record);
       }
       return saved;
@@ -146,6 +172,7 @@ export class QueryHistoryStore {
       actorRunId: !cached && typeof meta.actorRunId === 'string' ? meta.actorRunId : null,
       costUsd: options.egress === 'local' || cached ? 0 : typeof meta.actorUsageUsd === 'number' && Number.isFinite(meta.actorUsageUsd) && meta.actorUsageUsd >= 0 ? meta.actorUsageUsd : null,
       errorCode: typeof error.code === 'string' ? error.code : null,
+      ...(() => { const v = extractDailyVolume(result); return v !== null ? { dailyVolume: v } : {}; })(),
     };
     return this.serial(async () => {
       await mkdir(this.directory, { recursive: true, mode: 0o700 });

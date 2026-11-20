@@ -29,6 +29,7 @@ export interface QueryRecord {
   actorRunId: string | null;
   costUsd: number | null;
   errorCode: string | null;
+  dailyVolume?: number | null;
   singleVolume?: { calls: number; hit: 'first' | 'second' | 'none' };
   volumeRuns?: VolumeRun[];
 }

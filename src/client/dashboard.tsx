@@ -15,12 +15,13 @@ import { TrendChart, hasChartPoints } from './trend-chart.js';
 type Translate = (key: string) => string;
 const TIME_KEYS = [['now 1-H', 'dashTime1h'], ['now 4-H', 'dashTime4h'], ['now 1-d', 'dashTime24h'], ['now 7-d', 'dashTime7d'],
   ['today 1-m', 'dashTime1m'], ['today 3-m', 'dashTime3m'], ['today 12-m', 'dashTime1y'], ['today 5-y', 'dashTime5y'], ['all', 'dashTimeAll']] as const;
+const EMPTY_EXAMPLES = ['ChatGPT', 'ChatGPT, Gemini', 'Cursor, Claude, DeepSeek'] as const;
 const colors = ['#2563eb', '#7c3aed', '#0d9488', '#d97706', '#e11d48'];
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const array = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.map(object) : [];
 const duration = (ms: number) => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
-const percent = (part: number, total: number) => total ? `${(part / total * 100).toFixed(1)}%` : '—';
+const percent = (part: number, total: number) => total ? `${(part / total * 100).toFixed(0)}%` : '—';
 const compactVolume = new Intl.NumberFormat(undefined, { notation: 'compact', maximumSignificantDigits: 2 });
 const formatVolume = (value: unknown) => {
   const amount = number(value);
@@ -32,15 +33,19 @@ const egressLabel = (egress: EgressMode, t: Translate) => t(egress === 'local' ?
 const statusKey: Record<string, string> = { ok: 'dashOk', error: 'dashError', blocked: 'dashBlocked', no_data: 'dashNoData', partial: 'dashPartial' };
 const dateText = (raw: string | null, full = false) => raw && Number.isFinite(Date.parse(raw)) ? new Date(raw).toLocaleString(undefined,
   full ? { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const csvCell = (value: unknown) => {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
 
 export function TrendsMark({ size = 28 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#2563eb" /><path d="m14 42 10-13a3 3 0 0 1 4.7 0l5.1 6.6a2.9 2.9 0 0 0 4.9-.5L49 17" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" /><circle cx="49" cy="17" r="4.4" fill="#99f6e4" /></svg>;
 }
 
-function Button({ children, onClick, disabled, primary, ghost, compact, label }: {
-  children: ReactNode; onClick?: () => void; disabled?: boolean; primary?: boolean; ghost?: boolean; compact?: boolean; label?: string;
+function Button({ children, onClick, disabled, primary, ghost, compact, label, title }: {
+  children: ReactNode; onClick?: () => void; disabled?: boolean; primary?: boolean; ghost?: boolean; compact?: boolean; label?: string; title?: string;
 }) {
-  return <button type="button" className={`gd-button${primary ? ' primary' : ''}${ghost ? ' ghost' : ''}${compact ? ' compact' : ''}`} disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>;
+  return <button type="button" className={`gd-button${primary ? ' primary' : ''}${ghost ? ' ghost' : ''}${compact ? ' compact' : ''}`} disabled={disabled} onClick={onClick} aria-label={label} title={title}>{children}</button>;
 }
 
 function Checkbox({ checked, indeterminate = false, disabled = false, label, ariaLabel, onChange }: {
@@ -77,6 +82,38 @@ function QueryProgressCard({ operation, t, cancel }: { operation: QueryProgress 
   return <div className="gd-progress" role="status" aria-live="polite"><div className="gd-progress-top"><div className="gd-progress-copy"><span className="gd-spinner"><Icon name="refresh" size={16} /></span><div><strong>{phase}</strong><p>{operation.terms.join(' · ')} · {t('dashElapsed')} {elapsed} s</p></div></div><Button compact onClick={cancel}>{t('dashCancel')}</Button></div><div className="gd-progress-track" role="progressbar" aria-label={phase} aria-valuetext={`${t('dashElapsed')} ${elapsed} s`}><i /></div></div>;
 }
 
+function HistorySummaryStrip({ records, days, setDays, loading, refresh, t }: {
+  records: QueryRecord[]; days: number; setDays: (d: number) => void; loading: boolean; refresh: () => void; t: Translate;
+}) {
+  const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - days + 1);
+  const rows = records.filter(row => Date.parse(row.createdAt) >= start.getTime() && Date.parse(row.createdAt) <= Date.now());
+  const success = rows.filter(row => row.status === 'ok').length;
+  const cached = rows.filter(row => row.cached).length;
+  const avgMs = rows.length ? duration(rows.reduce((sum, row) => sum + row.durationMs, 0) / rows.length) : '—';
+  const checks = records.flatMap(record => record.volumeRuns ?? []).filter(run => Date.parse(run.createdAt) >= start.getTime() && Date.parse(run.createdAt) <= Date.now());
+  const runs = new Map([...rows, ...checks].filter(run => run.actorRunId).map(run => [run.actorRunId, run]));
+  const priced = [...runs.values()].filter(row => row.costUsd !== null);
+  const cost = priced.reduce((sum, row) => sum + row.costUsd!, 0);
+  const costText = runs.size && !priced.length ? '—' : `$${cost.toFixed(4)}`;
+  return <div className="gd-summary-strip" aria-label={t('dashUsage')}>
+    <div className="gd-summary-window" role="group" aria-label={t('dashWindow')}>
+      {([7, 30] as const).map(value => <button key={value} type="button" aria-pressed={days === value} onClick={() => setDays(value)}>{t(value === 7 ? 'dash7' : 'dash30')}</button>)}
+    </div>
+    <div className="gd-summary-stats">
+      <span className="gd-summary-stat"><span>{t('dashCount')}</span><strong>{rows.length}</strong></span>
+      <span className="gd-summary-sep" aria-hidden="true" />
+      <span className="gd-summary-stat"><span>{t('dashSuccess')}</span><strong>{percent(success, rows.length)}</strong></span>
+      <span className="gd-summary-sep" aria-hidden="true" />
+      <span className="gd-summary-stat"><span>{t('dashCacheRate')}</span><strong>{percent(cached, rows.length)}</strong></span>
+      <span className="gd-summary-sep" aria-hidden="true" />
+      <span className="gd-summary-stat"><span>{t('dashDuration')}</span><strong>{avgMs}</strong></span>
+      <span className="gd-summary-sep" aria-hidden="true" />
+      <span className="gd-summary-stat"><span>{t('dashCosts')}</span><strong className="accent">{costText}</strong></span>
+    </div>
+    <Button compact ghost disabled={loading} onClick={refresh} label={t('dashRefresh')} title={t('dashRefresh')}><Icon name="refresh" size={14} /></Button>
+  </div>;
+}
+
 export function Dashboard({ t, openSettings, controller: supplied }: { t: Translate; openSettings?: () => void; controller?: DashboardController }) {
   const own = useRef<DashboardController | null>(null);
   if (!supplied && !own.current) own.current = new DashboardController();
@@ -106,6 +143,16 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
     return () => { window.removeEventListener('focus', focus); if (!supplied) controller.dispose(); };
   }, [controller, supplied]);
   const run = async () => { if (!await controller.run()) keywordInput.current?.focus(); };
+  const runTerm = async (term: string) => {
+    setText(term);
+    if (!await controller.run()) keywordInput.current?.focus();
+  };
+  const appendCompare = (term: string) => {
+    const existing = queryKeywords(text);
+    if (existing.length >= 5 || existing.some(item => item.toLowerCase() === term.toLowerCase())) return;
+    setText([...existing, term].join(', '));
+    keywordInput.current?.focus();
+  };
   const view = (id: string) => controller.view(id);
   const clear = async () => {
     if (!clearing || deleting) return;
@@ -125,10 +172,10 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
       <div className="gd-brand"><TrendsMark size={28} /><h1>Google Trends</h1></div>
       <nav className="gd-tabs" role="tablist" aria-label="Google Trends" onKeyDown={event => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-        event.preventDefault(); const tabs = ['overview', 'query', 'records'] as const, index = tabs.indexOf(tab);
-        const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
+        event.preventDefault(); const tabs = ['query', 'records'] as const, index = tabs.indexOf(tab);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : (index + 1) % 2;
         setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
-      }}>{(['overview', 'query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} key={key} onClick={() => { setTab(key); void refresh(); }}>{t(key === 'overview' ? 'dashOverview' : key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
+      }}>{(['query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} key={key} onClick={() => { setTab(key); void refresh(); }}>{t(key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
       <div className="gd-topbar-right">
         {state ? <button type="button" className="gd-route-pill" disabled={!openSettings} onClick={openSettings}><i className="gd-route-dot" />{egressLabel(state.settings.egress, t)}</button> : null}
         <Button compact disabled={!openSettings} onClick={openSettings}><Icon name="sliders" size={14} />{t('dashSettings')}</Button>
@@ -137,10 +184,6 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
     <div className="gd-workspace">
       {error ? <div className="gd-error" role="alert">{t(error)}<Button compact disabled={loading} onClick={() => { void refresh(); }}>{t('dashRefresh')}</Button></div> : null}
       {operation && tab !== 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-      <section id="gd-panel-overview" role="tabpanel" aria-labelledby="gd-tab-overview" hidden={tab !== 'overview'}>
-        <div className="gd-toolbar"><div><h2>{t('dashUsage')}</h2></div><div className="gd-actions"><Picker label={t('dashWindow')} value={String(days)} options={[{ value: '7', label: t('dash7') }, { value: '30', label: t('dash30') }]} onChange={value => setDays(Number(value))} /><Button compact disabled={loading} onClick={() => { void refresh(); }}><Icon name="refresh" size={14} />{t('dashRefresh')}</Button></div></div>
-        <Overview records={records} days={days} t={t} />
-      </section>
       <section id="gd-panel-query" role="tabpanel" aria-labelledby="gd-tab-query" hidden={tab !== 'query'}>
         <div className="gd-query-shell">
           <form className="gd-command-bar" onSubmit={event => { event.preventDefault(); void run(); }}>
@@ -163,9 +206,18 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
           </div>
         </div>
         {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} metric={metric} setMetric={setMetric} busy={busy} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onPickRelated={term => { setText(term); keywordInput.current?.focus(); }} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={30} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
+        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} t={t} /> : <div className="gd-card gd-empty">
+          <Icon name="chart" size={30} />
+          <h3>{t('dashEmptyResult')}</h3>
+          <p>{t('dashEmptyHint')}</p>
+          <div className="gd-empty-chips">
+            <span>{t('dashTryExamples')}</span>
+            {EMPTY_EXAMPLES.map(sample => <button key={sample} type="button" className="gd-chip" disabled={busy} onClick={() => { setText(sample); keywordInput.current?.focus(); }}>{sample}</button>)}
+          </div>
+        </div>}
       </section>
       <section id="gd-panel-records" role="tabpanel" aria-labelledby="gd-tab-records" hidden={tab !== 'records'}>
+        <HistorySummaryStrip records={records} days={days} setDays={setDays} loading={loading} refresh={() => { void refresh(); }} t={t} />
         <div className="gd-record-tools">
           <input className="gd-input" aria-label={t('dashSearch')} placeholder={t('dashSearch')} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
           <Picker label={t('dashAllStatus')} value={status} options={['all', 'ok', 'failed', 'no_data', 'partial'].map(value => ({ value, label: t(value === 'all' ? 'dashAllStatus' : value === 'failed' ? 'dashFailure' : statusKey[value]!) }))} onChange={value => { setStatus(value); setPage(1); }} />
@@ -175,65 +227,12 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
             <Button disabled={!records.length} onClick={() => setClearing(records.map(row => row.id))}>{t('dashClearAll')}</Button>
           </div>
         </div>
-        <div className="gd-card gd-records"><div className="gd-scroll"><table><thead><tr><th><Checkbox ariaLabel={t('dashClearSelected')} checked={allRowsSelected} indeterminate={someRowsSelected} onChange={checked => setSelected(checked ? [...new Set([...selected, ...rows.map(row => row.id)])] : selected.filter(id => !rows.some(row => row.id === id)))} /></th><th>{t('dashKeyword')}</th><th>{t('dashGeo')} / {t('dashWindow')}</th><th>{t('dashSources')}</th><th>{t('dashEgress')}</th><th>{t('dashCalledAt')}</th><th /></tr></thead><tbody>{rows.map(record => <tr key={record.id}><td><Checkbox ariaLabel={`${t('dashSelected')} ${record.terms.join(', ')} ${record.id}`} checked={selected.includes(record.id)} onChange={checked => setSelected(checked ? [...selected, record.id] : selected.filter(id => id !== record.id))} /></td><td><strong>{record.terms.join(' vs ')}</strong><small>{record.tool.replace('trends_', '')} · {duration(record.durationMs)}</small><Badge record={record} t={t} /></td><td>{regionLabel(record.geo, isZh ? 'zh' : 'en')}<small>{timeLabel(record.time, t)}</small></td><td>{t(record.source === 'manual' ? 'dashManual' : 'dashAgent')}</td><td>{egressLabel(record.egress, t)}</td><td>{dateText(record.createdAt)}</td><td><div className="gd-actions"><Button ghost disabled={busy} onClick={() => { void view(record.id); }}>{t('dashView')}</Button><Button ghost label={`${t('dashClear')} ${record.terms.join(', ')} ${record.id}`} onClick={() => setClearing([record.id])}><Icon name="trash" size={14} /></Button></div></td></tr>)}</tbody></table></div>{!rows.length ? <div className="gd-empty"><Icon name="clock" size={26} /><h3>{t(records.length ? 'dashNoMatches' : 'dashEmptyHistory')}</h3><Button primary onClick={() => setTab('query')}>{t('dashRun')}</Button></div> : null}<footer className="gd-table-footer"><span>{filtered.length} · {selected.length} {t('dashSelected')}</span><div className="gd-actions"><Button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t('dashPrevious')}</Button><span>{currentPage} / {pages}</span><Button disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>{t('dashNext')}</Button></div></footer></div>
+        <div className="gd-card gd-records"><div className="gd-scroll"><table><thead><tr><th><Checkbox ariaLabel={t('dashClearSelected')} checked={allRowsSelected} indeterminate={someRowsSelected} onChange={checked => setSelected(checked ? [...new Set([...selected, ...rows.map(row => row.id)])] : selected.filter(id => !rows.some(row => row.id === id)))} /></th><th>{t('dashKeyword')}</th><th>{t('dashGeo')} / {t('dashWindow')}</th><th>{t('dashSources')}</th><th>{t('dashEgress')}</th><th>{t('dashCalledAt')}</th><th /></tr></thead><tbody>{rows.map(record => <tr key={record.id} className="gd-record-row" onClick={() => { if (!busy) void view(record.id); }}><td onClick={event => event.stopPropagation()}><Checkbox ariaLabel={`${t('dashSelected')} ${record.terms.join(', ')} ${record.id}`} checked={selected.includes(record.id)} onChange={checked => setSelected(checked ? [...selected, record.id] : selected.filter(id => id !== record.id))} /></td><td><strong>{record.terms.join(' vs ')}</strong><small>{record.tool.replace('trends_', '')} · {duration(record.durationMs)}</small><span className="gd-badges"><span className={`gd-badge ${record.status}`}>{t(statusKey[record.status] ?? 'dashError')}</span>{record.cached ? <span className="gd-badge cache">{t('dashCached')}</span> : null}{record.dailyVolume != null ? <span className="gd-badge vol">{formatVolume(record.dailyVolume)}/{isZh ? '天' : 'd'}</span> : null}</span></td><td>{regionLabel(record.geo, isZh ? 'zh' : 'en')}<small>{timeLabel(record.time, t)}</small></td><td>{t(record.source === 'manual' ? 'dashManual' : 'dashAgent')}</td><td>{egressLabel(record.egress, t)}</td><td>{dateText(record.createdAt)}</td><td onClick={event => event.stopPropagation()}><div className="gd-actions"><Button ghost disabled={busy} onClick={() => { void view(record.id); }}>{t('dashView')}</Button><Button ghost label={`${t('dashClear')} ${record.terms.join(', ')} ${record.id}`} onClick={() => setClearing([record.id])}><Icon name="trash" size={14} /></Button></div></td></tr>)}</tbody></table></div>{!rows.length ? <div className="gd-empty"><Icon name="clock" size={26} /><h3>{t(records.length ? 'dashNoMatches' : 'dashEmptyHistory')}</h3><Button primary onClick={() => setTab('query')}>{t('dashRun')}</Button></div> : null}<footer className="gd-table-footer"><span>{filtered.length} · {selected.length} {t('dashSelected')}</span><div className="gd-actions"><Button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t('dashPrevious')}</Button><span>{currentPage} / {pages}</span><Button disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>{t('dashNext')}</Button></div></footer></div>
       </section>
       <footer className="gd-footer"><span>{t('dashHistoryLimit')}</span><span>{state ? `v${state.version}` : t('dashLoading')}</span></footer>
       {clearing ? <ClearDialog count={clearing.length} t={t} busy={deleting} cancel={() => { if (!deleting) setClearing(null); }} confirm={() => { void clear(); }} /> : null}
     </div>
   </div>;
-}
-
-function Overview({ records, days, t }: { records: QueryRecord[]; days: number; t: Translate }) {
-  const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - days + 1);
-  const rows = records.filter(row => Date.parse(row.createdAt) >= start.getTime() && Date.parse(row.createdAt) <= Date.now());
-  const success = rows.filter(row => row.status === 'ok').length, cached = rows.filter(row => row.cached).length;
-  const average = rows.length ? duration(rows.reduce((sum, row) => sum + row.durationMs, 0) / rows.length) : '—';
-  const ranking = new Map<string, number>();
-  rows.filter(row => row.tool !== 'trends_now').forEach(row => row.terms.forEach(term => ranking.set(term, (ranking.get(term) ?? 0) + 1)));
-  const top = [...ranking].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const singles = rows.filter(r => r.singleVolume);
-  const cacheHits = singles.filter(r => r.cached && r.singleVolume!.calls === 0);
-  const measured = singles.filter(r => !cacheHits.includes(r));
-  const successful = measured.filter(r => r.singleVolume!.hit !== 'none');
-  const callCount = (items: QueryRecord[]) => items.reduce((sum, r) => sum + r.singleVolume!.calls, 0);
-  const routes = (['actor-public', 'actor-own', 'local'] as const).map(value => ({ value, count: rows.filter(row => row.egress === value).length }));
-  const checks = records.flatMap(record => record.volumeRuns ?? []).filter(run => Date.parse(run.createdAt) >= start.getTime() && Date.parse(run.createdAt) <= Date.now());
-  const runs = new Map([...rows, ...checks].filter(run => run.actorRunId).map(run => [run.actorRunId, run]));
-  const priced = [...runs.values()].filter(row => row.costUsd !== null), cost = priced.reduce((sum, row) => sum + row.costUsd!, 0);
-  const routeColors = ['#2563eb', '#7c3aed', '#94a3b8'];
-  return <>
-    <div className="gd-metrics">{[['dashCount', String(rows.length), 'dashSources'], ['dashSuccess', percent(success, rows.length), 'dashOk'], ['dashCacheRate', percent(cached, rows.length), 'dashReuse'], ['dashDuration', average, 'dashCount']].map(([label, value, note]) => <article className="gd-card gd-metric" key={label}><span>{t(label!)}</span><strong>{value}</strong><small>{t(note!)}</small></article>)}</div>
-    {singles.length > 0 && <article className="gd-card gd-single-card"><h3>{t('dashSingleStats')}</h3>
-      <p>{t('dashFirstHit')} · {percent(measured.filter(r => r.singleVolume!.hit === 'first').length, measured.length)}
-        {' · '}{t('dashVolumeHits')} {successful.length}/{measured.length}{' · '}{t('dashCached')} {cacheHits.length}</p>
-      <p>{t('dashMeanCalls')} · {successful.length ? (callCount(successful) / successful.length).toFixed(2) : '—'}
-        {' · '}{t('dashAllCallsPerHit')} · {successful.length ? (callCount(measured) / successful.length).toFixed(2) : '—'}</p>
-    </article>}
-    <div className="gd-overview-grid">
-      <article className="gd-card"><h3>{t('dashDaily')}</h3><DailyChart records={rows} days={days} t={t} /><div className="gd-legend" style={{ paddingTop: 6 }}>{['dashLive', 'dashCached', 'dashFailure'].map((key, index) => <span key={key} style={{ border: 0, padding: 0, background: 'none' }}><i style={{ background: ['#2563eb', '#10b981', '#f43f5e'][index] }} />{t(key)}</span>)}</div></article>
-      <article className="gd-card"><h3>{t('dashTop')}</h3><div className="gd-ranking">{top.map(([term, count], index) => <div key={term}><p><span>{String(index + 1).padStart(2, '0')}</span><strong>{term}</strong><span>{count}</span></p><div className="gd-rail"><i style={{ width: `${count / top[0]![1] * 100}%` }} /></div></div>)}{!top.length ? <p className="gd-muted">—</p> : null}</div></article>
-    </div>
-    <div className="gd-bottom-grid">
-      <article className="gd-card"><h3>{t('dashEgress')}</h3><div className="gd-mix-card"><div className="gd-mix-bar">{routes.map((row, i) => <div key={row.value} style={{ width: `${rows.length ? row.count / rows.length * 100 : 0}%`, background: routeColors[i] }} />)}</div><div className="gd-mix-legend">{routes.map((row, i) => <span key={row.value}><i style={{ background: routeColors[i] }} />{egressLabel(row.value, t)} <strong>{row.count}</strong></span>)}</div></div></article>
-      <article className="gd-card"><h3>{t('dashSources')}</h3><div className="gd-mix-card"><div className="gd-mix-bar">{(['manual', 'agent'] as const).map((key, i) => { const count = rows.filter(row => row.source === key).length; return <div key={key} style={{ width: `${rows.length ? count / rows.length * 100 : 0}%`, background: i === 0 ? '#2563eb' : '#10b981' }} />; })}</div><div className="gd-mix-legend">{(['manual', 'agent'] as const).map((key, i) => <span key={key}><i style={{ background: i === 0 ? '#2563eb' : '#10b981' }} />{t(key === 'manual' ? 'dashManual' : 'dashAgent')} <strong>{rows.filter(row => row.source === key).length}</strong></span>)}</div></div></article>
-      <article className="gd-card gd-cost"><h3>{t('dashCosts')}</h3><strong>{runs.size && !priced.length ? '—' : `$${cost.toFixed(4)}`}</strong><p>{runs.size ? `${priced.length} / ${runs.size} ${t('dashRuns')}` : t('dashNoRuns')}</p><small>{t('dashCostHint')}</small></article>
-    </div>
-  </>;
-}
-
-function DailyChart({ records, days, t }: { records: QueryRecord[]; days: number; t: Translate }) {
-  const buckets = Array.from({ length: days }, (_, i) => {
-    const date = new Date(); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() - days + 1 + i);
-    const end = new Date(date); end.setDate(end.getDate() + 1);
-    const rows = records.filter(row => Date.parse(row.createdAt) >= date.getTime() && Date.parse(row.createdAt) < end.getTime());
-    return { date, counts: [rows.filter(row => row.status === 'ok' && !row.cached).length, rows.filter(row => row.status === 'ok' && row.cached).length, rows.filter(row => row.status !== 'ok').length] };
-  });
-  const max = Math.max(4, ...buckets.map(bucket => bucket.counts.reduce((a, b) => a + b, 0))), ceiling = Math.ceil(max / 4) * 4;
-  const step = 610 / days;
-  return <svg className="gd-daily-chart" viewBox="0 0 670 225" role="img" aria-label={`${t('dashDaily')} ${records.length}`}>
-    {Array.from({ length: 5 }, (_, i) => <g key={i}><line x1="38" x2="648" y1={188 - i * 42} y2={188 - i * 42} stroke="var(--gtfa-line)" strokeDasharray={i === 0 ? undefined : '2 3'} /><text x="28" y={192 - i * 42} textAnchor="end">{i * ceiling / 4}</text></g>)}
-    {buckets.map((bucket, i) => { let base = 188; const barW = Math.min(26, Math.max(6, step * .52)); return <g key={i}>{bucket.counts.map((count, j) => { const height = count / ceiling * 168; base -= height; return count > 0 ? <rect key={j} x={38 + step * i + (step - barW) / 2} y={base} width={barW} height={height} rx="3" fill={['#2563eb', '#10b981', '#f43f5e'][j]}><title>{bucket.date.toLocaleDateString()} · {t(['dashLive', 'dashCached', 'dashFailure'][j]!)} {count}</title></rect> : null; })}{i === 0 || i === days - 1 || i % (days === 7 ? 1 : 5) === 0 ? <text x={38 + step * (i + .5)} y="214" textAnchor="middle">{bucket.date.getMonth() + 1}/{bucket.date.getDate()}</text> : null}</g>; })}
-  </svg>;
 }
 
 interface Series {
@@ -370,15 +369,18 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   </div>;
 }
 
-function Result({ saved, metric, setMetric, t, egress, estimate, busy, onPickRelated }: {
-  saved: SavedQuery; metric: string; setMetric: (v: string) => void; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean; onPickRelated?: (term: string) => void;
+function Result({ saved, metric, setMetric, t, egress, estimate, busy, currentTerms, onRunRelated, onAddCompare }: {
+  saved: SavedQuery; metric: string; setMetric: (v: string) => void; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean;
+  currentTerms: string[]; onRunRelated?: (term: string) => void; onAddCompare?: (term: string) => void;
 }) {
   const { record, result } = saved, meta = object(result.meta);
   const [focused, focusTerm] = useState<string | null>(null);
   const [relatedTab, setRelatedTab] = useState<'popular' | 'rising'>('popular');
+  const [copied, setCopied] = useState(false);
+  const interestSeries = resultSeries(saved);
   const trafficSeries = resultSeries(saved, true), hasTraffic = trafficSeries.some(row => row.average !== null || row.range);
   const currentMetric = metric === 'traffic' && hasTraffic ? 'traffic' : 'interest';
-  const series = currentMetric === 'traffic' ? trafficSeries : resultSeries(saved);
+  const series = currentMetric === 'traffic' ? trafficSeries : interestSeries;
   const legend = series.map((row, index) => ({ ...row, color: colors[index]! }));
   const chartSeries = legend.filter(hasChartPoints);
   const visible = focused && chartSeries.some(row => row.term === focused) ? chartSeries.filter(row => row.term === focused) : chartSeries;
@@ -388,6 +390,38 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy, onPickRel
   const error = object(result.error), tables = object(result.tables);
   const hasRelated = !comparison && (array(tables.popular).length > 0 || array(tables.rising).length > 0);
   const isZh = t('dashGeo') === '地区';
+
+  const copySummary = () => {
+    const header = `${record.terms.join(' vs ')} (${regionLabel(record.geo, isZh ? 'zh' : 'en')} · ${timeLabel(record.time, t)})`;
+    const lines = interestSeries.map((row, index) => {
+      const vol = trafficSeries[index];
+      const est = vol?.range ? `${compactVolume.format(vol.range.low)}–${compactVolume.format(vol.range.high)} ${t('dashPerDay')}`
+        : vol?.average != null ? `≈ ${Math.round(vol.average).toLocaleString()} ${t('dashPerDay')}` : null;
+      return `- ${row.term}: ${t('dashAverage')} ${formatNumber(row.average)}, ${t('dashLatest')} ${formatNumber(row.latest)}, ${t('dashPeak')} ${formatNumber(row.peak)}${est ? ` | ${est}` : ''}`;
+    });
+    const payload = [header, ...lines].join('\n');
+    void navigator.clipboard?.writeText?.(payload).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }).catch(() => {});
+  };
+
+  const downloadCsv = () => {
+    const timestamps = [...new Set(series.flatMap(row => row.points.map(point => point.t)))].sort();
+    const header = ['timestamp', ...series.map(row => currentMetric === 'traffic' ? `${row.term} (${t('dashPerDay')})` : row.term)];
+    const lines = [header.map(csvCell).join(','), ...timestamps.map(ts => {
+      const values = series.map(row => row.points.find(point => point.t === ts)?.value ?? '');
+      return [ts, ...values].map(csvCell).join(',');
+    })];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `trends-${record.terms.join('-').replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, '_').slice(0, 48)}-${record.geo || 'world'}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   if (record.tool === 'trends_now') return <div className="gd-results"><div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}</div>;
   const showLegend = legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length);
   return <div className="gd-results">
@@ -403,10 +437,14 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy, onPickRel
               <span>{duration(record.durationMs)}</span>
             </div>
           </div>
-          {(!result.onDemand || hasTraffic) && <div className="gd-metric-switch">{(['interest', 'traffic'] as const).map(value =>
-            <button type="button" key={value} aria-pressed={currentMetric === value} disabled={value === 'traffic' && !hasTraffic}
-              onClick={() => { focusTerm(null); setMetric(value); }}>{t(value === 'interest' ? 'dashInterest' : 'dashTraffic')}</button>
-          )}</div>}
+          <div className="gd-result-tools">
+            {(!result.onDemand || hasTraffic) && <div className="gd-metric-switch">{(['interest', 'traffic'] as const).map(value =>
+              <button type="button" key={value} aria-pressed={currentMetric === value} disabled={value === 'traffic' && !hasTraffic}
+                onClick={() => { focusTerm(null); setMetric(value); }}>{t(value === 'interest' ? 'dashInterest' : 'dashTraffic')}</button>
+            )}</div>}
+            <Button compact ghost onClick={copySummary} title={t('dashCopySummary')}>{copied ? t('dashCopiedSummary') : t('dashCopySummary')}</Button>
+            {chartSeries.length > 0 ? <Button compact ghost onClick={downloadCsv} title={t('dashExportCsv')}>{t('dashExportCsv')}</Button> : null}
+          </div>
         </div>
         {showLegend ? <div className="gd-legend gd-chart-legend">
           {legend.map(row => {
@@ -427,7 +465,7 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy, onPickRel
           <p className="gd-chart-note">{t('dashWeakComparison')}</p> : null}
         <table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th>
           <th>{t('dashAverage')}</th><th>{t(currentMetric === 'traffic' ? 'dashLatestUsable' : 'dashLatest')}</th><th>{t('dashPeak')}</th>
-          {hasTraffic && currentMetric === 'interest' ? <th>{t('dashDailyVolume')}</th> : null}
+          {hasTraffic && currentMetric === 'interest' ? <th>{t('dashVolumeEstimate')}</th> : null}
         </tr></thead><tbody>{series.map((row, index) => {
           const vol = trafficSeries[index];
           return <tr key={row.term}>
@@ -454,8 +492,11 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy, onPickRel
           </div>
           {array(tables[relatedTab]).slice(0, 8).map((row, i) => {
             const term = String(row.query ?? '');
-            return <div className="gd-related-row" key={i} style={{ cursor: onPickRelated && term ? 'pointer' : undefined }} onClick={() => term && onPickRelated?.(term)}>
-              <span>{term}</span><strong>{String(row.formattedValue ?? row.value ?? '—')}</strong>
+            const canAdd = Boolean(term && onAddCompare && currentTerms.length < 5 && !currentTerms.some(item => item.toLowerCase() === term.toLowerCase()));
+            return <div className="gd-related-row" key={i}>
+              <button type="button" className="gd-related-term" disabled={busy || !term} onClick={() => term && onRunRelated?.(term)}><span>{term}</span></button>
+              <strong>{String(row.formattedValue ?? row.value ?? '—')}</strong>
+              {canAdd ? <button type="button" className="gd-related-add" disabled={busy} aria-label={`${t('dashAddCompare')} ${term}`} title={t('dashAddCompare')} onClick={() => onAddCompare?.(term)}>+</button> : null}
             </div>;
           })}
           {!array(tables[relatedTab]).length ? <p className="gd-muted" style={{ fontSize: 12 }}>{t('dashNoRelated')}</p> : null}
