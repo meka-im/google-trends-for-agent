@@ -46,14 +46,14 @@ it('uses the full shared-scale comparison window and calibrates only matching ge
   for (const geo of ['US', 'CA', 'JP', 'SG']) {
     const [r] = await validateTerms(['x'], { store: await store(), filter: { geo }, query: mock([20, 20, 20, 20, 100]) });
     expect(r.anchor.ratio).toBe(3.6);
-    expect(r.anchor.term).toBe(geo === 'JP' ? 'ナンプレ' : 'sudoku');
+    expect(r.anchor.term).toBe(geo === 'JP' ? 'テトリス' : 'sudoku');
     if (geo === 'US') {
-      expect(r.anchor.dailySearches).toBe(63000);
-      expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'sudoku', dailySearches: 63000 });
-      expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 226800, low: 113400, high: 340200 });
+      expect(r.anchor.dailySearches).toBe(88000);
+      expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'sudoku', dailySearches: 88000 });
+      expect(r.anchor.traffic).toMatchObject({ unit: 'searches/day', average: 316800, low: 158400, high: 475200 });
     } else if (geo === 'CA' || geo === 'JP') {
-      expect(r.anchor.dailySearches).toBe(geo === 'CA' ? 12000 : 22000);
-      expect(r.anchor.traffic.average).toBe(geo === 'CA' ? 43200 : 79200);
+      expect(r.anchor.dailySearches).toBe(geo === 'CA' ? 15000 : 18000);
+      expect(r.anchor.traffic.average).toBe(geo === 'CA' ? 54000 : 64800);
     } else {
       expect(r.anchor.dailySearches).toBeNull();
       expect(r.anchor.traffic.average).toBeNull();
@@ -76,7 +76,7 @@ it.each([
 });
 it('uses an explicit web property with the default US baseline', async () => {
   const [r] = await validateTerms(['x'], { store: await store(), filter: { property: 'web' }, query: mock([20, 20, 20, 20, 100]) });
-  expect(r.anchor).toMatchObject({ term: 'sudoku', dailySearches: 63000, ratio: 3.6, traffic: { average: 226800 } });
+  expect(r.anchor).toMatchObject({ term: 'sudoku', dailySearches: 88000, ratio: 3.6, traffic: { average: 316800 } });
 });
 it('normalizes geo before ask cache lookup, upstream input, and response display', async () => {
   const s = await store(), query = mock([10, 10, 20, 20, 0]);
@@ -169,15 +169,16 @@ it('never serves a blocked snapshot from cache', async () => {
   expect(blocked).toHaveBeenCalledTimes(2);
 });
 it('flags a fresh spike in the past-24h window as spiking with medium confidence', async () => {
-  const base = Array(40).fill(5), rows = await validateTerms(['g'], { store: await store(), query: mock([...base, 0, 77, 100, 100]) });
+  const base = Array(40).fill(5), rows = await validateTerms(['g'], { store: await store(), filter: { time: 'now 1-d' }, query: mock([...base, 0, 77, 100, 100]) });
   expect(rows[0].verdict).toBe('spiking'); expect(rows[0].confidence).toBe('mid');
   expect(rows[0].freshSpike?.recheckAfterMin).toBe(60); expect(rows[0].reasons[0]).toContain('recheck');
 });
 it('does not flag spikes for small bumps, long windows or short series', () => {
-  expect(detectFreshSpike([...Array(40).fill(5), 8, 12], DEFAULT_FILTER)).toBeUndefined();
+  const shortWindow = { time: 'now 1-d' };
+  expect(detectFreshSpike([...Array(40).fill(5), 8, 12], shortWindow)).toBeUndefined();
   expect(detectFreshSpike([...Array(40).fill(5), 80, 100], { time: 'today 1-m' })).toBeUndefined();
-  expect(detectFreshSpike([1, 1, 90], DEFAULT_FILTER)).toBeUndefined();
-  expect(detectFreshSpike([...Array(40).fill(5), 80, 100], DEFAULT_FILTER)?.ratio).toBeGreaterThan(10);
+  expect(detectFreshSpike([1, 1, 90], shortWindow)).toBeUndefined();
+  expect(detectFreshSpike([...Array(40).fill(5), 80, 100], shortWindow)?.ratio).toBeGreaterThan(10);
 });
 it('shares one anchor comparison across up to four terms per run', async () => {
   const query = mock(Array(20).fill(10));
@@ -185,14 +186,14 @@ it('shares one anchor comparison across up to four terms per run', async () => {
   const compareCalls = (query as any).mock.calls.filter((c: any[]) => c[0].queries.includes('sudoku'));
   expect(compareCalls).toHaveLength(1); expect(compareCalls[0][0].queries).toEqual(['a', 'b', 'c', 'sudoku']);
 });
-it('uses gpts for 7-day validation and exposes its daily baseline', async () => {
+it('uses MEKA US default sudoku for 7-day validation and exposes its daily baseline', async () => {
   const query = mock([20, 20, 20, 20, 100]);
   const [r] = await validateTerms(['x'], { store: await store(), filter: { geo: 'US', time: 'now 7-d' }, query });
-  expect(r.anchor.term).toBe('gpts');
-  expect(r.anchor.dailySearches).toBe(3500);
-  expect(r.anchor.traffic).toMatchObject({ average: 12600, low: 6300, high: 18900 });
-  expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'gpts', dailySearches: 3500 });
-  expect((query as any).mock.calls.some((c: any[]) => c[0].queries.includes('gpts'))).toBe(true);
+  expect(r.anchor.term).toBe('sudoku');
+  expect(r.anchor.dailySearches).toBe(88000);
+  expect(r.anchor.traffic).toMatchObject({ average: 316800, low: 158400, high: 475200 });
+  expect(verdictEnvelope(r).anchor).toMatchObject({ term: 'sudoku', dailySearches: 88000 });
+  expect((query as any).mock.calls.some((c: any[]) => c[0].queries.includes('sudoku'))).toBe(true);
 });
 it('ask CLI maps blocked/rate-limited to exit 3, other upstream errors to 1, and partial to 2', async () => {
   const s = await store();
@@ -274,11 +275,11 @@ it('keeps retryAfterSec when the anchor comparison is rate limited', async () =>
 });
 it('calibrates a term that equals the anchor against itself instead of sending it twice', async () => {
   const query = mock([20, 20, 20, 20, 0]);
-  const [r] = await validateTerms(['GPTs'], { store: await store(), filter: { time: 'now 7-d' }, query });
+  const [r] = await validateTerms(['Sudoku'], { store: await store(), filter: { time: 'now 7-d' }, query });
   const comparisons = (query as unknown as { mock: { calls: [{ queries: string[]; dataTypes?: string[] }][] } }).mock.calls.map(([i]) => i).filter(i => i.dataTypes?.length === 1);
-  expect(comparisons.map(i => i.queries)).toEqual([['GPTs']]);
-  expect(r.anchor).toMatchObject({ term: 'gpts', dailySearches: 3500, ratio: 1 });
-  expect(r.anchor.traffic.average).toBe(3500);
+  expect(comparisons.map(i => i.queries)).toEqual([['Sudoku']]);
+  expect(r.anchor).toMatchObject({ term: 'sudoku', dailySearches: 88000, ratio: 1 });
+  expect(r.anchor.traffic.average).toBe(88000);
 });
 
 

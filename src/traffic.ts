@@ -1,17 +1,24 @@
 import { readFile } from 'node:fs/promises';
 import type { TrendsFilter } from './filter.js';
 import { automaticAnchorFor, BASELINE_CATALOG } from './baseline-catalog.js';
+import { getActiveMekaBaselines, mekaAnchorsFor } from './dsh-baselines.js';
 
 export interface Anchor { term: string; dailySearches?: number; tolerance?: number; geo: string }
 /** Optional per-window overrides; short = now 1-H / now 4-H / now 1-d, long = everything else. */
 export interface WindowAnchors { short?: string; long?: string }
 export interface Baselines { version: 2; anchors: Anchor[]; windowAnchors?: WindowAnchors }
 
-/** Windows measured in hours or one day: dense, fast-moving, and better anchored by sudoku. */
+/** Windows measured in hours or one day. */
 export const SHORT_WINDOWS = ['now 1-H', 'now 4-H', 'now 1-d'] as const;
 
 /** Runtime calibration fields; source metadata stays in the shared catalog. */
 export const BUILTIN_ANCHORS: readonly Anchor[] = BASELINE_CATALOG.map(({ term, geo, dailySearches, tolerance }) => ({ term, geo, dailySearches, tolerance }));
+
+function activeBuiltins(): Anchor[] {
+  return getActiveMekaBaselines().anchors.map(({ term, geo, dailySearches }) => ({
+    term, geo, dailySearches, tolerance: 0.5,
+  }));
+}
 
 function invalid(message: string): never { throw new Error(`Invalid baselines: ${message}`); }
 const isShort = (time: string) => (SHORT_WINDOWS as readonly string[]).includes(time);
@@ -51,22 +58,25 @@ export function findAnchor(
   if (!supportsBaseline(filter)) return undefined;
   const wanted = term.trim().toLowerCase();
   const wantedGeo = geo.trim().toUpperCase();
-  return baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo.trim().toUpperCase() === wantedGeo)
-    ?? BUILTIN_ANCHORS.find(a => a.term === wanted && a.geo.trim().toUpperCase() === wantedGeo);
+  const custom = baselines?.anchors.find(a => a.term.trim().toLowerCase() === wanted && a.geo.trim().toUpperCase() === wantedGeo);
+  if (custom) return custom;
+  const meka = mekaAnchorsFor(wantedGeo).find(a => a.term.trim().toLowerCase() === wanted);
+  return meka ? { term: meka.term, geo: meka.geo, dailySearches: meka.dailySearches, tolerance: 0.5 } : undefined;
 }
 
 /**
  * Pin regional defaults into an on-demand request, including for existing Actors.
- * Country requests omit the built-in Worldwide row for older v2 parsers, which
+ * Country requests omit the built-in Worldwide rows for older v2 parsers, which
  * rejected empty anchor geos. User-provided rows are preserved and always win.
  */
 export function baselinesForActor(geo: string, baselines?: Baselines): Baselines {
   const user = baselines?.anchors ?? [];
   const key = (anchor: Anchor) => JSON.stringify([anchor.term.trim().toLowerCase(), anchor.geo.trim().toUpperCase()]);
   const overridden = new Set(user.map(key));
+  const builtins = activeBuiltins();
   return {
     version: 2,
-    anchors: [...user, ...BUILTIN_ANCHORS.filter(anchor => (anchor.geo !== '' || geo.trim() === '') && !overridden.has(key(anchor)))],
+    anchors: [...user, ...builtins.filter(anchor => (anchor.geo !== '' || geo.trim() === '') && !overridden.has(key(anchor)))],
     windowAnchors: {
       short: defaultAnchorFor('now 1-d', baselines, geo),
       long: defaultAnchorFor('now 7-d', baselines, geo),
@@ -87,8 +97,9 @@ export function parseBaselines(parsed: unknown, source = 'baselines'): Baselines
     catch (e) { invalid(`${label}anchors[${i}]: ${e instanceof Error ? e.message : String(e)}`); }
   });
   const anchors = anchorRows as Anchor[];
+  const builtins = activeBuiltins();
   const known = (term: string) => anchors.some(a => a.term.trim().toLowerCase() === term.trim().toLowerCase())
-    || BUILTIN_ANCHORS.some(a => a.term === term.trim().toLowerCase());
+    || builtins.some(a => a.term.trim().toLowerCase() === term.trim().toLowerCase());
   if (row.windowAnchors !== undefined) {
     if (!row.windowAnchors || typeof row.windowAnchors !== 'object' || Array.isArray(row.windowAnchors)) invalid(`${label}"windowAnchors" must be an object`);
     const windows = row.windowAnchors as Record<string, unknown>;

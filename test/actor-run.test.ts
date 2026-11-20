@@ -114,15 +114,15 @@ describe('runOnce mapping', () => {
         { t: '2026-11-10T02:00:00Z', score: 60, traffic: 15000 },
         { t: '2026-11-10T03:00:00Z', score: 50, traffic: 12500 },
       ] },
-      anchor: { term: 'gpts' }, verdict: { label: 'rising' },
+      anchor: { term: 'sudoku' }, verdict: { label: 'rising' },
       tables: { popular: [{ query: 'sora 2' }], rising: [{ query: 'sora 2 api' }] },
       chart: { path: '/tmp/charts/sora.svg' },
       meta: { fetchedAt: '2026-11-12T10:00:00.000Z' },
     }), { setValue, readFile: async () => chart });
-    const result = await runOnce({ tool: 'snapshot', terms: ['Sora'], geo: 'US', window: 'now 7-d', anchor: 'gpts' }, deps);
+    const result = await runOnce({ tool: 'snapshot', terms: ['Sora'], geo: 'US', window: 'now 7-d', anchor: 'sudoku' }, deps);
     expect(pushed[0]).toMatchObject({
       status: 'ok', interestLatest: 50, interestSettled: 60, interestAverage: 62.5, interestPeak: 100,
-      searchesPerDay: 12000, verdict: 'rising', anchor: 'gpts',
+      searchesPerDay: 12000, verdict: 'rising', anchor: 'sudoku',
       chartKey: chartKeyFor('Sora'), chartUrl: `https://api.apify.com/v2/key-value-stores/store-1/records/${chartKeyFor('Sora')}`,
     });
     expect(setValue).toHaveBeenCalledWith(chartKeyFor('Sora'), chart, { contentType: 'image/svg+xml' });
@@ -130,11 +130,11 @@ describe('runOnce mapping', () => {
     expect(result.failed).toBe(false);
   });
 
-  it('defaults geo to US and the window to now 1-d', async () => {
+  it('defaults geo to US and the window to now 7-d', async () => {
     let seen: Record<string, unknown> | undefined;
     const { deps } = harness(async (_name, input) => { seen = input; return askEnvelope('Sora'); });
     await runOnce({ tool: 'ask', terms: ['Sora'] }, deps);
-    expect(seen).toMatchObject({ term: 'Sora', geo: 'US', time: 'now 1-d' });
+    expect(seen).toMatchObject({ term: 'Sora', geo: 'US', time: 'now 7-d' });
   });
 
   it('uses one compare call and one row per series entry', async () => {

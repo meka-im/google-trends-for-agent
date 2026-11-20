@@ -415,8 +415,7 @@ describe('query-default pickers', () => {
     const input = screen.getByRole('combobox', { name: t('anchor') }) as HTMLInputElement;
     await user.click(input);
     expect(screen.getByText(t('anchorAutoOption'))).toBeTruthy();
-    expect(screen.getByText(t('anchorShortOption'))).toBeTruthy();
-    expect(screen.getByText(t('anchorLongOption'))).toBeTruthy();
+    expect(screen.getByText(t('anchorRegionalOption'))).toBeTruthy();
     await user.type(input, 'my re');
     await user.click(within(screen.getByRole('listbox', { name: t('anchor') })).getByRole('option', { name: 'my research' }));
     expect(input.value).toBe('my research');
@@ -459,7 +458,7 @@ describe('baseline editor', () => {
   };
   const sampleBaselines = () => ({ anchors: [
     { term: 'research', geo: 'US', dailySearches: 1200, tolerance: 0.2 },
-  ], windowAnchors: { short: 'research', long: 'gpts' } });
+  ], windowAnchors: { short: 'research', long: 'sudoku' } });
 
   it('shows all built-ins alongside existing US rows and preserves edits while browsing', async () => {
     const anchors = [
@@ -665,7 +664,7 @@ describe('baseline editor', () => {
 });
 
 describe('Actor creation and selection', () => {
-  it.each([null, { version: '0.2.22', baselineCatalogRevision: '2026-11-16' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-16' }])('separates actual runtime version from successful keyword checks: %j', runtime => {
+  it.each([null, { version: '0.2.22', baselineCatalogRevision: '2026-11-19' }, { version: '0.2.23', baselineCatalogRevision: '2026-11-19' }])('separates actual runtime version from successful keyword checks: %j', runtime => {
     const base = diagnostic();
     render(<ConnectionTestResults result={{ ...base, egress: 'actor-own', network: { ...base.network, egress: 'actor-own' },
       data: { ...base.data, keywords: base.data.keywords.map(item => ({ ...item, status: 'ok' as const })) },

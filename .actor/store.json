@@ -20,7 +20,7 @@
       "Sora"
     ],
     "geo": "US",
-    "window": "now 1-d",
+    "window": "now 7-d",
     "anchor": ""
   },
   "pricing": "usage-only (no Actor fee): pay per platform usage, no monetization"

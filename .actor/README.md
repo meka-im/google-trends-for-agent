@@ -11,7 +11,7 @@ Use the Input tab, then Start:
   "tool": "snapshot",
   "terms": ["Sora"],
   "geo": "US",
-  "window": "now 1-d",
+  "window": "now 7-d",
   "anchor": ""
 }
 ```
@@ -47,8 +47,8 @@ For self-deployment, keep Server / Standby disabled. This Actor runs queries on 
 - `tool`: `ask`, `snapshot`, `compare`, or `now`.
 - `terms`: one or more terms for ask/snapshot, 1–5 distinct terms for compare; ignored by now.
 - `geo`: supported country code; `WORLDWIDE` is accepted except for now.
-- `window`: a supported Trends time window, default `now 1-d`.
-- `anchor`: automatic by query region and window when blank; built-in terms are `gpts`, `sudoku`, `calculator` and `ナンプレ`.
+- `window`: a supported Trends time window, default `now 7-d`.
+- `anchor`: automatic multi-tier MEKA calibration by query region and window when blank; built-in terms come from the MEKA Google Ads Keyword Planner catalog.
 - `timeoutMs`: optional 1000–60000 ms per upstream request.
 - `proxyConfiguration`: defaults to the on-platform US residential proxy.
 

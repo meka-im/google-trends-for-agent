@@ -115,8 +115,8 @@ describe('dsh Config schema', () => {
     });
     expect(baselinesFromConfig({ anchors: [{ term: 'sudoku', dailySearches: 1234 }] })?.anchors[0].geo).toBe('US');
     expect(() => baselinesFromConfig({ anchors: [{ term: 'sudoku', geo: null, dailySearches: 1234 }] })).toThrow(/invalid baseline anchor/);
-    expect(resolveGtfaSettings(Config!({ baselines: { windowAnchors: { short: 'calculator', long: 'ナンプレ' } } }) as never).baselines?.windowAnchors)
-      .toEqual({ short: 'calculator', long: 'ナンプレ' });
+    expect(resolveGtfaSettings(Config!({ baselines: { windowAnchors: { short: 'calculator', long: 'テトリス' } } }) as never).baselines?.windowAnchors)
+      .toEqual({ short: 'calculator', long: 'テトリス' });
   });
 
   it('rejects invalid baseline edits at Config time', () => {

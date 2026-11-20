@@ -152,7 +152,7 @@ describe('CLI timeout propagation', () => {
       return okResponse(input);
     });
     const snapshot = await runSnapshotCli([
-      'Astra', '--json', '--fresh', '--store', tempDir('gtfa-review-snapshot-'), '--timeout', '3500',
+      'Astra', '--time', 'now 1-d', '--json', '--fresh', '--store', tempDir('gtfa-review-snapshot-'), '--timeout', '3500',
     ], {
       query: snapshotQuery,
       baselines: { version: 2, anchors: [] },
@@ -199,7 +199,7 @@ describe('tool descriptions and country normalization', () => {
     expect(compare.description).not.toMatch(/calibration baselines|estDaily/);
 
     const result = await compare.execute({ keywords: ['coffee'], geo: ' us ' });
-    expect(result).toMatchObject({ filter: { geo: 'US', time: 'now 1-d' } });
+    expect(result).toMatchObject({ filter: { geo: 'US', time: 'now 7-d' } });
   });
 });
 

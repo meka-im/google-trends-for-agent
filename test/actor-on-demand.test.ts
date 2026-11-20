@@ -106,10 +106,10 @@ describe('on-demand Actor execution', () => {
   });
 
   it.each([
-    { geo: 'CA', anchor: 'sudoku', daily: 12000 },
-    { geo: 'JP', anchor: 'ナンプレ', daily: 22000 },
-    { geo: 'IN', anchor: 'calculator', daily: 300000 },
-    { geo: '', anchor: 'sudoku', daily: 220000 },
+    { geo: 'CA', anchor: 'sudoku', daily: 15000 },
+    { geo: 'JP', anchor: 'テトリス', daily: 18000 },
+    { geo: 'GB', anchor: 'crossword solver', daily: 27000 },
+    { geo: '', anchor: 'stopwatch', daily: 160000 },
   ])('forwards $geo regional calibration to both native cloud tools', async ({ geo, anchor, daily }) => {
     const fetch = service(), client = new OnDemandActorClient({ fetch: fetch as typeof globalThis.fetch, pollIntervalMs: 0 });
     for (const name of ['trends_ask', 'trends_snapshot'] as const) {

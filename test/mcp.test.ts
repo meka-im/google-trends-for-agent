@@ -29,7 +29,7 @@ describe('MCP offline', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const props = Object.fromEntries(tools.map(t => [t.name, Object.keys((t.inputSchema as { properties: object }).properties).sort()]));
-    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'timeoutMs', 'validate'], trends_compare: ['geo', 'keywords', 'time', 'timeoutMs'], trends_now: ['geos', 'hours', 'limit', 'timeoutMs'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'timeoutMs', 'tz'] });
+    expect(props).toEqual({ trends_ask: ['fresh', 'geo', 'points', 'term', 'time', 'timeoutMs', 'validate'], trends_compare: ['calibrate', 'geo', 'keywords', 'time', 'timeoutMs'], trends_now: ['geos', 'hours', 'limit', 'timeoutMs'], trends_snapshot: ['anchor', 'fresh', 'geo', 'svg', 'term', 'time', 'timeoutMs', 'tz'] });
     for (const t of tools) expect((t.inputSchema.properties as Record<string, Record<string, unknown>>).timeoutMs).toMatchObject({ type: 'integer', minimum: 1000, maximum: 60000 });
     for (const t of tools) expect(t.description).toMatch(/Output: ok, schemaVersion/);
     expect(tools.find(t => t.name === 'trends_now')!.description).toMatch(/Supported geos: .*SG/);
@@ -54,13 +54,13 @@ describe('MCP offline', () => {
     expect((timedOut.structuredContent as { error: { message: string } }).error.message).not.toContain('--timeout');
     expect(timeouts.some(ms => ms === 20000)).toBe(true);
   });
-  it('trends_compare defaults to US and now 1-d', async () => {
+  it('trends_compare defaults to US and now 7-d', async () => {
     const urls: string[] = [];
     const client = await connect(async req => { urls.push(req.url); return req.method === 'HEAD' ? { status: 200, headers: { 'set-cookie': 'NID=x; Path=/' }, body: '' } : { status: 500, headers: {}, body: '' }; });
     const r = await client.callTool({ name: 'trends_compare', arguments: { keywords: ['a', 'b'] } });
-    expect(r.structuredContent).toMatchObject({ ok: false, schemaVersion: SCHEMA_VERSION, filter: { geo: 'US', time: 'now 1-d' }, series: [{ keyword: 'a', points: [] }, { keyword: 'b', points: [] }] });
+    expect(r.structuredContent).toMatchObject({ ok: false, schemaVersion: SCHEMA_VERSION, filter: { geo: 'US', time: 'now 7-d' }, series: [{ keyword: 'a', points: [] }, { keyword: 'b', points: [] }] });
     const explore = decodeURIComponent(urls.find(u => u.includes('/api/explore'))!);
-    expect(explore).toContain('{"keyword":"a","geo":"US","time":"now 1-d"}');
+    expect(explore).toContain('{"keyword":"a","geo":"US","time":"now 7-d"}');
     expect(explore).toContain('"category":0,"property":""');
   });
   it('reports the package version in serverInfo', async () => {
@@ -186,7 +186,7 @@ describe('output envelopes', () => {
   });
   it('trends_compare envelope builds one series per keyword', () => {
     const e = compareEnvelope(['a', 'b'], { status: 'ok', input: {}, data: { interestOverTime: { timeline: [{ time: '1', formattedTime: '', values: [10, 40], formattedValues: [], hasData: [] }], averages: [10, 40] } }, meta: { fetchedAt: 'f', upstreamRequests: 2, durationMs: 1, warnings: [] } });
-    expect(e).toMatchObject({ ok: true, schemaVersion: 1, filter: { geo: 'US', time: 'now 1-d' }, summary: expect.stringContaining('a latest 10/peak 10'), series: [{ keyword: 'a', points: [{ t: '1', value: 10 }], average: 10, latest: 10, peak: 10 }, { keyword: 'b', average: 40, latest: 40, peak: 40 }] });
+    expect(e).toMatchObject({ ok: true, schemaVersion: 1, filter: { geo: 'US', time: 'now 7-d' }, summary: expect.stringContaining('a latest 10/peak 10'), series: [{ keyword: 'a', points: [{ t: '1', value: 10 }], average: 10, latest: 10, peak: 10 }, { keyword: 'b', average: 40, latest: 40, peak: 40 }] });
   });
   it('marks a blocked verdict as a failed envelope with error before meta', () => {
     const verdict = { label: 'blocked', confidence: 'low', reasons: ['RATE_LIMITED'], anchor: { term: 'gpts', ratio: null, band: null, note: 'rate limited' } };
@@ -248,7 +248,7 @@ describe("trends_ask end-to-end offline", () => {
       const live = await client.callTool({ name: "trends_ask", arguments: { term: "bitcoin", fresh: true } });
       expect(live.isError).not.toBe(true);
       const body = live.structuredContent as Record<string, unknown>;
-      expect(body).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: "ok", term: "bitcoin", filter: { geo: "US", time: "now 1-d" } });
+      expect(body).toMatchObject({ ok: true, schemaVersion: SCHEMA_VERSION, status: "ok", term: "bitcoin", filter: { geo: "US", time: "now 7-d" } });
       expect(body.tables).toMatchObject({ popular: expect.any(Array), rising: expect.any(Array) });
       expect(body.interest).not.toHaveProperty('points');
       const withPoints = await client.callTool({ name: "trends_ask", arguments: { term: "bitcoin", points: true } });

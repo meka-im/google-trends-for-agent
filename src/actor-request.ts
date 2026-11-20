@@ -5,7 +5,7 @@ import { defaultAnchorFor, parseBaselines } from './traffic.js';
 import { normalizeGeo } from './options.js';
 import { CONNECTION_PROBE_PROTOCOL } from './connection-check.js';
 import { VERSION } from './version.js';
-import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
+import { currentMekaBaselineVersion } from './dsh-baselines.js';
 
 export const ACTOR_RESPONSE_KEY = 'TOOL_RESPONSE';
 export const ACTOR_REQUEST_PROTOCOL = 1;
@@ -74,5 +74,5 @@ export async function runToolRequest(value: unknown, options: {
       }
     }
   }
-  return { protocol: request.protocol, runtime: { version: VERSION, baselineCatalogRevision: BASELINE_CATALOG_REVISION }, result, snapshots: snapshots.slice(0, 12) };
+  return { protocol: request.protocol, runtime: { version: VERSION, baselineCatalogRevision: currentMekaBaselineVersion() }, result, snapshots: snapshots.slice(0, 12) };
 }
