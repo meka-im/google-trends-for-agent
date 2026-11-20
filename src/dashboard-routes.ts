@@ -1,3 +1,4 @@
+import type { BatchResult } from './batch-types.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { QueryHistoryStore, HISTORY_LIMIT } from './query-history.js';
@@ -12,11 +13,13 @@ export const DASHBOARD_PATH = '/api/gtfa.dashboard';
 export interface DashboardBoundary {
   settings(): { egress: EgressMode; geo: string; cache: boolean; snapshotDir: string };
   execute(name: GtfaTool['name'], input: unknown, signal?: AbortSignal, progress?: (phase: QueryPhase) => void): Promise<Record<string, unknown>>;
+  batch?(saved: SavedQuery, requestId: string, signal: AbortSignal, report: (phase: QueryPhase) => void,
+    publish: (batch: BatchResult) => Promise<void>): Promise<unknown>;
   estimate?(saved: SavedQuery, term: string, requestId: string, startedAt: number, egress: EgressMode,
     signal: AbortSignal, progress: (phase: QueryPhase) => void): Promise<VolumeCheck | undefined>;
   restore?(saved: SavedQuery, check: VolumeCheck, signal: AbortSignal): Promise<VolumeCheck | undefined>;
 }
-const query = z.object({ action: z.literal('query'), name: z.enum(['trends_snapshot', 'trends_compare']), input: z.record(z.string(), z.unknown()), requestId: z.uuid().optional() }).strict();
+const query = z.object({ action: z.literal('query'), name: z.enum(['trends_snapshot', 'trends_compare', 'trends_ask']), input: z.record(z.string(), z.unknown()), requestId: z.uuid().optional() }).strict();
 const estimate = z.object({ action: z.enum(['estimate', 'restore']), id: z.uuid(), term: z.string().trim().min(1).max(100), requestId: z.uuid().optional() }).strict();
 const clear = z.object({ action: z.literal('clear'), ids: z.array(z.uuid()).min(1).max(HISTORY_LIMIT) }).strict();
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'no-store' } });
@@ -56,7 +59,7 @@ export function dashboardRoute(boundary: DashboardBoundary, reject: (request: Re
         try { return json({ ok: true, deleted: await history.clear(clearing.data.ids) }); }
         catch { return json({ ok: false, error: 'Could not clear local query history.' }, 500); }
       }
-      const parsed = z.union([query, estimate]).safeParse(body);
+      const parsed = z.union([query, estimate, z.object({action:z.literal('batch'), id:z.uuid(), requestId:z.uuid()}).strict()]).safeParse(body);
       if (!parsed.success) return json({ ok: false, error: 'Invalid dashboard request.' }, 400);
       const operation = parsed.data;
       if (querying) return json({ ok: false, error: 'A query is already running.' }, 409);
@@ -72,6 +75,19 @@ export function dashboardRoute(boundary: DashboardBoundary, reject: (request: Re
         }
         const saved = await history.get(operation.id);
         if (!saved) return json({ ok: false, error: 'Record not found.' }, 404);
+        if (operation.action === 'batch') {
+          if (!boundary.batch || !saved.result.onDemand || !saved.result.ok) return json({ok:false, code:'ESTIMATE_UNAVAILABLE'},422);
+          const previous = saved.result.batchVolume as BatchResult | undefined;
+          if (previous?.complete || previous?.requestId === requestId) return json({ok:true, saved});
+          let updated = saved;
+          await boundary.batch(saved, requestId, signal, report, async batch => {
+            const persisted = await history.saveBatch(operation.id,batch);
+            if (!persisted) throw new Error('Record removed');
+            updated = persisted;
+            if (progress) progress = {...progress, batch, recordId:operation.id};
+          });
+          return json({ok:true,saved:updated});
+        }
         const term = normalizeTerm(operation.term);
         const checks = (saved.volumeChecks ?? []).filter(check => normalizeTerm(check.keyword) === term);
         const last = checks.at(-1), oldRange = last?.estimate?.range;

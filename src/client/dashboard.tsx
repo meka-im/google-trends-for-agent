@@ -1,3 +1,4 @@
+import type { BatchResult } from '../batch-types.js';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { ChoicePicker } from './choice-picker.js';
@@ -117,9 +118,8 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
           {fieldError ? <p className="gd-field-error" id="gd-keyword-error" role="alert">{t(fieldError)}</p> : null}
         </form><div className="gd-query-hint" id="gd-keyword-hint">{terms.length <= 1 ? <label><input type="checkbox" checked={reuse && state?.settings.cache !== false} disabled={busy || state?.settings.cache === false} onChange={event => setReuse(event.target.checked)} />{t('dashReuse')}</label> : null}<span>{terms.length ? `${terms.length} / 5 · ` : ''}{state ? egressLabel(state.settings.egress, t) : t('dashLoading')}</span></div>
       </div>
-      {terms.length === 5 ? <p className="gd-limit-hint">{t('dashFiveTerms')}</p> : null}
       {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-      {result ? <Result key={result.record.id} saved={result} metric={metric} setMetric={setMetric} busy={busy} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={32} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
+      {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? {...result,result:{...result.result,batchVolume:operation.batch}} : result} metric={metric} setMetric={setMetric} busy={busy} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} t={t} /> : <div className="gd-card gd-empty"><Icon name="chart" size={32} /><h3>{t('dashEmptyResult')}</h3><p>{t('dashEmptyHint')}</p></div>}
     </section>
     <section id="gd-panel-records" role="tabpanel" aria-labelledby="gd-tab-records" hidden={tab !== 'records'}>
       <div className="gd-toolbar"><div><h2>{t('dashRecords')}</h2><p>{t('dashHistoryHint')}</p></div></div>
@@ -192,7 +192,7 @@ function volumeRows(saved: SavedQuery) {
   const calibration = object(result.calibration), rows = array(calibration.series);
   return record.terms.map(term => {
     const last = [...(volumeChecks ?? [])].reverse().find(check => check.keyword === term);
-    const primary = rows.find(row => row.keyword === term) ?? (record.tool === 'trends_compare' ? {} : { traffic: result.traffic, anchor: result.anchor });
+    const primary = array(object(result.batchVolume).series).find(row => row.keyword === term) ?? rows.find(row => row.keyword === term) ?? (record.tool === 'trends_compare' ? {} : { traffic: result.traffic, anchor: result.anchor });
     const reading = last?.estimate ? { ...last.estimate } : primary;
     const legacy = !last?.estimate && calibration.settledOnly !== true && number(object(primary.traffic).average) !== null;
     return { term, reading, primary, last, legacy };
@@ -233,11 +233,23 @@ export function resultSeries(saved: SavedQuery, traffic = false): Series[] {
 const reasonKey: Record<string, string> = { baseline: 'dashVolumeNoBaseline', capacity: 'dashVolumeCapacity', window: 'dashVolumeLongWindow',
   samples: 'dashEstimateMissing', anchor: 'dashVolumeWeakAnchor', disagreement: 'dashVolumeDisagreement' };
 
-type EstimateAction = (term: string, action?: 'restore') => void;
+type EstimateAction = (term: string, action?: 'restore' | 'batch') => void;
 
 function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean }) {
   const { record, result } = saved;
-  if (record.tool !== 'trends_compare' && record.tool !== 'trends_snapshot') return null;
+  if (result.onDemand && result.ok && supportsVolumeWindow(record.time)) {
+    const batch = result.batchVolume as BatchResult | undefined;
+    return <section className="gd-volume-list" aria-live="polite"><h4>{t('dashCompareVolume')}</h4>
+      {(!batch?.complete || batch.error) && <button className="gd-button primary" style={{width:'100%'}} disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(busy ? 'dashRunning' : 'dashBatchEstimate')}</button>}
+      {batch?.series.map(s => <div className="gd-volume-row" key={s.keyword}><span>{s.keyword}</span>
+        <strong>{s.traffic.average !== null ? formatVolume(s.traffic.average) : s.below ? t('dashBelowFloor')+'（'+formatNumber(s.below)+' '+t('dashPerDay')+'）' : t(reasonKey[s.reason??'samples']??'dashEstimateMissing')}</strong>
+        {s.reused ? <small>{t('dashCached')}</small> : s.via || s.anchor ? <small>{t(s.via?'dashVia':'dashEstimateAnchor')} · {s.via??s.anchor?.term}</small> : null}
+      </div>)}
+      {batch?.rounds.map(step=><div className="gd-volume-row" key={step.round}><span>{t('dashRound')} {step.round} · {step.anchor} · {formatNumber(step.daily)} {t('dashPerDay')}</span><small>{step.targets.join('、')}</small></div>)}
+      {batch?.error && <small role="alert">{t('dashEstimateFailed')} · {batch.error}</small>}
+    </section>;
+  }
+  if (record.tool !== 'trends_compare' && record.tool !== 'trends_snapshot' && !result.onDemand) return null;
   const showChecks = Boolean(result.ok) && record.status !== 'blocked' && supportsVolumeWindow(record.time);
   const volume = volumeRows(saved);
   if (!supportsVolumeWindow(record.time) && !volume.some(({ legacy }) => legacy)) {
@@ -296,10 +308,10 @@ function Result({ saved, metric, setMetric, t, egress, estimate, busy }: {
     <div className="gd-toolbar"><div><h2>{record.terms.join(' vs ')} <Badge record={record} t={t} /></h2><p>{regionLabel(record.geo, t('dashGeo') === '地区' ? 'zh' : 'en')} · {timeLabel(record.time, t)} · {t('dashReadSaved')}</p></div></div>
     <div className="gd-result-grid">
       <article className="gd-card">
-        <div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')}</h3><div className="gd-actions">
+        <div className="gd-result-head"><h3>{t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')}</h3>{(!result.onDemand || hasTraffic) && <div className="gd-actions">
           <Button primary={currentMetric === 'interest'} onClick={() => { focusTerm(null); setMetric('interest'); }}>{t('dashInterest')}</Button>
           <Button disabled={!hasTraffic} primary={currentMetric === 'traffic'} onClick={() => { focusTerm(null); setMetric('traffic'); }}>{t('dashTraffic')}</Button>
-        </div></div>
+        </div>}</div>
         <TrendChart series={visible} traffic={currentMetric === 'traffic'}
           label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
         {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?

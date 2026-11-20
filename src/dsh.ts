@@ -1,3 +1,4 @@
+import { estimateBatch } from './dashboard-batch.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -15,7 +16,6 @@ import { createDefaultTransport, throwIfAborted, type Transport } from './transp
 import { registerRoutes, type RouteOverrides } from './dsh-routes.js';
 import { GTrendsError } from './core.js';
 import { QueryHistoryStore, type QueryRecord } from './query-history.js';
-import { calibratedComparison } from './dashboard-comparison.js';
 import { singleVolume } from './dashboard-single.js';
 import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './dashboard-volume.js';
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
@@ -368,9 +368,8 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
         result = await singleVolume(input, current, previous, (name, args) =>
           execute(tools.find(t => t.name === name)!, args, current, signal, progress, id => actorIds.push(id)), () => progress?.('calibrating'));
       } else {
-        result = source === 'manual' && tool.name === 'trends_compare'
-          ? await calibratedComparison(input, current, args => execute(tool, args, current, signal, progress), () => progress?.('calibrating'))
-          : await execute(tool, input, current, signal, progress);
+        result = await execute(tool, input, current, signal, progress);
+        if (source === 'manual') result = { ...result, onDemand: true };
       }
       throwIfAborted(signal);
     } catch (error) {
@@ -424,6 +423,14 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
     dashboard: {
       settings,
       execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),
+      batch: async (saved, requestId, signal, progress, publish) => {
+        const current = settings(), tool = tools.find(t => t.name === 'trends_compare')!;
+        const history = new QueryHistoryStore(current.snapshotDir);
+        return estimateBatch(saved, current, requestId, keywords => execute(tool, {
+          keywords, geo: saved.record.geo, time: saved.record.time, timeoutMs: 60000,
+        }, current, signal, progress), publish, term => current.cache
+          ? history.previousCalibration(term,saved.record.geo,saved.record.time) : Promise.resolve(null));
+      },
       estimate: async (saved, term, requestId, startedAt, egress, signal, progress) => {
         const current = { ...settings(), egress };
         const request = estimateRequest(saved, term, current);

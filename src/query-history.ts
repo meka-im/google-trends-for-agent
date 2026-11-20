@@ -1,3 +1,4 @@
+import type { BatchResult } from './batch-types.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -86,10 +87,27 @@ export class QueryHistoryStore {
         if (record.geo !== geo || record.time !== time || !record.terms.some(t => normalizeTerm(t) === normalizeTerm(term))) continue;
         const saved = await this.read(record.id);
         const estimate = rows(row(saved?.result.calibration).series).find(s => normalizeTerm(String(s.keyword)) === normalizeTerm(term));
+        if (rows(row(saved?.result.batchVolume).series).some(s => normalizeTerm(String(s.keyword)) === normalizeTerm(term) && typeof row(s.traffic).average === 'number')) return saved;
         if (estimate?.anchor || estimate?.range || saved?.volumeChecks?.some(c =>
           normalizeTerm(c.keyword) === normalizeTerm(term) && (c.estimate?.anchor || c.estimate?.range))) return saved;
       }
       return null;
+    });
+  }
+  async saveBatch(id: string, batch: BatchResult) {
+    if (!ID.test(id)) return null;
+    return this.serial(async () => {
+      const saved = await this.read(id);
+      if (!saved) return null;
+      saved.result.batchVolume = batch;
+      await writeJson(join(this.directory, id + '.json'), saved.result);
+      const runs = new Map((saved.record.volumeRuns ?? []).map(run => [run.actorRunId, run]));
+      for (const run of batch.runs) runs.set(run.actorRunId, run);
+      if (batch.runs.length) {
+        saved.record.volumeRuns = [...runs.values()];
+        await writeJson(join(this.directory, id + '.meta.json'), saved.record);
+      }
+      return saved;
     });
   }
   async saveVolumeCheck(id: string, check: VolumeCheck): Promise<SavedQuery | null> {

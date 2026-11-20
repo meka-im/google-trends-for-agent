@@ -100,7 +100,7 @@ export class DashboardController {
       if (this.disposed || signal.aborted || this.value.operation?.requestId !== requestId) return;
       try {
         const reply = await dashboardRequest<{ progress: QueryProgress | null }>(`?progress=${encodeURIComponent(requestId)}`, undefined, signal);
-        if (reply.progress && this.value.operation?.requestId === requestId) this.commit({ operation: { ...this.value.operation, phase: reply.progress.phase } });
+        if (reply.progress && this.value.operation?.requestId === requestId) this.commit({ operation: { ...this.value.operation, ...reply.progress } });
       } catch { /* The original query owns errors; progress never starts or retries work. */ }
       if (!this.disposed && !signal.aborted && this.value.operation?.requestId === requestId) this.pollProgress(requestId, signal);
     }, 1000);
@@ -133,10 +133,10 @@ export class DashboardController {
       this.commit({ fieldError: 'dashInputError', error: '' });
       return false;
     }
-    const name = terms.length === 1 ? 'trends_snapshot' : 'trends_compare';
+    const name = terms.length === 1 ? 'trends_ask' : 'trends_compare';
     return this.operate(terms, async (signal, requestId, startedAt) => {
       const output = await dashboardRequest<{ result: Record<string, unknown> }>('', { action: 'query', name, requestId,
-        input: { ...(terms.length === 1 ? { term: terms[0], svg: false, fresh: !reuse } : { keywords: terms }), geo, time, timeoutMs: 60000 } }, signal);
+        input: { ...(terms.length === 1 ? { term: terms[0], points: true, validate: false, fresh: !reuse } : { keywords: terms }), geo, time, timeoutMs: 60000 } }, signal);
       if (this.disposed || signal.aborted) return;
       const next = await this.refresh(), id = row(output.result.meta).queryRecordId;
       const record = next?.records.find(record => record.id === id);
@@ -144,13 +144,13 @@ export class DashboardController {
         createdAt: new Date(startedAt).toISOString(), fetchedAt: String(row(output.result.meta).fetchedAt ?? ''), durationMs: Date.now() - startedAt, actorRunId: null, costUsd: null, errorCode: null }, result: output.result }, metric: 'interest' }, true);
     });
   }
-  async estimate(term: string, action: 'estimate' | 'restore' = 'estimate') {
+  async estimate(term: string, action: 'estimate' | 'restore' | 'batch' = 'estimate') {
     const id = this.value.result?.record.id;
     if (!id || !ID.test(id)) return;
-    await this.operate([term], async (signal, requestId) => {
-      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action, id, term, requestId }, signal);
+    await this.operate(action === 'batch' ? this.value.result!.record.terms : [term], async (signal, requestId) => {
+      const reply = await dashboardRequest<{ saved: SavedQuery }>('', { action, id, ...(action === 'batch' ? {} : {term}), requestId }, signal);
       if (this.disposed || signal.aborted) return;
-      this.commit({ result: reply.saved, metric: 'traffic' }, true);
+      this.commit({ result: reply.saved, metric: action === 'batch' ? 'interest' : 'traffic' }, true);
       await this.refresh();
     });
   }

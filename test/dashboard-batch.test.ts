@@ -1,0 +1,27 @@
+import { describe, expect, it, vi } from 'vitest';
+import { estimateBatch } from '../src/dashboard-batch.js';
+import type { SavedQuery } from '../src/query-history-types.js';
+
+const terms = ['One','Two','Three','Four','Five'];
+const dates = Array.from({length:30}, (_,i) => new Date(Date.UTC(2026,9,i+1)).toISOString());
+const points = (value:number) => dates.map(t=>({t,value}));
+const saved = {
+  record:{terms,geo:'US',time:'today 1-m'},result:{series:terms.map(keyword=>({keyword,points:points(40)}))},
+} as SavedQuery;
+describe('on-demand calibration',()=>{
+  it('infers the fifth term from the original comparison with one paid request',async()=>{
+    const compare = vi.fn(async(keywords:string[])=>({ok:true,series:keywords.map(keyword=>({keyword,points:points(40)}))}));
+    const state=await estimateBatch(saved,{geo:'US'},'request',compare,async()=>{},async()=>null);
+    expect(compare).toHaveBeenCalledTimes(1);
+    expect(compare.mock.calls[0]![0]).toHaveLength(5);
+    expect(state.series.every(row=>row.traffic.average===1600)).toBe(true);
+    expect(state.series.filter(row=>row.via)).toHaveLength(1);
+  });
+  it('rechecks only the weak term and leaves all-zero signals unavailable', async()=>{
+    const compare=vi.fn(async(keywords:string[])=>({ok:true,series:keywords.map(keyword=>({keyword,points:points(keyword==='Five'?0:40)}))}));
+    const state=await estimateBatch(saved,{geo:'US'},'request',compare,async()=>{},async()=>null);
+    expect(compare.mock.calls[1]![0]).toEqual(['Five','psi to bar']);
+    expect(state.series.find(row=>row.keyword==='Five')).toMatchObject({reason:'samples',traffic:{average:null}});
+    expect(state.series.find(row=>row.keyword==='Five')?.below).toBeUndefined();
+  });
+});

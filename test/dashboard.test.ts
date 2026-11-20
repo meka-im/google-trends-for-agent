@@ -132,7 +132,7 @@ describe('dsh query history and dashboard', () => {
     const record = await h.store.save({ tool: 'trends_now', input: { geos: ['CA', 'GB'], hours: 48 }, result: { ok: true, status: 'ok', geos: ['CA', 'GB'] }, source: 'agent', egress: 'local', defaultGeo: 'US', startedAt: Date.now() });
     expect(record).toMatchObject({ geo: 'CA, GB', time: '48h', terms: ['CA', 'GB'] });
   });
-  it('uses exactly one Actor run and one journal record for a calibrated multi-term UI query', async () => {
+  it('uses exactly one Actor run and one journal record for an interest query and calibrates its terms together on demand', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'gtfa-dashboard-actor-')); directories.push(directory);
     const routes = new Map<string, Route>();
     let keywords: string[] = [];
@@ -159,8 +159,8 @@ describe('dsh query history and dashboard', () => {
       { egress: 'actor-public', apifyToken: 'apify_api_test_placeholder', snapshotDir: directory, chartDir: null }, { onDemand: { fetch: actorFetch } });
     const reply = await routes.get('/api/gtfa.dashboard')!.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify({ action: 'query', name: 'trends_compare', input: { keywords: ['Alpha', 'Beta'], time: 'today 1-m' } }) }));
     const output = (await reply.json()).result;
-    expect(output.ok).toBe(true); expect(output.calibration.status).toBe('partial');
-    expect(keywords).toEqual(['Alpha', 'Beta', 'word search', 'oz to ml', 'kph to mph']);
+    expect(output.ok).toBe(true); expect(output.calibration).toBeUndefined();
+    expect(keywords).toEqual(['Alpha', 'Beta']);
     expect(actorFetch.mock.calls.filter(([url]) => String(url).includes('/runs?'))).toHaveLength(1);
     const records = await new QueryHistoryStore(directory).list();
     expect(records).toHaveLength(1); expect(records[0]).toMatchObject({ terms: ['Alpha', 'Beta'], actorRunId: 'run-1', costUsd: 0.001 });
@@ -169,19 +169,20 @@ describe('dsh query history and dashboard', () => {
     const post = (body: unknown) => route.fetch(new Request('http://localhost/api/gtfa.dashboard', { method: 'POST', body: JSON.stringify(body) }));
     expect((await post({ action: 'estimate', id, term: 'unrelated' })).status).toBe(422);
     expect(actorRuns).toBe(1);
-    const check = { action: 'estimate', id, term: 'alpha', requestId: randomUUID() };
+    const check = { action: 'batch', id, requestId: randomUUID() };
     const response = await post(check);
     expect(response.status).toBe(200);
     const { saved } = await response.json();
-    expect(keywords).toEqual(['Alpha', 'psi to bar', 'kph to mph']);
-    expect(saved.volumeChecks).toMatchObject([{ sameWindow: true, keyword: 'Alpha', actorRunId: 'run-2', costUsd: 0.001,
-      estimate: { anchor: { term: 'kph to mph' }, traffic: { average: 1297 } } }]);
+    expect(keywords).toEqual(['Beta', 'Alpha', 'kph to mph']);
+    expect(saved.result.batchVolume.complete).toBe(true);
+    expect(saved.result.batchVolume.series).toHaveLength(2);
+    expect(saved.result.batchVolume.series[0].traffic.average).toBeGreaterThan(0);
     expect(saved.result).toEqual((await new QueryHistoryStore(directory).get(id))!.result);
     expect((await post({ ...check, requestId: randomUUID() })).status).toBe(200);
     expect(actorRuns).toBe(2);
     const store = new QueryHistoryStore(directory);
     expect(await store.list()).toMatchObject([{ id, volumeRuns: [{ actorRunId: 'run-2', costUsd: 0.001 }] }]);
-    expect((await store.get(id))?.volumeChecks).toHaveLength(1);
+    expect((await store.get(id))?.volumeChecks).toBeUndefined();
     expect(await store.clear([id])).toBe(1);
     await expect(stat(join(store.directory, id + '.volume.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
