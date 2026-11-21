@@ -53,6 +53,7 @@ export const DASHBOARD_CSS = `
 }
 .gd-route-pill:not(:disabled):hover{border-color:color-mix(in srgb,var(--gtfa-accent) 40%,var(--gtfa-line));color:var(--gtfa-ink);background:var(--gtfa-hover)}
 .gd-route-dot{width:7px;height:7px;border-radius:50%;background:var(--gtfa-green);box-shadow:0 0 0 3px var(--gtfa-green-soft);flex:none}
+.gd-route-dot.warn{background:#d97706;box-shadow:0 0 0 3px color-mix(in srgb,#f59e0b 16%,var(--gtfa-surface))}
 .gd-actions{display:flex;align-items:center;gap:8px}
 
 /* Workspace Container */
@@ -367,7 +368,13 @@ export const DASHBOARD_CSS = `
 .gd-badge.vol{background:var(--gtfa-accent-soft);color:var(--gtfa-accent);font-variant-numeric:tabular-nums}
 .gd-table-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--gtfa-line);color:var(--gtfa-quiet);font-size:11.5px;background:color-mix(in srgb,var(--gtfa-soft) 50%,transparent)}
 .gd-table-footer .gd-button{height:32px;min-height:32px;max-height:32px}
-.gd-footer{display:flex;justify-content:space-between;gap:14px;font-size:11px;color:var(--gtfa-quiet);padding-top:18px}
+.gd-footer{display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:11px;color:var(--gtfa-quiet);padding-top:18px}
+.gd-footer-ver{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 6px;border-radius:6px;font:inherit;color:var(--gtfa-muted);cursor:pointer}
+.gd-footer-ver:hover{background:var(--gtfa-hover);color:var(--gtfa-ink)}
+.gd-footer-dot{width:6px;height:6px;border-radius:50%;background:var(--gtfa-accent);flex:none}
+.gd-footer-dot.warn{background:#d97706}
+.gd-footer-tag{color:var(--gtfa-accent);font-weight:550}
+.gd-footer-tag.warn{color:var(--dsw-alias-state-warning-primary,#b45309)}
 .gd-muted{color:var(--gtfa-muted)}
 
 /* Confirm Dialog */

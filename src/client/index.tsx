@@ -26,6 +26,12 @@ import { SETTINGS_CSS } from './theme.js';
 import { Dashboard, TrendsMark } from './dashboard.js';
 import { DashboardController } from './dashboard-state.js';
 import { DASHBOARD_EN, DASHBOARD_ZH } from './dashboard-locale.js';
+import {
+  UpdateBanner,
+  effectiveUpdateFlags,
+  loadVersionStatus,
+} from './update-banner.js';
+import type { VersionStatusSnapshot } from '../version-check.js';
 import { parseActorRuntime } from '../actor-runtime.js';
 import { automaticAnchorFor, catalogForGeo, BASELINE_CATALOG_REVISION } from '../baseline-catalog.js';
 import {
@@ -272,6 +278,34 @@ export const EN: Record<string, string> = {
   actorRuntimeUnknown: 'Actor version unverified. Update the Actor and run the check again.',
   actorRuntimeCatalogDifferent: 'Actor calibration catalog differs. Update the Actor and run the check again.',
   actorUpdateStep: 'Prepare update',
+  actorOutdatedBadge: 'v{version} · Outdated',
+  updateUpToDateTitle: 'Google Trends plugin is up to date',
+  updateUpToDateSub: 'Baselines {catalog} · Last checked: {checked}',
+  updateNotChecked: 'not yet',
+  updateCheckNow: 'Check updates',
+  updateChecking: 'Checking…',
+  updateCheckFailed: 'Could not check GitHub releases right now. Try again later.',
+  updateCheckRateLimited: 'GitHub release check was rate-limited. Try again in a few minutes.',
+  updatePluginTitle: 'Update available',
+  updatePluginSubFallback: 'A newer version of google-trends-for-agent is available on GitHub.',
+  updateActorOldTitle: 'Your personal Actor is behind this plugin',
+  updateActorOldPill: 'Actor v{actor} · Plugin v{plugin}',
+  updateActorOldSub: 'Older Actor builds lack newer features such as batch volume calibration. Rebuild it or switch to the managed Public Actor.',
+  updateBothTitle: 'Plugin update available & personal Actor is outdated',
+  updateBothSub: 'Upgrade the plugin to v{next}, and rebuild your personal Actor (or switch to the Public Actor).',
+  updateRestartTitle: 'Restart dsh to finish upgrading',
+  updateRestartSub: 'Frontend loaded v{frontend} while the dsh backend is still running v{backend}. Fully quit and reopen dsh.',
+  updateShowSteps: 'Upgrade steps',
+  updateHideSteps: 'Hide steps',
+  updateCopyCmd: 'Copy command',
+  updateCopied: 'Copied',
+  updateReleaseNotes: 'Release notes →',
+  updateRestartHint: 'If pnpm asks to approve the new commit in allowBuilds, add it and re-run, then fully quit and reopen dsh.',
+  updateActorAction: 'Update my Actor',
+  updateSwitchPublic: 'Use Public Actor',
+  updateDismiss: 'Dismiss this notice',
+  updateFooterAvailable: 'v{version} available',
+  updateFooterActorOld: 'Actor v{version}',
   recommended: 'Recommended',
   routeLocalDescription: 'Use this machine · No account needed',
   routePublicDescription: 'Apify network · Nothing to deploy',
@@ -567,6 +601,34 @@ export const ZH: Record<string, string> = {
   actorRuntimeUnknown: '尚未核验 Actor 版本，请更新 Actor 后重新测试。',
   actorRuntimeCatalogDifferent: 'Actor 的校准基准版本不同，请更新后重新测试。',
   actorUpdateStep: '准备更新',
+  actorOutdatedBadge: 'v{version} · 旧版',
+  updateUpToDateTitle: 'Google Trends 插件已是最新版本',
+  updateUpToDateSub: '基线目录 {catalog} · 上次检查：{checked}',
+  updateNotChecked: '尚未检查',
+  updateCheckNow: '检查更新',
+  updateChecking: '检查中…',
+  updateCheckFailed: '暂时无法检查 GitHub 新版本，请稍后再试。',
+  updateCheckRateLimited: 'GitHub 版本检查触发限流，请稍后再试。',
+  updatePluginTitle: '发现新版本',
+  updatePluginSubFallback: 'GitHub 上已有更新版本的 google-trends-for-agent。',
+  updateActorOldTitle: '你的个人 Actor 已落后于当前插件',
+  updateActorOldPill: 'Actor v{actor} · 插件 v{plugin}',
+  updateActorOldSub: '旧版 Actor 缺少批量搜索量校准等新能力，建议重建更新或改用免维护的公共 Actor。',
+  updateBothTitle: '插件有新版本，且你的个人 Actor 也已落后',
+  updateBothSub: '建议先升级插件至 v{next}，并更新个人 Actor（或改用免维护的公共 Actor）。',
+  updateRestartTitle: '检测到新版本已安装，需要重启 dsh',
+  updateRestartSub: '前端已加载 v{frontend}，但 dsh 后端仍在运行 v{backend}。请完全退出并重新打开 dsh。',
+  updateShowSteps: '升级步骤',
+  updateHideSteps: '收起步骤',
+  updateCopyCmd: '复制命令',
+  updateCopied: '已复制',
+  updateReleaseNotes: '查看更新日志 →',
+  updateRestartHint: '提示：如 pnpm 提示需要在 allowBuilds 追加新哈希，保存后重跑一次，完成后请完全退出并重开 dsh。',
+  updateActorAction: '一键更新我的 Actor',
+  updateSwitchPublic: '改用公共 Actor',
+  updateDismiss: '忽略此提醒',
+  updateFooterAvailable: '有新版 v{version}',
+  updateFooterActorOld: 'Actor 旧版 v{version}',
   recommended: '推荐',
   routeLocalDescription: '使用本机网络 · 无需账号',
   routePublicDescription: '使用 Apify 网络 · 无需部署',
@@ -1778,10 +1840,10 @@ function actorBuildState(status: string | null, buildId: string | null): { label
 
 /** Keep deployment progress and available Actor choices in one consistent panel. */
 export function ActorSelection({ state, value, t, disabled, pending = false, refreshing = false,
-  deployment = null, updating = false, notice, onChange, onRefresh, onManual, onDeploy, onUpdate }: {
+  deployment = null, updating = false, outdatedActor = null, notice, onChange, onRefresh, onManual, onDeploy, onUpdate }: {
   state: ApifyActorsView; value: string; t: Translate; disabled: boolean; pending?: boolean;
   refreshing?: boolean; deployment?: 'creating' | 'building' | null; notice?: string | null;
-  updating?: boolean;
+  updating?: boolean; outdatedActor?: { id: string; version: string } | null;
   onChange: (value: string) => void; onRefresh: () => void; onManual: () => void;
   onDeploy: () => void;
   onUpdate?: () => void;
@@ -1833,7 +1895,7 @@ export function ActorSelection({ state, value, t, disabled, pending = false, ref
             <span className="gtfa-actor-choice-icon"><Icon name="server" size={18} /></span>
             <span className="gtfa-actor-choice-copy"><strong>{actor.title ?? actor.name}</strong>
               <span>{[actor.username, actor.name].filter(Boolean).join('/')}</span></span>
-            <span className={`gtfa-actor-build ${build.tone}`}><span className="gtfa-dot" />{t(build.label)}</span>
+            <span className={`gtfa-actor-build ${outdatedActor && actor.id === outdatedActor.id && build.tone === 'ready' ? 'outdated' : build.tone}`}><span className="gtfa-dot" />{outdatedActor && actor.id === outdatedActor.id && build.tone === 'ready' ? template(t('actorOutdatedBadge'), { version: outdatedActor.version }) : t(build.label)}</span>
             <span className="gtfa-actor-radio" aria-hidden="true">{active ? <Icon name="check" size={11} /> : null}</span>
           </button>;
         })}
@@ -2111,6 +2173,30 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   const baselinesLoaded = useRef(false);
   const baselinesSyncAbort = useRef<AbortController | null>(null);
   useEffect(() => () => { baselinesSyncAbort.current?.abort(); baselinesSyncAbort.current = null; }, []);
+  const [versionStatus, setVersionStatus] = useState<VersionStatusSnapshot | null>(null);
+  const [checkingVersion, setCheckingVersion] = useState(false);
+  const versionAbort = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    versionAbort.current = controller;
+    void loadVersionStatus(false, controller.signal).then(next => {
+      if (!controller.signal.aborted && next) setVersionStatus(next);
+    });
+    return () => { controller.abort(); if (versionAbort.current === controller) versionAbort.current = null; };
+  }, []);
+  const refreshVersionStatus = useCallback(async (force = false) => {
+    versionAbort.current?.abort();
+    const controller = new AbortController();
+    versionAbort.current = controller;
+    if (force) setCheckingVersion(true);
+    try {
+      const next = await loadVersionStatus(force, controller.signal);
+      if (!controller.signal.aborted && next) setVersionStatus(next);
+    } finally {
+      if (versionAbort.current === controller) versionAbort.current = null;
+      if (force) setCheckingVersion(false);
+    }
+  }, []);
   const [oauth, setOauth] = useState<ApifyOAuthView>(initialOAuth ?? { status: 'idle' });
   const [oauthBusy, setOauthBusy] = useState<ApifyOAuthAction | null>(null);
   const [oauthPoll, setOauthPoll] = useState({ id: 0, delay: 0, egress: draft.egress });
@@ -2335,6 +2421,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
       setBuilding(false);
       setDeployNotice(null);
       setTestResult(null);
+      void refreshVersionStatus(false);
       return;
     }
     if (resolved.status === 'failed') {
@@ -2461,7 +2548,10 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         ...(draft.egress !== 'local' && (draft.token.trim() || draft.clearToken)
           ? { apifyToken: draft.clearToken ? '' : draft.token.trim() } : {}),
       }, controller.signal);
-      if (testAbort.current === controller) setTestResult(result);
+      if (testAbort.current === controller) {
+        setTestResult(result);
+        if (result.actorRuntime) void refreshVersionStatus(false);
+      }
     } finally {
       if (testAbort.current === controller) { testAbort.current = null; setTesting(false); }
     }
@@ -2609,8 +2699,28 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     });
   };
 
+  const outdatedActor = useMemo(() => {
+    if (!versionStatus || draft.egress !== 'actor-own') return null;
+    const flags = effectiveUpdateFlags(versionStatus, draft.egress, draft.actor);
+    if (!flags.actorUpdate || !versionStatus.observedActor) return null;
+    return { id: versionStatus.observedActor.actorId, version: versionStatus.observedActor.version };
+  }, [versionStatus, draft.egress, draft.actor]);
+
   return <form className="gtfa-settings" style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
     <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
+    <UpdateBanner
+      surface="settings"
+      status={versionStatus}
+      t={t}
+      locale={intlLocale}
+      egressOverride={draft.egress}
+      actorIdOverride={draft.actor}
+      checking={checkingVersion}
+      updatingActor={preparingActor}
+      onCheckUpdates={() => { void refreshVersionStatus(true); }}
+      onUpdateActor={ownEgress && editable && Boolean(draft.actor.trim()) ? () => { void deploy(true); } : undefined}
+      onSwitchPublic={ownEgress && editable ? () => { resetDeployment(); edit({ egress: 'actor-public', egressNotice: undefined }); setTestResult(null); } : undefined}
+    />
     <section className="gtfa-section" style={styles.section}>
       <SectionHeader icon="plug" title={t('connection')} description={t('connectionDescription')} />
       <Segmented label={t('egress')} value={draft.egress} disabled={!editable}
@@ -2636,7 +2746,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
               onRefresh={() => requestUsage(true)} onRetry={() => requestUsage(true)} refreshing={busy} />}
           {ownEgress ? <ActorSelection state={actors} value={draft.actor} t={t} disabled={!editable || oauthBusy !== null}
             pending={oauth.status === 'ready' && oauth.data.pending}
-            refreshing={actorsRefreshing} deployment={deploying ? 'creating' : building ? 'building' : null} updating={updatingActor} notice={deployNotice}
+            refreshing={actorsRefreshing} deployment={deploying ? 'creating' : building ? 'building' : null} updating={updatingActor} outdatedActor={outdatedActor} notice={deployNotice}
             onChange={value => edit({ actor: value })} onRefresh={() => requestActors(true)}
             onManual={openManualToken} onDeploy={() => { void deploy(); }} onUpdate={() => { void deploy(true); }} /> : null}
           {usage.status === 'error' && usage.code === 'no-token' && !oauthConnected ? <ApifySignupBar t={t} locale={intlLocale} /> : null}

@@ -21,6 +21,8 @@ import { row, rows, relativeDshResult, volumeFilter, volumeReferences } from './
 import { estimateRequest, finishEstimate, restoreEstimateBand } from './dashboard-estimate.js';
 import { MEKA_BASELINES_URL, mekaDefaultAnchor } from './dsh-baselines.js';
 import { createMekaBaselinesSync, type MekaBaselineBoundary } from './dsh-baselines-sync.js';
+import { createVersionStatusMonitor, type VersionStatusBoundary } from './dsh-version.js';
+import { parseActorRuntime } from './actor-runtime.js';
 import { REGIONAL_CALIBRATION_GUIDANCE } from './baseline-catalog.js';
 import type { QueryPhase } from './query-progress.js';
 
@@ -162,6 +164,11 @@ export interface RegisterOverrides {
     autoSync?: boolean;
     fetch?: typeof globalThis.fetch;
     boundary?: MekaBaselineBoundary;
+  };
+  /** Test seam for plugin & Actor version status monitoring. */
+  versionStatus?: {
+    fetch?: typeof globalThis.fetch;
+    boundary?: VersionStatusBoundary;
   };
 }
 
@@ -323,6 +330,10 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   if (typeof ctx.effect === 'function') ctx.effect(() => () => oauth.dispose());
   const transport = overrides.transport ?? createDefaultTransport();
   const onDemand = new OnDemandActorClient(overrides.onDemand);
+  const versionStatus = overrides.versionStatus?.boundary ?? createVersionStatusMonitor({
+    getSnapshotDir: () => settings().snapshotDir,
+    ...(overrides.versionStatus?.fetch ? { fetch: overrides.versionStatus.fetch } : {}),
+  });
   const tools = createTools({
     transport,
     minIntervalMs: overrides.minIntervalMs ?? 1500,
@@ -356,10 +367,13 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
         const rejected = invalidInputEnvelope(resolved.message ?? 'Sign in with Apify to run an Actor query.');
         return { ...rejected, error: { ...rejected.error, code: resolved.code === 'network' ? 'NETWORK_ERROR' : 'INVALID_INPUT' } };
       }
+      const actorId = current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '';
       result = await callActorTool(onDemand, {
-        token: resolved.token, actorId: current.egress === 'actor-public' ? GTFA_PUBLIC_ACTOR_ID : current.apifyActor ?? '',
-        name: tool.name, input: queryInput, settings: executionSettings, signal, progress, started,
+        token: resolved.token, actorId,
+        name: tool.name, input: queryInput, settings: executionSettings, egress: current.egress, signal, progress, started,
       });
+      const observed = parseActorRuntime(row(result.meta).actorRuntime);
+      if (actorId && observed) void versionStatus.recordActorRuntime(actorId, observed);
     } else {
       result = await tool.execute(queryInput, { signal, settings: executionSettings });
     }
@@ -440,6 +454,7 @@ export async function register(ctx: DshContext, config: GtfaConfig = {}, overrid
   registerRoutes(ctx, settings, {
     oauth,
     baselines: baselinesSync,
+    versionStatus,
     dashboard: {
       settings,
       execute: (name, input, signal, progress) => run(tools.find(tool => tool.name === name)!, input, signal, 'manual', progress),

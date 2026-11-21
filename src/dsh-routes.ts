@@ -23,6 +23,8 @@ import type { ActorRuntime } from './actor-runtime.js';
 import { createTools } from './tools.js';
 import { dashboardRoute, type DashboardBoundary } from './dashboard-routes.js';
 import type { MekaBaselineBoundary } from './dsh-baselines-sync.js';
+import type { VersionStatusBoundary } from './dsh-version.js';
+import { VERSION_STATUS_PATH } from './version-check.js';
 import {
   CONNECTION_FILTER, CONNECTION_KEYWORDS, CONNECTION_PROBE_PROTOCOL, connectionErrorCode,
   emptyDataCheck, summarizeConnectionProbe, type ConnectionCode, type ConnectionDiagnostics, type ConnectionResult,
@@ -35,6 +37,7 @@ export const APIFY_UPDATE_PATH = '/api/gtfa.apify-update';
 export const TEST_CONNECTION_PATH = '/api/gtfa.test-connection';
 export const BASELINES_STATUS_PATH = '/api/gtfa.baselines';
 export const BASELINES_SYNC_PATH = '/api/gtfa.baselines-sync';
+export { VERSION_STATUS_PATH };
 
 const TRENDS_URL = 'https://trends.google.com/trends/';
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -48,6 +51,7 @@ export interface RouteSettings {
 export interface RouteOverrides {
   dashboard?: DashboardBoundary;
   baselines?: MekaBaselineBoundary;
+  versionStatus?: VersionStatusBoundary;
   /** Fetch implementation for the Apify REST API in tests. */
   fetch?: typeof globalThis.fetch;
   /** Local transport used by the local test-connection check in tests. */
@@ -433,7 +437,9 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
       try {
         const resolved = await resolveRouteToken(input.settings.apifyToken);
         if (!resolved.token) return json(tokenFailure(resolved, 'update the Actor'));
-        return json(await actors.updateActor(resolved.token, input.settings.apifyActor, request.signal));
+        const updated = await actors.updateActor(resolved.token, input.settings.apifyActor, request.signal);
+        if (updated.ok) void overrides.versionStatus?.clearActorRuntime(input.settings.apifyActor);
+        return json(updated);
       } finally { deploying = false; }
     },
   }));
@@ -466,6 +472,9 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           now: overrides.now,
           connectionProbe: overrides.connectionProbe,
         });
+        if (result.actorRuntime && result.actorId) {
+          void overrides.versionStatus?.recordActorRuntime(result.actorId, result.actorRuntime);
+        }
         return json({ ...result, settingsSource: source });
       } finally {
         testing = false;
@@ -553,6 +562,28 @@ function attachRoutes(connection: unknown, getSettings: () => RouteSettings, ove
           return json(await overrides.baselines!.sync(request.signal));
         } catch {
           return json({ ok: false, code: 'network', message: 'Could not reach meka.im to sync baselines.' }, 500);
+        }
+      },
+    }));
+  }
+
+  if (overrides.versionStatus) {
+    disposers.push(service.fetch.register({
+      path: VERSION_STATUS_PATH,
+      methods: ['GET'],
+      requestBody: 'buffered',
+      fetch: async request => {
+        try {
+          const refresh = new URL(request.url).searchParams.get('refresh') === '1';
+          const settings = getSettings();
+          return json(await overrides.versionStatus!.status({
+            egress: settings.egress,
+            apifyActor: settings.apifyActor,
+            refresh,
+            signal: request.signal,
+          }));
+        } catch {
+          return json({ error: 'Could not read version status.' }, 500);
         }
       },
     }));

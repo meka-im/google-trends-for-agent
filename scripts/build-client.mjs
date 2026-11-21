@@ -1,5 +1,7 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
+
+const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 
 // dsh loads a browser half as a CJS factory registered on its module loader.
 // React and the JSX runtime come from the host page; everything else is bundled.
@@ -12,6 +14,9 @@ await build({
   platform: 'browser',
   target: 'es2022',
   jsx: 'automatic',
+  define: {
+    __GTFA_CLIENT_VERSION__: JSON.stringify(String(pkg.version ?? '0.0.0')),
+  },
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   banner: {
     js: 'window.__ModuleLoader__.load({ id: "google-trends-for-agent", factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;',

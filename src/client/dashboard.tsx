@@ -11,6 +11,16 @@ import { DashboardController, dashboardRequest, queryKeywords } from './dashboar
 import type { QueryProgress } from '../query-progress.js';
 import { supportsVolumeWindow, type VolumeBandPoint } from '../volume-types.js';
 import { TrendChart, hasChartPoints } from './trend-chart.js';
+import {
+  UpdateBanner,
+  dismissKeyForStatus,
+  effectiveUpdateFlags,
+  loadVersionStatus,
+  readDismissedUpdateKey,
+  resolveUpdateMode,
+  writeDismissedUpdateKey,
+} from './update-banner.js';
+import type { VersionStatusSnapshot } from '../version-check.js';
 
 type Translate = (key: string) => string;
 const TIME_KEYS = [['now 1-H', 'dashTime1h'], ['now 4-H', 'dashTime4h'], ['now 1-d', 'dashTime24h'], ['now 7-d', 'dashTime7d'],
@@ -171,14 +181,27 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
   const setPage = (value: number) => controller.set('page', value);
   const setSelected = (value: string[]) => controller.set('selected', value);
   const [clearing, setClearing] = useState<string[] | null>(null), [deleting, setDeleting] = useState(false);
+  const [versionStatus, setVersionStatus] = useState<VersionStatusSnapshot | null>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(() => readDismissedUpdateKey());
   const keywordInput = useRef<HTMLInputElement>(null);
   const busy = operation !== null, terms = queryKeywords(text);
   const refresh = () => controller.refresh();
   useEffect(() => {
     void controller.refresh();
-    const focus = () => { void controller.refresh(); };
+    const versionAbort = new AbortController();
+    const loadVersion = () => {
+      void loadVersionStatus(false, versionAbort.signal).then(next => {
+        if (!versionAbort.signal.aborted && next) setVersionStatus(next);
+      });
+    };
+    loadVersion();
+    const focus = () => { void controller.refresh(); loadVersion(); };
     window.addEventListener('focus', focus);
-    return () => { window.removeEventListener('focus', focus); if (!supplied) controller.dispose(); };
+    return () => {
+      versionAbort.abort();
+      window.removeEventListener('focus', focus);
+      if (!supplied) controller.dispose();
+    };
   }, [controller, supplied]);
   const run = async () => { if (!await controller.run()) keywordInput.current?.focus(); };
   const runTerm = async (term: string) => {
@@ -205,6 +228,24 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
   const allRowsSelected = Boolean(rows.length) && rows.every(row => selected.includes(row.id));
   const someRowsSelected = rows.some(row => selected.includes(row.id)) && !allRowsSelected;
   const isZh = t('dashGeo') === '地区';
+  const updateMode = versionStatus ? resolveUpdateMode(versionStatus, undefined, state?.settings.egress) : 'up-to-date';
+  const updateFlags = versionStatus ? effectiveUpdateFlags(versionStatus, state?.settings.egress) : null;
+  const currentDismissKey = versionStatus ? dismissKeyForStatus(versionStatus, updateMode, updateFlags?.targetPluginVersion ?? null) : null;
+  const updateDismissed = Boolean(currentDismissKey && dismissedKey === currentDismissKey);
+  const actorWarnDot = updateMode === 'actor-outdated' || updateMode === 'both-outdated';
+  const dismissUpdate = () => {
+    if (!currentDismissKey) return;
+    writeDismissedUpdateKey(currentDismissKey);
+    setDismissedKey(currentDismissKey);
+  };
+  const reopenUpdate = () => {
+    if (updateDismissed) {
+      writeDismissedUpdateKey(null);
+      setDismissedKey(null);
+    } else if (updateMode !== 'up-to-date' && openSettings) {
+      openSettings();
+    }
+  };
   return <div className="gtfa-settings gtfa-dashboard"><style>{SETTINGS_CSS + DASHBOARD_CSS}</style>
     <header className="gd-topbar">
       <div className="gd-brand"><TrendsMark size={28} /><h1>Google Trends</h1></div>
@@ -215,11 +256,22 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
         setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
       }}>{(['query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} key={key} onClick={() => { setTab(key); void refresh(); }}>{t(key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
       <div className="gd-topbar-right">
-        {state ? <button type="button" className="gd-route-pill" disabled={!openSettings} onClick={openSettings}><i className="gd-route-dot" />{egressLabel(state.settings.egress, t)}</button> : null}
+        {state ? <button type="button" className="gd-route-pill" disabled={!openSettings} onClick={openSettings}><i className={`gd-route-dot${actorWarnDot ? ' warn' : ''}`} />{egressLabel(state.settings.egress, t)}</button> : null}
         <Button compact disabled={!openSettings} onClick={openSettings}><Icon name="sliders" size={14} />{t('dashSettings')}</Button>
       </div>
     </header>
     <div className="gd-workspace">
+      <UpdateBanner
+        surface="dashboard"
+        status={versionStatus}
+        t={t}
+        locale={isZh ? 'zh-CN' : 'en'}
+        egressOverride={state?.settings.egress}
+        dismissed={updateDismissed}
+        onDismiss={dismissUpdate}
+        onUpdateActor={openSettings}
+        onSwitchPublic={openSettings}
+      />
       {error ? <div className="gd-error" role="alert">{t(error)}<Button compact disabled={loading} onClick={() => { void refresh(); }}>{t('dashRefresh')}</Button></div> : null}
       {operation && tab !== 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
       <section id="gd-panel-query" role="tabpanel" aria-labelledby="gd-tab-query" hidden={tab !== 'query'}>
@@ -267,7 +319,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
         </div>
         <div className="gd-card gd-records"><div className="gd-scroll"><table><thead><tr><th><Checkbox ariaLabel={t('dashClearSelected')} checked={allRowsSelected} indeterminate={someRowsSelected} onChange={checked => setSelected(checked ? [...new Set([...selected, ...rows.map(row => row.id)])] : selected.filter(id => !rows.some(row => row.id === id)))} /></th><th>{t('dashKeyword')}</th><th>{t('dashGeo')} / {t('dashWindow')}</th><th>{t('dashSources')}</th><th>{t('dashEgress')}</th><th>{t('dashCalledAt')}</th><th /></tr></thead><tbody>{rows.map(record => <tr key={record.id} className="gd-record-row" onClick={() => { if (!busy) void view(record.id); }}><td onClick={event => event.stopPropagation()}><Checkbox ariaLabel={`${t('dashSelected')} ${record.terms.join(', ')} ${record.id}`} checked={selected.includes(record.id)} onChange={checked => setSelected(checked ? [...selected, record.id] : selected.filter(id => id !== record.id))} /></td><td><strong>{record.terms.join(' vs ')}</strong><small>{record.tool.replace('trends_', '')} · {duration(record.durationMs)}</small><span className="gd-badges"><span className={`gd-badge ${record.status}`}>{t(statusKey[record.status] ?? 'dashError')}</span>{record.cached ? <span className="gd-badge cache">{t('dashCached')}</span> : null}{record.dailyVolume != null ? <span className="gd-badge vol">{formatVolume(record.dailyVolume)}/{isZh ? '天' : 'd'}</span> : null}</span></td><td>{regionLabel(record.geo, isZh ? 'zh' : 'en')}<small>{timeLabel(record.time, t)}</small></td><td>{t(record.source === 'manual' ? 'dashManual' : 'dashAgent')}</td><td>{egressLabel(record.egress, t)}</td><td>{dateText(record.createdAt)}</td><td onClick={event => event.stopPropagation()}><div className="gd-actions"><Button ghost disabled={busy} onClick={() => { void view(record.id); }}>{t('dashView')}</Button><Button ghost label={`${t('dashClear')} ${record.terms.join(', ')} ${record.id}`} onClick={() => setClearing([record.id])}><Icon name="trash" size={14} /></Button></div></td></tr>)}</tbody></table></div>{!rows.length ? <div className="gd-empty"><Icon name="clock" size={26} /><h3>{t(records.length ? 'dashNoMatches' : 'dashEmptyHistory')}</h3><Button primary onClick={() => setTab('query')}>{t('dashRun')}</Button></div> : null}<footer className="gd-table-footer"><span>{filtered.length} · {selected.length} {t('dashSelected')}</span><div className="gd-actions"><Button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>{t('dashPrevious')}</Button><span>{currentPage} / {pages}</span><Button disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>{t('dashNext')}</Button></div></footer></div>
       </section>
-      <footer className="gd-footer"><span>{t('dashHistoryLimit')}</span><span>{state ? `v${state.version}` : t('dashLoading')}</span></footer>
+      <footer className="gd-footer"><span>{t('dashHistoryLimit')}</span>{state ? (updateMode !== 'up-to-date' ? <button type="button" className="gd-footer-ver" onClick={reopenUpdate}><span>v{state.version}</span><span className={`gd-footer-dot${actorWarnDot ? ' warn' : ''}`} /><span className={`gd-footer-tag${actorWarnDot ? ' warn' : ''}`}>{updateMode === 'actor-outdated' && versionStatus?.observedActor ? t('updateFooterActorOld').replace('{version}', versionStatus.observedActor.version) : updateFlags?.targetPluginVersion ? t('updateFooterAvailable').replace('{version}', updateFlags.targetPluginVersion) : t('updatePluginTitle')}</span></button> : <span>v{state.version}</span>) : <span>{t('dashLoading')}</span>}</footer>
       {clearing ? <ClearDialog count={clearing.length} t={t} busy={deleting} cancel={() => { if (!deleting) setClearing(null); }} confirm={() => { void clear(); }} /> : null}
     </div>
   </div>;
