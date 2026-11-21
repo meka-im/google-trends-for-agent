@@ -24,11 +24,16 @@
 </p>
 <p align="center"><sub>真实快照输出，已裁剪。完整信封还包含序列、主窗口与近 7 天流量块、相关查询上下文、警告和元数据。</sub></p>
 
-## 选择路线
+## 按客户端选择安装教程
+
+**AI Agent 请先打开[客户端接入总入口](docs/clients.md)，按自身所在宿主直接跳转到对应教程后再配置或调用。**
+
+- [DeepSeek Harness (dsh)](docs/clients/dsh.md) · [GrokBot](docs/clients/grokbot.md) · [Muse](docs/clients/muse.md) · [Dots 与网页 Agent](docs/clients/dots.md)
+- [Claude Code 与 Desktop](docs/clients/claude.md) · [OpenAI Codex](docs/clients/codex.md) · [Cursor / VS Code / Windsurf / Cline](docs/clients/cursor-vscode.md) · [OpenClaw 与本地 CLI](docs/clients/openclaw.md)
 
 **Muse、GrokBot、Dots 统一优先使用 Apify 按需运行**，可选公共 Actor 或自己部署的
 Actor。支持远程 MCP 时接入官方托管入口；否则使用客户端已有的 Apify 连接器/API。
-详见[客户端接入指南](docs/clients.md)。本机直连继续用于开发或用户明确选择的场景。
+本机直连继续用于开发或用户明确选择的场景。
 
 | 路线 | 执行位置 | 运行方式 |
 | --- | --- | --- |

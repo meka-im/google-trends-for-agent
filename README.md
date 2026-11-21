@@ -24,13 +24,17 @@
 </p>
 <p align="center"><sub>Real snapshot output, trimmed. The full envelope also includes the series, primary and 7-day traffic blocks, related-query context, warnings, and metadata.</sub></p>
 
-## Choose a route
+## Choose your client guide
+
+**AI agents: start at the [Client Setup Router](docs/clients.md) and open the guide for your exact host before installing or calling tools.**
+
+- [DeepSeek Harness (dsh)](docs/clients/dsh.md) · [GrokBot](docs/clients/grokbot.md) · [Muse](docs/clients/muse.md) · [Dots & Web Agents](docs/clients/dots.md)
+- [Claude Code & Desktop](docs/clients/claude.md) · [OpenAI Codex](docs/clients/codex.md) · [Cursor / VS Code / Windsurf / Cline](docs/clients/cursor-vscode.md) · [OpenClaw & CLI](docs/clients/openclaw.md)
 
 **Muse, GrokBot and Dots: use Apify on demand by default**, with either the public
 Actor or your own deployment. Use the managed remote MCP gateway where supported,
-or the client's authenticated Apify connector/API. See the
-[client setup guide](docs/clients.md). Local access remains available for
-development and explicit direct-use setups.
+or the client's authenticated Apify connector/API. Local access remains available
+for development and explicit direct-use setups.
 
 | Route | Where it runs | Execution |
 | --- | --- | --- |

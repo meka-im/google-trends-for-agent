@@ -93,10 +93,12 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
   const pending = terms.filter(t => !latest.has(normalizeTerm(t.keyword))).sort((a,b) => b.quality-a.quality);
   const reference = pending[0];
   let batch = pending.length === 5 ? [reference!, ...pending.slice(-3)] : pending;
-  const nearest = (value: number) => candidates.reduce<typeof candidates[number] | undefined>((best,a) =>
+  const nearest = (value: number, pool = candidates) => pool.reduce<typeof candidates[number] | undefined>((best,a) =>
     !best || Math.abs(Math.log(anchorDailySearches(a)!/value)) < Math.abs(Math.log(anchorDailySearches(best)!/value)) ? a : best, undefined);
+  const tried = new Set<string>();
   let anchor = refs.pinned ? pinned : nearest(1600);
-  for (let round = 1; supportsVolumeWindow(filter.time) && batch.length && anchor && round <= 2; round++) {
+  for (let round = 1; supportsVolumeWindow(filter.time) && batch.length && anchor && round <= 3; round++) {
+    tried.add(normalizeTerm(anchor.term));
     const info: BatchRound = { round, anchor: anchor.term, daily: anchorDailySearches(anchor)!, targets: batch.map(t => t.keyword), completed: [...latest.values()].filter(done).length };
     state.rounds.push(info);
     await store(info);
@@ -145,8 +147,10 @@ export async function estimateBatch(saved: SavedQuery, settings: VolumeSettings,
     }
     batch = pending.filter(t => !done(latest.get(normalizeTerm(t.keyword)))).slice(0,4);
     const hints = batch.map(t => latest.get(normalizeTerm(t.keyword))?.anchorTargetDaily).filter((v): v is number => Boolean(v));
-    const next = hints.length ? nearest(Math.max(...hints)) : mean(settledBase) < 3 ? nearest(info.daily*30) : candidates[0];
-    if (refs.pinned || next?.term === anchor.term) break;
+    const targetDaily = hints.length ? Math.exp(hints.reduce((sum, v) => sum + Math.log(v), 0) / hints.length) : undefined;
+    const untried = candidates.filter(a => !tried.has(normalizeTerm(a.term)));
+    const next = targetDaily ? nearest(targetDaily, untried) : mean(settledBase) < 3 ? nearest(info.daily * 30, untried) : untried[0];
+    if (refs.pinned || !next || (round === 2 && !targetDaily)) break;
     anchor = next;
   }
   for (const term of terms) if (!state.error && !latest.has(normalizeTerm(term.keyword))) {

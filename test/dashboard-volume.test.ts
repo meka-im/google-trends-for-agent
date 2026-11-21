@@ -55,6 +55,39 @@ describe('on-demand batch calibration', () => {
     expect(recovered.series[0]?.traffic.average).toBe(1600);
     expect(recovered.complete).toBe(true);
   });
+
+  it('uses a hint-guided third round to calibrate million-scale head terms after low anchors are crushed', async () => {
+    const head = {
+      record: { terms: ['ChatGPT', 'Claude', 'Gemini'], geo: 'US', time: 'now 7-d' },
+      result: {
+        series: [
+          { keyword: 'ChatGPT', points: points(71) },
+          { keyword: 'Claude', points: points(24) },
+          { keyword: 'Gemini', points: points(34) },
+        ],
+      },
+    } as SavedQuery;
+    const volumes: Record<string, number> = {
+      ChatGPT: 2_100_000, Claude: 720_000, Gemini: 1_000_000,
+      'kph to mph': 1_600, sudoku: 88_000, instagram: 990_000, gmail: 2_500_000,
+    };
+    const compare = vi.fn(async (keywords: string[]) => {
+      const peak = Math.max(...keywords.map(k => volumes[k] ?? 1000));
+      return {
+        ok: true,
+        series: keywords.map(keyword => ({
+          keyword,
+          points: points(Math.round(100 * (volumes[keyword] ?? 1000) / peak)),
+        })),
+      };
+    });
+    const state = await estimateBatch(head, { geo: 'US' }, 'head-terms', compare, async () => {}, async () => null);
+    expect(state.complete).toBe(true);
+    expect(state.rounds.map(r => r.anchor)).toEqual(['kph to mph', 'sudoku', 'instagram']);
+    expect(state.series.find(s => s.keyword === 'ChatGPT')?.traffic.average).toBeGreaterThan(1_500_000);
+    expect(state.series.find(s => s.keyword === 'Gemini')?.traffic.average).toBeGreaterThan(700_000);
+    expect(state.series.find(s => s.keyword === 'Claude')?.traffic.average).toBeGreaterThan(500_000);
+  });
 });
 
 describe('single-keyword automatic calibration', () => {

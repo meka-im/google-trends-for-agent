@@ -2,19 +2,22 @@
 
 Guidance for AI agents using `google-trends-for-agent` (`gtfa`). It queries undocumented Google Trends web endpoints. Use it for light, interactive research only—not bulk scraping or continuous polling. It is unofficial and not affiliated with Google.
 
-## Recommended setup for Muse, GrokBot and Dots
+## Start here: pick your client guide
 
-Prefer **Apify on-demand execution** for all three clients, using either the
-public `meka.im/google-trends-for-agent` Actor or the user's own deployment.
-Use `https://mcp.apify.com?tools=meka.im/google-trends-for-agent` with the client's
-MCP OAuth, replacing the Actor name in `tools=` for a self-deployment. If the Host
-does not expose native remote MCP registration, use its authenticated Apify
-connector/API and describe the integration accurately. Keep Server / Standby
-disabled. See [client setup and result reading](docs/clients.md).
+Identify which host/client you are running in and open **your matching guide** before installing or calling tools ([Client Setup Router](docs/clients.md)):
 
-Local CLI/stdio is an explicit direct-access or development option for these
-clients. An Apify route can still be blocked or rate-limited; stop that path and
-report the result rather than switching deployments to get around it.
+- **DeepSeek Harness (dsh):** [docs/clients/dsh.md](docs/clients/dsh.md)
+- **GrokBot:** [docs/clients/grokbot.md](docs/clients/grokbot.md)
+- **Muse:** [docs/clients/muse.md](docs/clients/muse.md)
+- **Dots & Hosted Web Agents:** [docs/clients/dots.md](docs/clients/dots.md)
+- **Claude Code & Claude Desktop:** [docs/clients/claude.md](docs/clients/claude.md)
+- **OpenAI Codex CLI & App:** [docs/clients/codex.md](docs/clients/codex.md)
+- **Cursor, VS Code, Windsurf & Cline:** [docs/clients/cursor-vscode.md](docs/clients/cursor-vscode.md)
+- **OpenClaw & Generic CLI / Local Agents:** [docs/clients/openclaw.md](docs/clients/openclaw.md)
+
+Prefer **Apify on-demand execution** for cloud/hosted clients (`meka.im/google-trends-for-agent` or the user's own deployment) and keep Server / Standby disabled. Never connect to legacy `*.apify.actor` Standby URLs. When calling via `toolRequest`, note that `trends_snapshot` uses `term` while `trends_compare` uses `keywords` (not `terms`) plus optional `calibrate: true`.
+
+Local CLI/stdio is an explicit direct-access or development option. An Apify route can still be blocked or rate-limited; stop that path and report the result rather than switching deployments to get around it.
 
 ## Install from GitHub
 
