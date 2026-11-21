@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { parseActorRuntime, type ActorRuntime } from './actor-runtime.js';
 import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
 import { GTFA_PUBLIC_ACTOR_ID, type EgressMode } from './options.js';
+import { QueryHistoryStore } from './query-history.js';
 import { VERSION } from './version.js';
 import {
   GTFA_LATEST_RELEASE_API_URL,
@@ -28,6 +29,7 @@ interface StoredVersionCache {
   checkedAt: string | null;
   latestRelease: ReleaseInfo | null;
   observedActors: Record<string, ObservedActorRuntime>;
+  clearedActors?: Record<string, string>;
 }
 
 export interface VersionStatusQuery {
@@ -54,7 +56,7 @@ export interface VersionStatusMonitorOptions {
 }
 
 function emptyCache(): StoredVersionCache {
-  return { schemaVersion: 1, checkedAt: null, latestRelease: null, observedActors: {} };
+  return { schemaVersion: 1, checkedAt: null, latestRelease: null, observedActors: {}, clearedActors: {} };
 }
 
 function sanitizeHighlight(line: string): string {
@@ -143,7 +145,15 @@ function parseStoredCache(raw: unknown): StoredVersionCache {
       }
     }
   }
-  return { schemaVersion: 1, checkedAt, latestRelease, observedActors };
+  const clearedActors: Record<string, string> = {};
+  if (doc.clearedActors && typeof doc.clearedActors === 'object' && !Array.isArray(doc.clearedActors)) {
+    for (const [key, value] of Object.entries(doc.clearedActors as Record<string, unknown>)) {
+      if (key.trim() && typeof value === 'string' && Number.isFinite(Date.parse(value))) {
+        clearedActors[key.trim()] = value;
+      }
+    }
+  }
+  return { schemaVersion: 1, checkedAt, latestRelease, observedActors, clearedActors };
 }
 
 async function writeCacheAtomically(path: string, payload: StoredVersionCache): Promise<void> {
@@ -291,9 +301,44 @@ export function createVersionStatusMonitor(options: VersionStatusMonitorOptions)
     };
   };
 
+  const bootstrapObservedActorFromHistory = async (actorId: string): Promise<void> => {
+    const trimmed = actorId.trim();
+    if (!trimmed || trimmed in cache.observedActors) return;
+    const clearedAtMs = cache.clearedActors?.[trimmed] ? Date.parse(cache.clearedActors[trimmed]!) : Number.NaN;
+    try {
+      const store = new QueryHistoryStore(options.getSnapshotDir());
+      const records = await store.list();
+      let inspected = 0;
+      for (const record of records) {
+        if (record.egress !== 'actor-own') continue;
+        if (Number.isFinite(clearedAtMs) && Date.parse(record.createdAt) <= clearedAtMs) break;
+        if (++inspected > 5) break;
+        const saved = await store.get(record.id);
+        const meta = saved?.result && typeof saved.result.meta === 'object' && saved.result.meta !== null
+          ? saved.result.meta as Record<string, unknown> : null;
+        const runtime = parseActorRuntime(meta?.actorRuntime);
+        if (!runtime) continue;
+        cache = {
+          ...cache,
+          observedActors: pruneObservedActors({
+            ...cache.observedActors,
+            [trimmed]: { ...runtime, actorId: trimmed, observedAt: record.createdAt },
+          }),
+        };
+        await persist();
+        return;
+      }
+    } catch {
+      /* History bootstrap is best-effort and must never fail version status reads. */
+    }
+  };
+
   return {
     async status(query: VersionStatusQuery): Promise<VersionStatusSnapshot> {
       await ensureLoaded();
+      if (query.egress === 'actor-own' && query.apifyActor?.trim()) {
+        await bootstrapObservedActorFromHistory(query.apifyActor.trim());
+      }
       const checkedMs = cache.checkedAt ? Date.parse(cache.checkedAt) : Number.NaN;
       const stale = !Number.isFinite(checkedMs) || (now().getTime() - checkedMs) >= ttlMs;
       let checkError: VersionCheckErrorCode | null = null;
@@ -313,8 +358,11 @@ export function createVersionStatusMonitor(options: VersionStatusMonitorOptions)
       const parsed = parseActorRuntime(runtime);
       if (!parsed) return;
       await ensureLoaded();
+      const nextCleared = { ...(cache.clearedActors ?? {}) };
+      delete nextCleared[trimmed];
       cache = {
         ...cache,
+        clearedActors: nextCleared,
         observedActors: pruneObservedActors({
           ...cache.observedActors,
           [trimmed]: { ...parsed, actorId: trimmed, observedAt: now().toISOString() },
@@ -327,10 +375,13 @@ export function createVersionStatusMonitor(options: VersionStatusMonitorOptions)
       const trimmed = actorId.trim();
       if (!trimmed) return;
       await ensureLoaded();
-      if (!(trimmed in cache.observedActors)) return;
       const next = { ...cache.observedActors };
       delete next[trimmed];
-      cache = { ...cache, observedActors: next };
+      cache = {
+        ...cache,
+        observedActors: next,
+        clearedActors: { ...(cache.clearedActors ?? {}), [trimmed]: now().toISOString() },
+      };
       await persist();
     },
   };
