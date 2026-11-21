@@ -19,22 +19,24 @@ The clone follows the repository's default `main` branch. If a review process ne
 
 | Command | Flags | Purpose |
 | --- | --- | --- |
-| `gtfa ask <term>` | `--validate`, `--from FILE\|-`, `--anchor TERM`, `--no-anchor`, `--trending`, `--diff`, `--points`, `--fresh`, `--refresh always\|never\|if-stale`, `--max-age MIN`, `--geo`, `--time`, `--category`, `--property`, `--store DIR`, `--timeout MS`, `--json`, `--pretty`, `--help` | One term: interest, Popular/Rising, regions, optional verdict, and diff. `--timeout` applies to each Explore request. |
-| `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--timeout MS`, `--json`, `--pretty`, `--help` | Calibrated searches/day, traffic series, verdict, charts, and chart paths. `--timeout` applies to the primary and extra 7-day requests. |
-| `gtfa compare <kw> [<kw> ...]` | `--url URL` (repeatable), `--geo`, `--time`, `--start YYYY-MM-DD`, `--end YYYY-MM-DD`, `--types LIST`, `--format json\|csv`, `--json`, `--timeout MS`, `--retries N`, `--min-interval MS`, `--pretty`, `--help`, `--version` | Relative interest for 1–5 distinct keywords. The default `--query` mode is the same command. |
-| `gtfa now --geo US` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
+| `gtfa ask <term>` | `--validate`, `--from FILE\|-`, `--anchor TERM`, `--no-anchor`, `--trending`, `--diff`, `--points`, `--fresh`, `--refresh always\|never\|if-stale`, `--max-age MIN`, `--geo`, `--time`, `--category`, `--property`, `--store DIR`, `--egress local\|actor-public\|actor-own`, `--actor ID`, `--timeout MS`, `--json`, `--pretty`, `--help` | One term: interest, Popular/Rising, regions, optional verdict, and diff. `--timeout` applies to each Explore request. |
+| `gtfa snapshot <term>` | `--geo`, `--time`, `--anchor`, `--fresh`, `--max-age MIN`, `--store DIR`, `--chart-dir DIR`, `--tz IANA`, `--svg`, `--egress local\|actor-public\|actor-own`, `--actor ID`, `--timeout MS`, `--json`, `--pretty`, `--help` | Multi-tier MEKA calibrated searches/day, traffic series, verdict, charts, and chart paths. `--timeout` applies to the primary, retry, and extra 7-day requests. |
+| `gtfa compare <kw> [<kw> ...]` | `--url URL` (repeatable), `--geo`, `--time`, `--start YYYY-MM-DD`, `--end YYYY-MM-DD`, `--types LIST`, `--calibrate`, `--egress local\|actor-public\|actor-own`, `--actor ID`, `--format json\|csv`, `--json`, `--timeout MS`, `--retries N`, `--min-interval MS`, `--pretty`, `--help`, `--version` | Relative interest for 1–5 distinct keywords (optional `--calibrate` attaches `batchVolume`). The default `--query` mode is the same command. |
+| `gtfa now --geo US` | `--geo US,SG,JP`, `--all-geos`, `--default-geos`, `--list-geos`, `--hours 4\|24\|48\|168`, `--min-volume N`, `--category 18,17`, `--limit N`, `--lang en`, `--egress local\|actor-public\|actor-own`, `--actor ID`, `--format json\|csv`, `--json`, `--pretty`, `--timeout MS`, `--min-interval MS`, `--help` | Trending Now by country. `--hours` is the Trending Now window, not the Explore `--time` range. |
+| `gtfa baselines` | `--sync`, `--store DIR`, `--json`, `--pretty`, `--help` | Inspect active MEKA v1 calibration baselines status or manually sync from `meka.im`. |
 | `gtfa doctor` | `--timeout MS`, `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. `--timeout` accepts 1000–60000 and defaults to 8000 ms for each network check; a challenge or HTTP 429 skips the live fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 1-d`, web, category 0, except where a command says otherwise. `compare` and the default `--query` mode honor omitted `geo`, `time`, `category`, `property`, and `locale` (`hl`) from `gtfa.config.json`; `GTFA_GEO` and `GTFA_TIME` supply their respective environment defaults. Explore URL plans keep the URL's filters, and explicit dates keep their dates. Chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 7-d`, web, category 0, except where a command says otherwise. `compare` and the default `--query` mode honor omitted `geo`, `time`, `category`, `property`, and `locale` (`hl`) from `gtfa.config.json`; `GTFA_GEO` and `GTFA_TIME` supply their respective environment defaults. Explore URL plans keep the URL's filters, and explicit dates keep their dates. Chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 gtfa ask "nano banana" --validate --diff --json
 cat leads.json | gtfa ask --validate --from - --json
 gtfa snapshot Sora --geo US --svg --tz Asia/Shanghai --fresh --json
-gtfa compare coffee tea --geo US --time "today 3-m" --pretty
+gtfa compare coffee tea --geo US --time "today 3-m" --calibrate --json --pretty
 gtfa --query coffee --query tea --geo US --json
 gtfa now --geo SG --hours 24 --limit 20 --pretty
 gtfa now --geo US --list-geos
+gtfa baselines --sync --json
 gtfa doctor --json
 gtfa help snapshot
 ```
@@ -59,12 +61,12 @@ The stdio server exposes exactly four tools. HTTP and Actor tool calls share the
 
 | Tool | Inputs | What it returns |
 | --- | --- | --- |
-| `trends_ask` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `fresh` (`false`); `validate` (`false`); `points` (`false`); `timeoutMs` (30000) | Interest, Popular/Rising queries, regions, optional verdict, diff vs the previous saved snapshot. `points: true` includes the full series. |
-| `trends_snapshot` | `term` (required); `geo` (`US`); `time` (`now 1-d`); `anchor` (optional; automatic when omitted); `fresh` (`false`); `svg` (`false`); `tz` (`GTFA_TZ`, then `UTC`); `timeoutMs` (30000) | Calibrated searches/day, `anchor` / `anchor7d` and traffic blocks, series, verdict, related queries, and shape-stable `chart7d` / `traffic7d`. The extra 7-day request runs sequentially after the primary attempt unless the primary is `BLOCKED` or `RATE_LIMITED`. |
-| `trends_compare` | `keywords` (1–5 distinct, required); `geo` (`US`); `time` (`now 1-d`); `timeoutMs` (30000) | Relative 0–100 interest for each keyword on one shared scale, with gap-aware latest/peak. Duplicate keywords return `INVALID_INPUT`. |
+| `trends_ask` | `term` (required); `geo` (`US`); `time` (`now 7-d`); `fresh` (`false`); `validate` (`false`); `points` (`false`); `timeoutMs` (30000) | Interest, Popular/Rising queries, regions, optional verdict, diff vs the previous saved snapshot. `points: true` includes the full series. |
+| `trends_snapshot` | `term` (required); `geo` (`US`); `time` (`now 7-d`); `anchor` (optional; automatic when omitted); `fresh` (`false`); `svg` (`false`); `tz` (`GTFA_TZ`, then `UTC`); `timeoutMs` (30000) | Multi-tier MEKA calibrated searches/day, `anchor` / `anchor7d`, `traffic`, `calibration` (including automatic 2nd-round tier retry when unpinned and out of range), series, verdict, related queries, and shape-stable `chart7d` / `traffic7d`. A non-`now 7-d` primary triggers a sequential 7-day request unless the primary is `BLOCKED` or `RATE_LIMITED`. |
+| `trends_compare` | `keywords` (1–5 distinct, required); `geo` (`US`); `time` (`now 7-d`); `calibrate` (`false`); `timeoutMs` (30000) | Relative 0–100 interest for each keyword on one shared scale, with gap-aware latest/peak; `calibrate: true` attaches multi-tier MEKA `batchVolume`. Duplicate keywords return `INVALID_INPUT`. |
 | `trends_now` | `geos` (array of up to 30 distinct country codes after dedupe, `"default"`, or `"all"`; default `"default"` = 30 countries); `hours` (`4`, `24`, `48`, or `168`; default `24`); `limit` (integer ≥ 0; default `10`); `timeoutMs` (15000) | Trending Now items per country, with rank, traffic bucket, growth, categories, related queries, and links. |
 
-`time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 1-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live. Anchors are automatic by region and window. [Regional calibration](baselines.md) lists CA, GB, AU, DE, FR, JP, IN and Worldwide estimates, source periods and live validation; new estimates use ±75% assumption bands. The US defaults are: `sudoku` for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` for `now 7-d` and longer. An explicit MCP `anchor` or CLI `--anchor` overrides both the requested and the extra 7-day window when that extra request runs.
+`time` is one of `now 1-H`, `now 4-H`, `now 1-d`, `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all`. The first three tools default to US, `now 7-d`, web search, and category 0. `fresh: false` reuses saved snapshots younger than 360 minutes; `fresh: true` fetches live. Anchors come from the unified **MEKA v1 regional baseline catalog** (59 anchors across US, CA, GB, DE, FR, JP, and Worldwide; see [regional baselines](baselines.md)). An explicit MCP `anchor` or CLI `--anchor` overrides both the requested and the extra 7-day window when that extra request runs.
 
 `trends_ask` always returns `diff`, comparing the current snapshot with the latest usable prior success, even on cache hits. Store keys and matching trim and lowercase keywords; responses preserve the requested spelling. Only complete `status: "ok"` snapshots without errors or the low-sample gate participate. Failed, partial, blocked, and no-data snapshots are still saved on disk for diagnostics, but never used as diff baselines. Only `ok` / `no_data` snapshots are reused as cached responses (default 360 minutes); failed/partial/blocked fetches are fetched again. A cache hit creates no snapshot. With no usable pair, `diff` is `null` with a clear `diffReason` (first success: `"Need two snapshots"`; failed current fetch: `"Current snapshot has no usable successful data"`; no usable prior success or incompatible history gets its own reason). Incompatible history never rejects valid input or aborts a batch. Use `fresh: true` to fetch and save a new comparison point (CLI `--diff` forces this).
 
@@ -85,7 +87,7 @@ For a self-deployment, replace the Actor in `tools=` with the accessible
 
 The gateway handles client OAuth and exposes the Actor's input interface, run state, Dataset, key-value-store, and abort tools. Each query starts an on-demand Actor run. Local MCP and dsh provide the four native `trends_*` tools. Apify's account-wide `full_api_access` scope must be disclosed before authorization. Use the client's credential storage for Bearer fallback if OAuth is unavailable.
 
-Useful environment variables: `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
+Useful environment variables: `GTFA_EGRESS` (`local` | `actor-public` | `actor-own`) and `GTFA_APIFY_ACTOR` configure cloud egress for `gtfa` and `gtfa-mcp` (paired with `APIFY_TOKEN`, or overridden via `--egress` / `--actor`), `GTFA_SNAPSHOT_DIR` and `GTFA_CHART_DIR` move the `.gtfa/snapshots` and `.gtfa/charts` stores (handy for read-only working directories), `GTFA_BASELINES` points at a version 2 baselines file (CLI, `gtfa-mcp`, and the Actor), `GTFA_TZ` sets the default chart time zone, and `HTTPS_PROXY` / `HTTP_PROXY` select a proxy (`HTTPS_PROXY` wins, lowercase variants are honored). With neither set, requests go direct. `gtfa doctor` reports which mode is active.
 
 After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
 
@@ -183,6 +185,8 @@ The settings page calls the following owner-only Host routes through dsh's Conne
 | `/api/gtfa.apify-usage` | `GET` | Reads this cycle's plan and usage from two Apify account endpoints; `?refresh=1` bypasses the 60 s cache. A stored OAuth session is used first; only when none is stored do credentials fall back to saved config token, then `APIFY_TOKEN`. `source` can be `oauth`, `config`, or `env`. |
 | `/api/gtfa.apify-actors` | `GET` | Lists this package's Actors in the account with the latest build status; `?refresh=1` bypasses the 60 s cache. Returns `no-token` / `invalid-token` codes. |
 | `/api/gtfa.apify-deploy` | `POST` | Creates `google-trends-for-agent` from the Git repository with Standby disabled and starts its first build; one deploy at a time. Name conflicts return `exists`. |
+| `/api/gtfa.baselines` | `GET` | Returns the active MEKA v1 baseline catalog status (`source`, `version`, `syncedAt`, `count`, `regions`, and anchor rows). |
+| `/api/gtfa.baselines-sync` | `POST` | Manually fetches and atomically persists the latest MEKA v1 baseline catalog from `meka.im` to `<snapshotDir>/.meka-baselines.json`. |
 | `/api/gtfa.test-connection` | `POST` | Checks saved-egress connectivity, then queries ChatGPT, Gemini and weather together (US, past 24 hours). Returns separate `network`, `data` and `checkedAt` results with per-keyword counts. Actor mode starts one usage-billed on-demand run after API/authentication preflight. |
 
 The diagnostic does not reuse cached data or retry upstream requests. It requires a valid, nonzero series for every keyword; HTTP success alone, missing/malformed series and zero-only results do not pass. A challenge or rate limit stops further work. The 120 s overall deadline, **Cancel check**, and closing the settings page stop the request and attempt to abort its owned cloud run; if cloud cleanup is unreachable, the 300 s platform timeout is the final bound. Connection checks require POST from the same site and reject concurrent checks.
@@ -210,8 +214,8 @@ Both ask and snapshot use `verdict.label`: `spiking`, `rising`, `steady`, `flat`
 Tool bodies:
 
 - `trends_ask`: `term`, `summary`, `filter`, `interest`, `tables`, `regions`, optional `verdict`, `diff`, optional `diffReason`, `meta`.
-- `trends_snapshot`: `term`, `summary`, `filter`, `anchor`, `anchor7d`, `traffic`, `series`, `chart`, `chart7d`, `traffic7d`, `tables`, `verdict`, `meta`.
-- `trends_compare`: `filter`, `summary`, `series`, `meta`.
+- `trends_snapshot`: `term`, `summary`, `filter`, `anchor`, `anchor7d`, `traffic`, `calibration`, `series`, `chart`, `chart7d`, `traffic7d`, `tables`, `verdict`, `meta`.
+- `trends_compare`: `filter`, `summary`, `series`, optional `batchVolume` (when `calibrate: true`), `meta`.
 - `trends_now`: `hours`, `geos`, `summary`, `byGeo`, `meta`.
 
 Errors contain `{ "code": string, "message": string, "retryAfterSec"?: number }`. Messages are actionable for agents: they say what happened and whether to retry, lower the request rate, raise `--timeout` (CLI) or `timeoutMs` (MCP, dsh, and Actor tools; 1000–60000), check the network, or set `HTTPS_PROXY` / `HTTP_PROXY`. The lower-level `queryTrends()` API instead returns `{ status, input, data?, error?, meta }`.
@@ -244,29 +248,23 @@ If `interest.average` < 1 and both Popular/Rising tables are empty, treat the re
 traffic = round(score ÷ anchorLevel × dailySearches)
 ```
 
-`anchorLevel` is the mean of the anchor's non-gap points in the same shared-scale comparison. Anchors are automatic by region and window. [Regional calibration](baselines.md) lists CA, GB, AU, DE, FR, JP, IN and Worldwide estimates, source periods and live validation; new estimates use ±75% assumption bands. The US defaults are:
+`anchorLevel` is the mean of the anchor's non-gap points in the same shared-scale comparison. All surfaces share the unified **MEKA v1 baseline catalog** (59 Google Ads Keyword Planner anchors across 7 regions, revision `2026-11-19`, ±50% tolerance; see [regional baselines](baselines.md)). Starting regional defaults:
 
-| Window | Anchor | Geo | Daily searches | Tolerance | How derived |
-| --- | --- | --- | --- | --- | --- |
-| `now 1-H`, `now 4-H`, `now 1-d` | `sudoku` | `US` | **63,000/day** | ±50% | 18.035 × 3,500 ≈ 63,123 (7-day sudoku/gpts ratio); thesaurus cross-check ≈62,720. |
-| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | `US` | **3,500/day** (≈105k/month) | ±50% | Long-window ruler; back-derived from public keyword-tool volumes through measured Trends ratios. |
+| Region | Default anchor | Daily searches | Tolerance | Catalog tiers |
+| --- | --- | ---: | --- | ---: |
+| `US` | `sudoku` | **88,000/day** | ±50% | 10 anchors |
+| `CA` | `sudoku` | **15,000/day** | ±50% | 7 anchors |
+| `GB` | `crossword solver` | **27,000/day** | ±50% | 8 anchors |
+| `DE` | `Kreuzworträtsel` | **22,000/day** | ±50% | 8 anchors |
+| `FR` | `sudoku` | **22,000/day** | ±50% | 8 anchors |
+| `JP` | `テトリス` | **18,000/day** | ±50% | 8 anchors |
+| Worldwide (`""`) | `stopwatch` | **160,000/day** | ±50% | 10 anchors |
 
 All built-in and version 2 user baselines currently represent **web search in category 0**. They are eligible only when the effective filter has `property: "web"` and `category: 0`; the version 2 schema gains no property or category fields. CLI `ask --validate` can still return relative interest for another property/category, but the `traffic` object remains present with numeric fields set to `null` and a calibration warning.
 
-**Why 3,500/day:** public US keyword-tool volumes for sudoku, thesaurus, and calculator, divided by measured 7-day Trends ratios (sudoku/gpts 18.035, thesaurus/gpts 7.341, calculator/sudoku ≈18). The sudoku and calculator rows cluster at 2,100–4,100/day, and 3,500 sits in that cluster. The thesaurus rows run higher because the tools disagree widely on that keyword (1.5M–4.1M/month). All of these are rounded third-party estimates, so the built-in tolerance stays ±50%. Google Ads' own `gpts` number (1.5M/month) is unusable because Keyword Planner merges close variants such as "gpt".
+When `trends_snapshot` runs without a pinned anchor and round 1 falls out of range, it automatically executes one second-round multi-tier MEKA comparison against closer regional tier anchors and upgrades `anchor` / `traffic` if rescued (details under `calibration`). Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
 
-| Source (US monthly) | Per day | Implied gpts/day |
-| --- | ---: | ---: |
-| sudoku, Google Ads (via [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=us)) — 2.24M | 74k | ≈4,100 |
-| sudoku, Semrush, Sep 2026 ([sudoku.com](https://www.semrush.com/website/sudoku.com/overview/)) — 1.83M | 60k | ≈3,300 |
-| sudoku, Ahrefs ([sudoku.com](https://ahrefstop.com/websites/sudoku.com)) — 1.5M | 49k | ≈2,700 |
-| thesaurus, Google Ads (via [seodata.dev](https://api.seodata.dev/v1/keyword?q=thesaurus&country=us)) — 1.5M | 49k | ≈6,700 |
-| thesaurus, Semrush, Oct 2026 ([thesaurus.com](https://www.semrush.com/website/thesaurus.com/overview/)) — 4.09M | 134k | ≈18,300 |
-| calculator, Ahrefs ([top Google searches](https://ahrefs.com/blog/top-google-searches/)) / Google Ads ([seodata.dev](https://api.seodata.dev/v1/keyword?q=calculator&country=us)) — 21.0M / 20.4M | ≈680k | ≈2,100 |
-
-Derivation of 63,000: the 7-day shared-scale ratio sudoku/gpts is 18.035, so 18.035 × 3,500 ≈ 63,123. Cross-check through thesaurus: thesaurus/gpts 7.341 × 3,500 ≈ 25,694, then sudoku/thesaurus 2.441 × 25,694 ≈ 62,720. Both round to ≈63,000, so 1-day and 7-day estimates sit on the same ruler (`gpts = 3,500`). Alternates worth noting: thesaurus ≈25,700/day is closer to small AI terms but has zero points at night; chairs ≈143,000/day (scaled from its earlier 22,500/day estimate to the new ruler) is 100% nonzero but flattens very small terms. Anchors that are too big (weather, calculator, pizza) crush small terms. Method references: [Krazydad, comparing Trends scales](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) and [G-TAB](https://arxiv.org/abs/2007.13861).
-
-The full built-in catalog is described in [regional baselines](baselines.md) and displayed in dsh's calibration settings. [examples/baselines.json](../examples/baselines.json) demonstrates US overrides. A version 2 file can replace or add anchors; `windowAnchors` remaps the automatic short/long defaults:
+The full built-in catalog is described in [regional baselines](baselines.md), inspectable via `gtfa baselines`, and displayed in dsh's calibration settings. [examples/baselines.json](../examples/baselines.json) demonstrates a version 2 custom override file (`anchors` plus optional `windowAnchors.short` / `.long`):
 
 ```json
 {
@@ -297,7 +295,7 @@ Geo matching first trims whitespace and uppercases the code. An empty string rem
 
 A real 24-hour Sora run with `gpts` failed the third condition: `27/180` non-gap anchor points were nonzero (15%), even though `anchorLevel` was `2.72`. That is why short windows now use `sudoku`: in a US 24-hour check it was 99.4% nonzero (CV 0.21), and small AI terms such as `gemini 4 carbon`, `pika h3`, and `genie 4` stayed nonzero next to it. A 7-day Sora run with `gpts` calibrated normally: average **36,795**, latest **39,238** (39.2k), peak **55,262** (55.3k) searches/day.
 
-These numbers are **estimates from an anchor**, not measured Google search volume. Only snapshot Popular/Rising rows retain `estDaily` for schema compatibility, always as `null`; `trends_ask` omits that field. Related-list values do not share the primary term's scale and cannot be converted into absolute volume. When the requested window is not `now 7-d`, `traffic7d` and `chart7d` come from one separate 7-day fetch after the primary attempt unless the primary is `BLOCKED` or `RATE_LIMITED`; ordinary primary errors such as `NETWORK_ERROR` do not by themselves prevent that attempt. The fetch uses `gpts` unless an explicit anchor was given. If skipped, the 7-day fields remain shape-stable with an empty chart, null traffic, baseline metadata, and a warning. A single 7-day request error is retained as a warning/fallback when the primary otherwise completes, while caller cancellation or an overall deadline propagates through the whole snapshot. When the request is already `now 7-d`, they reuse the primary snapshot and chart, so they are not independent. Cache keys include the filter window, property/category, and anchor term, so a 1-day `sudoku` snapshot and a 7-day `gpts` snapshot never collide.
+These numbers are **estimates from an anchor**, not measured Google search volume. Only snapshot Popular/Rising rows retain `estDaily` for schema compatibility, always as `null`; `trends_ask` omits that field. Related-list values do not share the primary term's scale and cannot be converted into absolute volume. When the requested window is already `now 7-d` (the default), `traffic7d` and `chart7d` reuse the primary snapshot and chart with no extra upstream request. When the requested window is not `now 7-d`, they come from one separate 7-day fetch after the primary attempt unless the primary is `BLOCKED` or `RATE_LIMITED`; ordinary primary errors such as `NETWORK_ERROR` do not by themselves prevent that attempt. If skipped, the 7-day fields remain shape-stable with an empty chart, null traffic, baseline metadata, and a warning. A single 7-day request error is retained as a warning/fallback when the primary otherwise completes, while caller cancellation or an overall deadline propagates through the whole snapshot. Cache keys include the filter window, property/category, and anchor term, so different windows or anchors never collide.
 
 In `now 1-d` windows, trailing points may be 0 or low while Google back-fills. Prefer settled values and the window average; a trailing 0 alone is not evidence of a real drop. `settledLatest` removes the last point in `now *` windows, then excludes gaps, so multiple trailing zeros can still remain. Non-`now` series with daily spacing remove two tail points; other series remove one. Averages exclude gaps but still include unsettled tail points. Leading/trailing zeros are retained, not marked as gaps; the calculation is unchanged.
 

@@ -69,14 +69,14 @@ actual name with the client's tool list; it does not expose four direct
 `trends_*` tools. A connector/API instead starts the same selected Actor through
 the Apify platform. Neither path needs a local `gtfa-mcp` process.
 
-For a simple summary, pass ordinary Actor input:
+For a simple summary, pass ordinary Actor input (defaults to `US`, `now 7-d`):
 
 ```json
 {
   "tool": "snapshot",
   "terms": ["ChatGPT"],
   "geo": "US",
-  "window": "now 1-d",
+  "window": "now 7-d",
   "timeoutMs": 60000
 }
 ```
@@ -97,7 +97,7 @@ For the full four-tool envelopes, limits and inline SVG, use the Actor's
     "input": {
       "term": "ChatGPT",
       "geo": "US",
-      "time": "now 1-d",
+      "time": "now 7-d",
       "fresh": true,
       "svg": true,
       "timeoutMs": 60000
@@ -110,7 +110,39 @@ Read `TOOL_RESPONSE` from that run's key-value store: `result` is the full tool
 envelope and `runtime` reports its package/baseline versions. Native requests can
 have zero Dataset rows. Change `name` and `input` using the
 [four-tool field guide](mcp-api.md); for example `trends_now` takes
-`geos: ["US"], hours: 24, limit: 3` in `input`.
+`geos: ["US"], hours: 24, limit: 3` in `input`, and `trends_compare` supports
+`calibrate: true` for multi-tier MEKA `batchVolume` estimates.
+
+## Local stdio MCP or CLI with Apify egress
+
+If a client (such as Dots, Codex CLI, Claude Desktop, or a Muse/agent shell)
+supports local stdio MCP or CLI commands and you want the four direct
+`trends_*` tool names while still routing Google Trends requests through Apify's
+residential proxy, pass `--egress actor-public` (or `--egress actor-own --actor <id>`)
+with `APIFY_TOKEN` in the client's secure environment:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "env": { "APIFY_TOKEN": "<your-apify-token>" }
+    }
+  }
+}
+```
+
+CLI equivalents:
+
+```sh
+APIFY_TOKEN=... gtfa snapshot Sora --egress actor-public --json --pretty
+APIFY_TOKEN=... gtfa compare Sora Veo --calibrate --egress actor-public --json
+gtfa baselines --sync --json
+```
+
+Environment variables `GTFA_EGRESS` (`local` | `actor-public` | `actor-own`) and
+`GTFA_APIFY_ACTOR` set the same routing defaults for both `gtfa` and `gtfa-mcp`.
 
 Record the selected Actor, connection type, actual runtime, result status and
 `fetchedAt` during acceptance. A handshake or tool list verifies connection only.

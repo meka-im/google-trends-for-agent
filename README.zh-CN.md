@@ -90,12 +90,30 @@ clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源
 
 打包后的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
 
-CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。下面的 stdio 配置使用运行机器的
-网络；Muse、GrokBot、Dots 优先按[Apify 接入指南](docs/clients.md)配置：
+CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认走 `local` 本机网络，也支持 Apify 按需云端出口（`--egress actor-public` 或 `--egress actor-own --actor <id>`，或通过环境变量 `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` 配合 `APIFY_TOKEN`），可在直接暴露四个 `trends_*` 工具的同时走 Apify 住宅代理。若客户端支持免本地进程的远程托管 MCP，Muse、GrokBot、Dots 优先按[Apify 接入指南](docs/clients.md)配置：
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"] } }
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+    }
+  }
+}
+```
+
+需要本地 stdio MCP 直接走 Apify 公共 Actor 时（将 `APIFY_TOKEN` 放在客户端安全环境变量中）：
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "env": { "APIFY_TOKEN": "<your-apify-token>" }
+    }
+  }
 }
 ```
 
@@ -151,7 +169,7 @@ pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使�
 
 持久化交给 dsh credentials service/provider-managed store，与 profile 分离；后端位置、记录键和 schema 可以不同。当前本地 file-backed provider 在适用时使用 owner-only `0700` 目录与 `0600` 文件权限；它不是 OS Keychain，也不是加密存储，不能阻止同一 OS 用户下的其他进程读取。手动 token 位于**高级 / 备用**区域，仍会明文写入 `cordis.patch.yml`（mode `0600`），UI 中隐藏，不会记录，也不会进入浏览器可见状态或模型可见的 tool input/output。**Cancel（取消）** 只取消 pending flow。**Sign out（注销）** 删除已存储的 OAuth session，但按 provider 后端保留可复用的 client registration；它**不会撤销 Apify 云端授权**，如需撤销请到 Apify Console。路由和生命周期细节见 [dsh 插件参考](docs/reference.md#dsh-plugin)。
 
-从 dsh 侧边栏（或「更多」）打开 **Google Trends**，可使用「总览、查询、记录」三页。单词快照和多词对比共用九种时间范围，从过去 1 小时到全部时间。「插件设置」打开已有的已安装插件页面；对话仍使用原来的四个原生工具。
+从 dsh 侧边栏（或「更多」）打开 **Google Trends**，可使用「查询、记录」两页。单词快照和多词对比默认使用 **近 7 天（`now 7-d`）**，共用九种时间范围（从过去 1 小时到全部时间）。「插件设置」打开已有的已安装插件页面；对话仍使用原来的四个原生工具。
 
 查询统一输入 1–5 个关键词，用逗号分隔并自动选择工具。多词使用同一批数据、一次按需 Actor 运行，有空位时把校准锚点一并带上。当前适配器使用 Classic Explore 的五项对比接口；Google 的[新版 Explore 页面支持更多对比组](https://support.google.com/trends/answer/4359550?hl=en)。5 个关键词占满当前适配器的本批对比项，此时需其中已有本地区的已知锚点，才能同批估算搜索量；没有可用校准时如实留空。页面显示实际运行阶段和已用时间；切到其他 dsh 页面后，草稿、进行中的请求和结果都会保留。点击「取消」可停止请求；关闭或刷新浏览器、卸载插件会取消请求。
 
@@ -175,9 +193,9 @@ Host 将最近 1,000 次手动和 Agent 调用（包含失败及结果副本）�
 
 | 工具 | 用途 |
 | --- | --- |
-| `trends_ask` | 兴趣、热门/上升查询、地区，可选 verdict 和 diff。 |
-| `trends_snapshot` | 校准后的每日搜索量、锚点/流量块、verdict、`chart7d` / `traffic7d`。 |
-| `trends_compare` | 1–5 个不同关键词在同一共享尺度上的相对 0–100 兴趣。 |
+| `trends_ask` | 兴趣、热门/上升查询、地区，可选 verdict 和 diff（默认 `US`、`now 7-d`）。 |
+| `trends_snapshot` | 基于 MEKA 多档位自动校准的每日搜索量（首轮超量程时自动换锚二轮重试）、锚点/流量/`calibration` 块、verdict、`chart7d` / `traffic7d`。 |
+| `trends_compare` | 1–5 个不同关键词在同一共享尺度上的相对 0–100 兴趣；可选 `calibrate: true` 附带多档位 `batchVolume` 批量估算。 |
 | `trends_now` | 按国家/地区获取 Trending Now，含排名、增长、分类和链接。 |
 
 输入、时间窗、默认值和信封字段见[参考文档](docs/reference.md)和 [MCP 字段指南](docs/mcp-api.md)。
@@ -186,10 +204,11 @@ Host 将最近 1,000 次手动和 Agent 调用（包含失败及结果副本）�
 
 | 命令 | 用途 |
 | --- | --- |
-| `gtfa ask <term>` | 单个词，可选 `--validate`、`--diff`、`--points`、批量 `--from`，并支持单次请求 `--timeout MS` 和 `--pretty`。 |
-| `gtfa snapshot <term>` | 校准流量、相关查询、verdict、SVG 图表，并支持单次请求 `--timeout MS`。 |
-| `gtfa compare <kw> [<kw> ...]` | 1–5 个不同关键词的相对兴趣（也支持 `--query` 模式）。 |
-| `gtfa now --geo US` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口。 |
+| `gtfa ask <term>` | 单个词（默认 `US`、`now 7-d`），可选 `--validate`、`--diff`、`--points`、批量 `--from`、`--egress`、单次请求 `--timeout MS` 和 `--pretty`。 |
+| `gtfa snapshot <term>` | 多档位校准流量、相关查询、verdict、SVG 图表、`--egress` 与单次请求 `--timeout MS`。 |
+| `gtfa compare <kw> [<kw> ...]` | 1–5 个不同关键词的相对兴趣（也支持 `--query` 模式），可选 `--calibrate` 附带 `batchVolume` 及 `--egress`。 |
+| `gtfa now --geo US` | 按国家/地区获取 Trending Now；`--hours` 是 Now 窗口；支持 `--egress`。 |
+| `gtfa baselines [--sync]` | 查看当前生效的 MEKA 校准基线状态，或手动从 `meka.im` 同步最新基线。 |
 | `gtfa doctor` | 检查 Node、Google Trends 可达性、代理，并执行一次 `gpts` 美国 24 小时抓取。`--timeout MS` 限制每项网络检查；遇到 challenge 或 HTTP 429 时不再执行 live fetch。`--json` 供机器读取。 |
 
 完整选项和示例见[参考文档](docs/reference.md#cli-surface)。
@@ -198,20 +217,25 @@ Host 将最近 1,000 次手动和 Agent 调用（包含失败及结果副本）�
 
 ## 数字如何计算
 
-`snapshot` 和 `ask --validate` 把词条与锚点放在同一个 0–100 尺度上，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 计算。这些是基于锚点的估算，不是 Google 实测搜索量；没有可用校准或锚点未通过可靠性门槛时，流量为 `null`。
+`snapshot`、`ask --validate` 与 `compare --calibrate` 把词条与 MEKA 地区锚点放在同一个 0–100 尺度上，再按 `traffic = round(score ÷ anchorLevel × dailySearches)` 计算。这些是基于锚点的估算，不是 Google 实测搜索量；没有可用校准或锚点未通过可靠性门槛时，流量为 `null`。
+
+全端（Library API、CLI、MCP、Apify Actor 与 dsh 插件）统一使用同一套 **MEKA v1 校准基线**（59 个 Google Ads Keyword Planner 锚点，覆盖 7 个地区，版本 `2026-11-19`；安装/首次启动自动同步一次，之后可通过 `gtfa baselines --sync` 或 dsh 设置页手动同步）。`trends_snapshot` 在未固定锚点且首轮超出量程时，会自动执行第二轮多档位换锚重试，成功时回填更准确的 `anchor` 与 `traffic`。
 
 标定基线（包括 version 2 文件和用户提供的锚点行）只适用于 **Web、category 0**。CLI 使用其他 property 或分类过滤时仍可返回相对兴趣，`traffic` / `traffic7d` 对象继续存在，但其中的每日搜索量字段为 `null` 并附带说明；version 2 格式没有扩展。只有 Snapshot 的 Popular/Rising 行保留 `estDaily` 以兼容公开 schema，且它始终为 `null`：相关查询榜单与主词并不共享同一兴趣标尺。Ask 的相关词表不包含 `estDaily`。
 
-Snapshot 的近 7 天工作按顺序执行。主窗口不是 `now 7-d` 时，主尝试结束后，只要结果不是 `BLOCKED` / `RATE_LIMITED`，就尝试一次单独的 7 天请求；普通 `NETWORK_ERROR` 等错误本身不会阻止这次尝试。请求被跳过时返回空图表、null 流量和基线元数据，同时附带 warning。调用方取消或整体 deadline 会传播到整个 snapshot，不会被转换成上述正常兜底字段。
+Snapshot 默认时间窗口为 `now 7-d`（直接复用主序列作为 `chart7d` / `traffic7d`，不再发第二次请求）。主窗口不是 `now 7-d` 时，主尝试结束后，只要结果不是 `BLOCKED` / `RATE_LIMITED`，就尝试一次单独的 7 天请求；普通 `NETWORK_ERROR` 等错误本身不会阻止这次尝试。请求被跳过时返回空图表、null 流量和基线元数据，同时附带 warning。调用方取消或整体 deadline 会传播到整个 snapshot，不会被转换成上述正常兜底字段。
 
-| 窗口 | 锚点 | 美国基线 |
-| --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/天**，±50% |
-| `now 7-d`、`today 1-m`、`today 3-m`、`today 12-m`、`today 5-y`、`all` | `gpts` | **3,500/天**，±50% |
+| 地区 | 默认锚点 | 每日搜索量基线 | 档位数量 |
+| --- | --- | ---: | ---: |
+| 美国 (`US`) | `sudoku` | **88,000/天**，±50% | 10 个锚点 |
+| 加拿大 (`CA`) | `sudoku` | **15,000/天**，±50% | 7 个锚点 |
+| 英国 (`GB`) | `crossword solver` | **27,000/天**，±50% | 8 个锚点 |
+| 德国 (`DE`) | `Kreuzworträtsel` | **22,000/天**，±50% | 8 个锚点 |
+| 法国 (`FR`) | `sudoku` | **22,000/天**，±50% | 8 个锚点 |
+| 日本 (`JP`) | `テトリス` | **18,000/天**，±50% | 8 个锚点 |
+| 全球 (`""`) | `stopwatch` | **160,000/天**，±50% | 10 个锚点 |
 
-加拿大、英国、澳大利亚、德国、法国、日本、印度和全球现有各自的自动基准（±75% 假设区间）。[地区数值、来源与验证](docs/baselines.md)列出统计期及限制；未知地区或稀疏数据仍返回 null。
-
-推导过程、锚点覆盖、基线文件和 null 流量规则见[校准与锚点](docs/reference.md#calibration-and-the-anchor)。
+未知地区或稀疏数据仍返回 `null`。详见[地区数值、来源与验证](docs/baselines.md)与[校准与锚点](docs/reference.md#calibration-and-the-anchor)。
 
 ## 文档
 

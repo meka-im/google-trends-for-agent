@@ -2,51 +2,31 @@
 
 Calibration is an estimate of Google web searches across all categories. A baseline applies to its exact region, including the explicit empty geo `""` for Worldwide. It does not restrict which regions can be queried. Regions without a matching baseline still return relative interest and related queries; their numeric traffic fields stay `null`.
 
-## MEKA baselines in dsh
+## Unified MEKA v1 baselines (API, CLI, MCP, Actor, and dsh)
 
-dsh includes 59 Google Ads Keyword Planner anchors from the MEKA catalog dated 2026-11-19. It covers Worldwide, the US, Canada, the UK, Germany, France, and Japan. Queries for other regions return relative interest by default. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
+All surfaces—Library API, CLI (`gtfa`), MCP (`gtfa-mcp`), Apify Actor, and the dsh plugin—share the same bundled **MEKA v1 baseline catalog** (59 Google Ads Keyword Planner anchors across 7 regions, revision `2026-11-19`, ±50% tolerance). It covers Worldwide (`""`), the US (`US`), Canada (`CA`), the UK (`GB`), Germany (`DE`), France (`FR`), and Japan (`JP`). Queries for other regions return relative interest by default with `null` traffic. [MEKA catalog and method](https://meka.im/datasets/google-trends-anchors)
 
-For a new comparison without a known or fixed anchor, the dashboard fills available slots with regional anchors near 10,000 searches/day. This keeps common keywords and anchors visible on the shared scale. The follow-up estimate for a weak keyword uses the two lowest eligible anchors. Anchors marked `30d+` qualify for 30-day, 90-day, and 12-month comparisons and follow-up estimates. A native single-term snapshot uses an hourly-qualified anchor for both its requested window and the companion 7-day chart. Fixed eligible anchors and custom values for the same term take priority. If the data is too sparse, the dashboard shows an unavailable estimate. The catalog snapshot ships with the plugin.
+Both `gtfa-mcp` and the dsh plugin automatically sync once from `https://meka.im/data/google-trends-anchors/baselines/v1/index.json` on initial install/first boot when `.meka-baselines.json` is absent, and reuse the cached disk snapshot on subsequent starts without further automatic network calls. Refresh manually at any time via `gtfa baselines --sync` or the dsh Settings page (`/api/gtfa.baselines-sync`).
 
-## Built-in defaults for CLI, MCP and Actor
+| Region | Default anchor | Searches/day baseline | Tolerance | Tiers in catalog |
+| --- | --- | ---: | --- | ---: |
+| US (`US`) | `sudoku` | 88,000 | ±50% | 10 anchors |
+| Canada (`CA`) | `sudoku` | 15,000 | ±50% | 7 anchors |
+| United Kingdom (`GB`) | `crossword solver` | 27,000 | ±50% | 8 anchors |
+| Germany (`DE`) | `Kreuzworträtsel` | 22,000 | ±50% | 8 anchors |
+| France (`FR`) | `sudoku` | 22,000 | ±50% | 8 anchors |
+| Japan (`JP`) | `テトリス` | 18,000 | ±50% | 8 anchors |
+| Worldwide (`""`) | `stopwatch` | 160,000 | ±50% | 10 anchors |
 
-Sources reviewed on **2026-11-16**. Review dates are separate from the providers' measurement periods below. The US calibration is retained; the other entries are rounded regional estimates.
+### Multi-tier automatic calibration
 
-| Region | Automatic anchor | Searches/day baseline | Assumption band |
-| --- | --- | ---: | --- |
-| US, 1h / 4h / 24h | `sudoku` | 63,000 | ±50% |
-| US, 7d and longer | `gpts` | 3,500 | ±50% |
-| Canada (`CA`) | `sudoku` | 12,000 | ±75% |
-| United Kingdom (`GB`) | `sudoku` | 27,000 | ±75% |
-| Australia (`AU`) | `sudoku` | 8,100 | ±75% |
-| Germany (`DE`) | `sudoku` | 27,000 | ±75% |
-| France (`FR`) | `sudoku` | 20,000 | ±75% |
-| Japan (`JP`) | `ナンプレ` | 22,000 | ±75% |
-| India (`IN`) | `calculator` | 300,000 | ±75% |
-| Worldwide (`""`) | `sudoku` | 220,000 | ±75% |
+- **`trends_snapshot` (MCP, CLI, Actor, dsh):** starts with the region's default anchor (`sudoku` in US/CA/FR, `crossword solver` in GB, `Kreuzworträtsel` in DE, `テトリス` in JP, `stopwatch` Worldwide). When no anchor is pinned and round 1 falls out of range, it automatically performs one second-round multi-tier MEKA comparison against closer regional anchors and upgrades `anchor` / `traffic` if rescued, returning full round details under `calibration`.
+- **`trends_compare` (`calibrate: true` / `--calibrate`) and dsh dashboard:** selects regional anchors near 10,000 searches/day when comparison slots are available, or runs on-demand batch estimation (`batchVolume`) across multi-tier MEKA references. Anchors marked `30d+` (`dailyOnly`) qualify for 30-day, 90-day, and 12-month comparisons and follow-up estimates.
+- **Overrides & reliability gate:** explicit query anchors, fixed plugin anchors, and version 2 `GTFA_BASELINES` overrides always take priority for matching region + term. These tolerance bands are broad assumptions about model and source uncertainty, **not statistical confidence intervals or accuracy guarantees**. The live reliability gate still applies: an anchor's non-gap mean must be at least 1, at least 25% of its non-gap points must be nonzero, and the term must have usable data; otherwise numeric traffic fields remain `null`.
 
-Outside the US the listed anchor serves both short and long windows. An explicit query anchor, fixed plugin anchor or `windowAnchors` setting takes priority. It still needs a baseline for the query's region; selecting US `gpts` for Canada does not apply the US search volume there.
+## Historical pre-MEKA regional baseline review (2026-11-16)
 
-These bands are deliberately broad assumptions about model and source uncertainty, **not statistical confidence intervals or accuracy guarantees**. The live reliability gate also applies: an anchor's non-gap mean must be at least 1, at least 25% of its non-gap points must be nonzero, and the term must have usable data. A sparse term or anchor can still return `null` in a supported region. The 1h and 4h windows use the short-window anchor; the new regional validation directly measured 24h and 7d, not every shorter window or historical range.
-
-## Sources and conversion
-
-New daily values use `monthly / (365.25 / 12)` rounded to two significant digits. Germany and France use the geometric midpoint of their two direct keyword-volume estimates before conversion. No country is scaled from US population, US interest scores or website visits. Worldwide uses its own reported global keyword volume, not a sum of the listed countries.
-
-| Region / term | Reported monthly searches | Source | Measurement period |
-| --- | ---: | --- | --- |
-| CA / sudoku | 368,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=ca) | Not supplied |
-| GB / sudoku | 823,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=gb) | Not supplied |
-| AU / sudoku | 246,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=au) | Not supplied |
-| DE / sudoku | 1,000,000; 673,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=de), [Semrush keyword table for zeit.de](https://www.semrush.com/website/zeit.de/overview/) | Not supplied; October 2026 |
-| FR / sudoku | 550,000; 673,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=sudoku&country=fr), [Semrush keyword table for e-sudoku.fr](https://www.semrush.com/website/e-sudoku.fr/overview/) | Not supplied; October 2026 |
-| JP / ナンプレ | 673,000 | [Semrush keyword table for sudoku.name](https://de.semrush.com/website/sudoku.name/overview/) | September 2026 indexed report |
-| IN / calculator | 9,140,000 | [seodata.dev](https://api.seodata.dev/v1/keyword?q=calculator&country=in) | Not supplied |
-| Worldwide / sudoku | 6,640,000 | [The Word Finder's reported Ahrefs export](https://www.thewordfinder.com/blog/5000-years-of-games-how-we-got-from-senet-to-wordle/) | July 2026 |
-
-The seodata API provides keyword-volume estimates but omits the measurement range and close-variant list. Its `cached_at` timestamp is not a measurement date. [Google Ads documents](https://developers.google.com/google-ads/api/docs/keyword-planning/generate-historical-metrics) that historical keyword metrics can combine close variants. Do not treat these estimates as exact counts for a literal search string. The Japanese number is retained in the search index of Semrush's German-language September report; the current English-language October top-five table no longer lists that keyword. The global figure is the publisher's reported Ahrefs export, not a live Ahrefs API response. Both source periods remain explicit in the catalog.
-
-The wider ±75% band acknowledges these limitations and disagreement with cross-keyword checks. Separate calculator-based estimates and 3-month Trends ratios were examined; they were not substituted for direct regional keyword volumes. The Worldwide calculator/translate checks imply roughly 3.3–7.8 million monthly sudoku searches, showing why the global figure should not be presented as precise. US derivation and its original sources are in [the reference](reference.md#calibration-and-the-anchor).
+Prior to unifying on the MEKA v1 59-anchor catalog, the package shipped a 10-entry regional table reviewed on **2026-11-16** (US `sudoku` 63,000 / `gpts` 3,500, plus single-anchor estimates for CA, GB, AU, DE, FR, JP, IN, and Worldwide). The dated evidence directory below is preserved as historical validation evidence.
 
 ### Reading search-volume estimates in dsh
 
