@@ -93,13 +93,30 @@ The clone tracks the repository's default `main` branch. If your review process 
 
 The packed tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
 
-The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. The following stdio config
-uses this machine's network; Muse, GrokBot and Dots should start with the
-[Apify setup](docs/clients.md):
+The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local` egress (this machine's network) and also support Apify on-demand cloud egress (`--egress actor-public` or `--egress actor-own --actor <id>`, or `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` with `APIFY_TOKEN`), giving direct access to the four `trends_*` tools through Apify's residential proxy. For managed remote MCP without a local Node process, Muse, GrokBot and Dots should start with the [Apify setup](docs/clients.md):
 
 ```json
 {
-  "mcpServers": { "google-trends": { "command": "npx", "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"] } }
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+    }
+  }
+}
+```
+
+To route local stdio MCP or CLI calls through Apify's public Actor with `APIFY_TOKEN` in the client's secure environment:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "env": { "APIFY_TOKEN": "<your-apify-token>" }
+    }
+  }
 }
 ```
 
@@ -155,7 +172,7 @@ Credentials are re-resolved on every operation: a stored OAuth session is used f
 
 Persistence is delegated to the dsh credentials service/provider-managed store, separate from the profile; backend location, record keys, and schema can vary. The current local file-backed provider uses owner-only `0700` directory and `0600` file permissions when applicable; it is not an OS Keychain or encrypted storage and cannot stop other processes under the same OS user from reading it. The manual token remains an **Advanced / fallback** option and is still stored in plaintext in `cordis.patch.yml` (mode `0600`), hidden in the UI, never logged, and absent from browser-visible status and model-visible tool input/output. **Cancel** only stops a pending flow. **Sign out** removes the stored OAuth session but retains reusable client registration according to the provider backend; it does **not** revoke the cloud authorization, so use Apify Console for that. See the [dsh plugin reference](docs/reference.md#dsh-plugin) for routes and lifecycle details.
 
-Open **Google Trends** from the dsh sidebar (or **More**) for **Overview**, **Query**, and **History**. Single-term snapshots and comparisons support all nine time ranges, from the past hour to all time. **Plugin settings** opens the existing installed-plugin page. Chat still uses the same four native tools.
+Open **Google Trends** from the dsh sidebar (or **More**) for **Query** and **History**. Single-term snapshots and comparisons default to **7 days (`now 7-d`)** and support all nine time ranges, from the past hour to all time. **Plugin settings** opens the existing installed-plugin page. Chat still uses the same four native tools.
 
 The query form accepts 1–5 comma-separated keywords and selects the tool automatically. Multi-term queries use one shared batch and one on-demand Actor run, with a calibration anchor included when space permits. The current adapter uses Classic Explore's five comparison slots; Google's [new Explore interface supports more groups](https://support.google.com/trends/answer/4359550?hl=en). Five selected terms occupy this adapter's whole batch; volume can then be calibrated only if one of them is already a known regional anchor. Missing or weak calibration stays null. The page shows real Actor stages and elapsed time, and retains the draft, in-flight request and result when navigating to another dsh panel. Cancel explicitly stops the current request; closing/reloading the browser or unloading the plugin cancels it.
 
@@ -179,9 +196,9 @@ Relative `snapshotDir` and `chartDir` paths resolve from the directory where `ds
 
 | Tool | What it does |
 | --- | --- |
-| `trends_ask` | Interest, Popular/Rising queries, regions, optional verdict and diff. |
-| `trends_snapshot` | Calibrated searches/day, anchor/traffic blocks, verdict, `chart7d` / `traffic7d`. |
-| `trends_compare` | Relative 0–100 interest for 1–5 distinct keywords on one shared scale. |
+| `trends_ask` | Interest, Popular/Rising queries, regions, optional verdict and diff (default: `US`, `now 7-d`). |
+| `trends_snapshot` | Calibrated searches/day with multi-tier MEKA auto-calibration (automatic 2nd-round tier retry when out of range), anchor/traffic/calibration blocks, verdict, `chart7d` / `traffic7d`. |
+| `trends_compare` | Relative 0–100 interest for 1–5 distinct keywords on one shared scale; optional `calibrate: true` attaches multi-tier `batchVolume` estimates. |
 | `trends_now` | Trending Now by country, with rank, growth, categories, and links. |
 
 Inputs, time windows, defaults, and envelope fields are in the [reference](docs/reference.md) and the [MCP field guide](docs/mcp-api.md).
@@ -190,10 +207,11 @@ Inputs, time windows, defaults, and envelope fields are in the [reference](docs/
 
 | Command | What it does |
 | --- | --- |
-| `gtfa ask <term>` | One term, with optional `--validate`, `--diff`, `--points`, batch `--from`, per-request `--timeout MS`, and `--pretty`. |
-| `gtfa snapshot <term>` | Calibrated traffic, related queries, verdict, SVG charts, and per-request `--timeout MS`. |
-| `gtfa compare <kw> [<kw> ...]` | Relative interest for 1–5 distinct keywords (also `--query` mode). |
-| `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window. |
+| `gtfa ask <term>` | One term (default `US`, `now 7-d`), with optional `--validate`, `--diff`, `--points`, batch `--from`, `--egress`, per-request `--timeout MS`, and `--pretty`. |
+| `gtfa snapshot <term>` | Multi-tier calibrated traffic, related queries, verdict, SVG charts, `--egress`, and per-request `--timeout MS`. |
+| `gtfa compare <kw> [<kw> ...]` | Relative interest for 1–5 distinct keywords (also `--query` mode); optional `--calibrate` for `batchVolume` and `--egress`. |
+| `gtfa now --geo US` | Trending Now by country; `--hours` is the Now window; supports `--egress`. |
+| `gtfa baselines [--sync]` | Inspect the active MEKA calibration baseline catalog or manually sync the latest catalog from `meka.im`. |
 | `gtfa doctor` | Check Node, Google Trends reachability, proxy, and one `gpts` US 24h fetch. `--timeout MS` bounds each network check; a challenge or HTTP 429 stops before the live fetch. `--json` for machines. |
 
 Full flags and examples: [reference](docs/reference.md#cli-surface).
@@ -202,20 +220,25 @@ Full flags and examples: [reference](docs/reference.md#cli-surface).
 
 ## How the numbers work
 
-`snapshot` and `ask --validate` put the term and an anchor on one shared 0–100 scale, then compute `traffic = round(score ÷ anchorLevel × dailySearches)`. These are anchor-based estimates, not measured Google search volume. Traffic stays `null` when no calibration exists or the anchor fails its reliability gate.
+`snapshot`, `ask --validate`, and `compare --calibrate` put terms and MEKA regional anchors on one shared 0–100 scale, then compute `traffic = round(score ÷ anchorLevel × dailySearches)`. These are anchor-based estimates, not measured Google search volume. Traffic stays `null` when no calibration exists or the anchor fails its reliability gate.
+
+All surfaces (Library API, CLI, MCP, Apify Actor, and dsh) share the same **MEKA v1 baseline catalog** (59 Google Ads Keyword Planner anchors across 7 regions, revision `2026-11-19`, synced once on initial install/first boot and updated manually via `gtfa baselines --sync` or dsh Settings). When `trends_snapshot` runs without a pinned anchor and round 1 is out of range, it automatically performs one second-round multi-tier MEKA retry and upgrades `anchor` / `traffic` if rescued.
 
 Calibration baselines—including version 2 files and user-provided anchor rows—apply only to **web searches in category 0**. A CLI filter using another property or category can still return relative interest, but `traffic` / `traffic7d` objects remain with their searches/day fields set to `null` and an explanation; the version 2 format is unchanged. Only snapshot Popular/Rising rows retain `estDaily` for schema compatibility, and it is always `null`: those related lists do not share the primary term's scale. Ask tables do not contain `estDaily`.
 
-Snapshot attempts its 7-day work sequentially. For a primary window other than `now 7-d`, it tries the separate 7-day request after the primary attempt finishes unless the primary ended in `BLOCKED` or `RATE_LIMITED`; other errors such as `NETWORK_ERROR` do not by themselves prevent that attempt. If the attempt is skipped, the empty chart, null traffic, and baseline metadata are returned with a warning. Caller cancellation or the overall deadline propagates through the whole snapshot and is not converted into those normal fallback fields.
+Snapshot defaults to `now 7-d` (reusing the primary series for `chart7d` / `traffic7d` with no extra request). For a primary window other than `now 7-d`, it tries the separate 7-day request sequentially after the primary attempt finishes unless the primary ended in `BLOCKED` or `RATE_LIMITED`; other errors such as `NETWORK_ERROR` do not by themselves prevent that attempt. If the attempt is skipped, the empty chart, null traffic, and baseline metadata are returned with a warning. Caller cancellation or the overall deadline propagates through the whole snapshot and is not converted into those normal fallback fields.
 
-| Window | Anchor | US baseline |
-| --- | --- | --- |
-| `now 1-H` · `now 4-H` · `now 1-d` | `sudoku` | **63,000/day**, ±50% |
-| `now 7-d`, `today 1-m`, `today 3-m`, `today 12-m`, `today 5-y`, `all` | `gpts` | **3,500/day**, ±50% |
+| Region | Default anchor | Baseline (searches/day) | Tiers in catalog |
+| --- | --- | ---: | ---: |
+| US (`US`) | `sudoku` | **88,000/day**, ±50% | 10 anchors |
+| Canada (`CA`) | `sudoku` | **15,000/day**, ±50% | 7 anchors |
+| United Kingdom (`GB`) | `crossword solver` | **27,000/day**, ±50% | 8 anchors |
+| Germany (`DE`) | `Kreuzworträtsel` | **22,000/day**, ±50% | 8 anchors |
+| France (`FR`) | `sudoku` | **22,000/day**, ±50% | 8 anchors |
+| Japan (`JP`) | `テトリス` | **18,000/day**, ±50% | 8 anchors |
+| Worldwide (`""`) | `stopwatch` | **160,000/day**, ±50% | 10 anchors |
 
-Canada, the UK, Australia, Germany, France, Japan, India and Worldwide have their own automatic baselines (±75% assumption bands). See [regional values, sources and validation](docs/baselines.md). Unsupported regions and sparse data retain null traffic.
-
-Derivation, anchor overrides, baseline files, and null-traffic rules: [Calibration and the anchor](docs/reference.md#calibration-and-the-anchor).
+Unsupported regions and sparse data retain `null` traffic. See [regional values, sources and validation](docs/baselines.md) and [Calibration and the anchor](docs/reference.md#calibration-and-the-anchor) for overrides, version 2 baseline files, and null-traffic rules.
 
 ## Docs
 

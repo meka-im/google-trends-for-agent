@@ -4,7 +4,7 @@
 
 # google-trends-for-agent · Agent API
 
-本机 MCP 和 dsh 原生插件提供 **四个工具**（及同名语义的 CLI）。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 24 小时 · Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 还会用共享尺度锚点把 0–100 兴趣换算成每日搜索量估计；锚点按地区及窗口自动选择（美国短窗口用 `sudoku`、长窗口用 `gpts`；其他已支持地区见[地区基准](baselines.md)）。正常返回时，`chart7d` / `traffic7d` / `anchor7d` 字段形状固定。主窗口不是 `now 7-d` 时，主尝试结束后，只要结果不是 `BLOCKED` / `RATE_LIMITED`，就顺序尝试一次额外的 `now 7-d` 请求；普通 `NETWORK_ERROR` 等错误本身不会阻止该尝试。主窗口为这两类停止错误时不发额外请求，仍返回空图、null 流量、基线信息与 warning。调用方取消或整体 deadline 会向上传播，不承诺返回该正常信封。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述本版本的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
+本机 MCP、CLI 与 dsh 原生插件提供 **四个工具**（及同名语义的 CLI），且均支持通过 `--egress actor-public` / `actor-own`（或 `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` 配合 `APIFY_TOKEN`）走 Apify 按需云端住宅代理。`trends_ask` / `trends_compare` / `trends_snapshot` 默认 **美国 · 近 7 天（`now 7-d`）· Web · 全部分类**；`trends_now` 默认拉 **30 国** 的 Trending Now（`hours=24`）。`trends_snapshot` 与 `trends_compare`（`calibrate: true`）统一使用 **MEKA v1 多档位校准基线**（59 个锚点，覆盖 US/CA/GB/DE/FR/JP/全球；详见[地区基准](baselines.md)）；`trends_snapshot` 在未固定锚点且首轮超量程时会自动执行二轮换锚重试，并在 `calibration` 字段返回过程详情。正常返回时，`chart7d` / `traffic7d` / `anchor7d` 字段形状固定（默认主窗口就是 `now 7-d`，直接复用不发额外请求）。主窗口不是 `now 7-d` 时，主尝试结束后，只要结果不是 `BLOCKED` / `RATE_LIMITED`，就顺序尝试一次额外的 `now 7-d` 请求；普通 `NETWORK_ERROR` 等错误本身不会阻止该尝试。主窗口为这两类停止错误时不发额外请求，仍返回空图、null 流量、基线信息与 warning。调用方取消或整体 deadline 会向上传播，不承诺返回该正常信封。默认信封为 Agent 做了瘦身：`trends_ask` 不返回完整 `interest.points`（`points: true` / `--points` 才返回），`trends_snapshot` 不内联 SVG 文本（`svg: true` / `--svg` 才返回，`chart.path` 仍会写入）。图表时间轴默认使用 **UTC**，可用 `tz` / `--tz` / 库 `timeZone` 或 `GTFA_TZ` 指定 IANA 时区。`trends_ask`（`validate: true`）与 `trends_snapshot` 共用同一套标定公式和锚点可靠性门。本文只描述本版本的入参与稳定输出信封，字段以 `src/mcp.ts` / `src/tools.ts` / `src/trends-snapshot.ts` / `src/calibration.ts` 为准。英文总览与安装见 [README](../README.md)。
 
 所有内建及 version 2 用户标定基线当前只适用于 **Web、category 0**。CLI 将 `property` 过滤为其他值或将 `category` 设为非 0 时仍可返回相对兴趣，`traffic` / `traffic7d` 对象继续存在，但其中的数值字段全为 `null`，并在 warning 中说明没有匹配的标定；version 2 格式不因此扩展。
 
@@ -44,10 +44,11 @@
 
 | CLI | MCP |
 | --- | --- |
-| `gtfa ask <term> [--fresh] [--validate] [--diff …] [--points] [--category N] [--property PROPERTY] [--timeout MS] [--pretty]` | `trends_ask`（`--diff` 强制 JSON 输出） |
-| `gtfa snapshot <term> [--json] [--svg] [--tz IANA] [--timeout MS]` | `trends_snapshot` |
-| `gtfa compare a b …` 或 `--query a --query b` | `trends_compare` |
-| `gtfa now --geo SG [--hours 24] [--limit 10]` | `trends_now` |
+| `gtfa ask <term> [--fresh] [--validate] [--diff …] [--points] [--category N] [--property PROPERTY] [--egress MODE] [--actor ID] [--timeout MS] [--pretty]` | `trends_ask`（`--diff` 强制 JSON 输出） |
+| `gtfa snapshot <term> [--json] [--svg] [--tz IANA] [--egress MODE] [--actor ID] [--timeout MS]` | `trends_snapshot` |
+| `gtfa compare a b … [--calibrate] [--egress MODE] [--actor ID]` 或 `--query a --query b` | `trends_compare` |
+| `gtfa now --geo SG [--hours 24] [--limit 10] [--egress MODE] [--actor ID]` | `trends_now` |
+| `gtfa baselines [--sync] [--store DIR] [--json]` | 查看/手动同步 MEKA v1 校准基线（MCP 首次启动也会自动同步一次） |
 
 > `now` 的 `--hours` 是 Trending Now 窗口（4 / 24 / 48 / 168），**不是** Explore 的 `time`。
 
@@ -67,7 +68,7 @@ CLI-only：`gtfa ask --validate --from` 的 JSON 结果会为每行加入 `input
 | --- | --- | --- | --- | --- |
 | `term` | string（1–100，trim） | 是 | — | 要查的词 |
 | `geo` | string | 否 | `US` | 国家 / 地区（如 `US-CA`） |
-| `time` | 上表枚举 | 否 | `now 1-d` | Explore 时间窗 |
+| `time` | 上表枚举 | 否 | `now 7-d` | Explore 时间窗 |
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的快照；`true`：强制现拉 |
 | `validate` | boolean | 否 | `false` | `true`：附加裁决；锚点按地区与窗口自动，见[地区基准](baselines.md) |
 | `points` | boolean | 否 | `false` | `true`：返回完整 `interest.points`；默认省略以控制 Agent 上下文 |
@@ -238,7 +239,7 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 
 ## `trends_snapshot` — 把兴趣换算成每日搜索量
 
-一次共享尺度的 `[term, anchor]` 兴趣对比（同一个 0–100 标尺），加上该 term 的 Popular / Rising 相关查询，换算成 **searches/day** 估计、趋势裁决和 SVG 折线图（默认只给 `chart.path`，`svg: true` / `--svg` 才内联文本）。请求窗口对应 `chart` / `traffic` / `series` / `anchor`；正常返回时，`chart7d` / `traffic7d` / `anchor7d` 字段始终存在。主窗口不是 `now 7-d` 时，主尝试结束后，只要不是 `BLOCKED` / `RATE_LIMITED` 就顺序请求该额外窗口；普通主窗口错误（如 `NETWORK_ERROR`）不会单独阻止该请求。主窗口为这两类停止错误时直接使用空图、null 流量和基线信息，不再发出 7d 请求。美国短窗口（`now 1-H` / `now 4-H` / `now 1-d`）自动使用 `sudoku`（63,000 次/日，±50%），`now 7-d` 及以上自动使用美国 `gpts`（3,500 次/日，±50%）；这是**标定估计，不是实测流量**。
+一次共享尺度的 `[term, anchor]` 兴趣对比（同一个 0–100 标尺），加上该 term 的 Popular / Rising 相关查询，换算成 **searches/day** 估计、趋势裁决和 SVG 折线图（默认只给 `chart.path`，`svg: true` / `--svg` 才内联文本）。请求窗口对应 `chart` / `traffic` / `series` / `anchor`；正常返回时，`chart7d` / `traffic7d` / `anchor7d` 与 `calibration` 字段始终存在。默认窗口为 `now 7-d`（直接复用主序列，不再发第二次请求）；主窗口不是 `now 7-d` 时，主尝试结束后，只要不是 `BLOCKED` / `RATE_LIMITED` 就顺序请求该额外窗口。锚点统一来自 **MEKA v1 59 锚点基线表**（美国默认 `sudoku` 88,000 次/日，±50%；未指定固定锚点且首轮超量程时自动触发第二轮多档位换锚重试）；这是**标定估计，不是实测流量**。
 
 ### 入参
 
@@ -246,8 +247,8 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | --- | --- | --- | --- | --- |
 | `term` | string（1–100，trim） | 是 | — | 要估算的词 |
 | `geo` | string | 否 | `US` | 国家 / 地区（如 `US-CA`） |
-| `time` | 上表枚举 | 否 | `now 1-d` | Explore 时间窗；与 `trends_ask` 相同 |
-| `anchor` | string（1–100，trim） | 否 | 自动 | 共享尺度锚点词。省略时按地区与窗口自动选择，见[地区基准](baselines.md)；显式指定会同时用于主窗口和额外 7d 窗口。内建标定覆盖 US、CA、GB、AU、DE、FR、JP、IN 和 Worldwide 的 Web/category 0 |
+| `time` | 上表枚举 | 否 | `now 7-d` | Explore 时间窗；与 `trends_ask` 相同 |
+| `anchor` | string（1–100，trim） | 否 | 自动 | 共享尺度锚点词。省略时按地区自动选择并允许二轮多档位重试，见[地区基准](baselines.md)；显式指定会锁定锚点并同时用于主窗口和额外 7d 窗口。内建 MEKA 标定覆盖 US、CA、GB、DE、FR、JP 和 Worldwide 的 Web/category 0 |
 | `fresh` | boolean | 否 | `false` | `false`：复用 &lt;360 分钟的同类快照；`true`：强制现拉 |
 | `svg` | boolean | 否 | `false` | `true`：内联 `chart.svg` / `chart7d.svg` 文本；默认 `svg: ""`，但 `path` 仍会写入 |
 | `tz` | IANA string | 否 | `GTFA_TZ`，再退回 `UTC` | 图表时间轴时区（如 `Asia/Shanghai`）；非法名称返回 `INVALID_INPUT` |
@@ -375,7 +376,8 @@ ratio       = round2(mean(non-gap term scores) / anchorLevel)
 | `chart.svg` | 默认 `""`（不内联，控制 Agent 上下文）；`svg: true` / `--svg` 时返回 720×300 的内联 SVG（时间轴使用规范化后的 IANA 时区，默认 `UTC`；gap 点不连线，峰值 / latest 带时间标记，锚点虚线；标题 / aria / `<title>` 显示时区标签，如 `(UTC)`、`(Asia/Shanghai)`） |
 | `chart.path` | 写入 `.gtfa/charts/<snapshotId>-<tz-slug>-<sha1-8>.svg` 的路径（时区 slug 如 `utc-bdfd4d8d`、`asia-shanghai-b485a3cf`；短 SHA-1 后缀基于规范化 IANA 名称并避免不同时区碰撞）；`null` 表示文件写入被禁用/失败 |
 | `chart7d` | 正常返回时固定存在的 7d 曲线字段，形状与 `chart` 相同（`{ svg, path }`）；主窗口不是 `now 7-d` 时，在主尝试结束后只要不是 `BLOCKED` / `RATE_LIMITED` 就尝试拉取。普通 7d 错误没有快照或被跳过时为 `{ "svg": "", "path": null }` 并写入 warning；调用方取消/整体 deadline 不承诺返回该字段 |
-| `traffic7d` | 正常返回时固定存在的 7d 流量块，字段与 `traffic` 完全相同；成功拉取时用 `anchor7d` 的基线（美国默认 `gpts` 3,500 次/日，±50%；其他地区见[地区基准](baselines.md)）和同一 gap 排除规则标定；普通 7d 错误或跳过时数值字段为 `null`、`gapCount: 0`。调用方取消/整体 deadline 不进入该兜底 |
+| `traffic7d` | 正常返回时固定存在的 7d 流量块，字段与 `traffic` 完全相同；主窗口已是 `now 7-d` 时直接复用主结果；其他窗口成功拉取时用 `anchor7d` 的基线（美国默认 MEKA `sudoku` 88,000 次/日，±50%；其他地区见[地区基准](baselines.md)）和同一 gap 排除规则标定；普通 7d 错误或跳过时数值字段为 `null`、`gapCount: 0`。调用方取消/整体 deadline 不进入该兜底 |
+| `calibration` | 多档位 MEKA 校准详情：`status`、`rounds`（每一轮使用的锚点列表；超量程自动二轮换锚时长度为 2）、`series` 及可选 `retryError`。若二轮重试成功，顶层 `anchor` / `traffic` 同步升级为更精确的档位结果 |
 | `tables.popular[].estDaily` | 兼容字段，**始终为 `null`**。Popular 的 `value` 不是主词绝对量，不能据此推导每日搜索量 |
 | `tables.rising[].estDaily` | 兼容字段，**始终为 `null`**。升幅 / Breakout 与主词兴趣不共享可用于绝对量换算的标尺 |
 | `tables.rising[]` | 保留 `formattedValue` / `breakout`；`value` 是升幅或 Breakout 标记，不是 searches/day |
@@ -399,7 +401,7 @@ ratio         = round2(mean(non-gap term scores) / anchorLevel)
 
 `estDaily` 不参与上述流量公式。只有 `trends_snapshot` 的 Popular/Rising 行保留该兼容字段并始终投影为 `null`；`trends_ask` 的相关词表不包含 `estDaily`。`schemaVersion` 保持不变。
 
-内建美国锚点有两个：`gpts` **3,500 次/日**（`now 7-d` 及以上）和 `sudoku` **63,000 次/日**（`now 1-H` / `now 4-H` / `now 1-d`），都使用 ±50% tolerance。63,000 的推导：7 天共享尺度 sudoku/gpts = 18.035 → 18.035 × 3,500 ≈ 63,123；thesaurus 交叉校验 thesaurus/gpts 7.341 × 3,500 ≈ 25,694，sudoku/thesaurus 2.441 × 25,694 ≈ 62,720，两者都四舍五入到 ≈63,000，因此短窗口与 7 天窗口在同一把尺子上（gpts=3,500）。3,500 的基线由 sudoku、thesaurus、calculator 的公开关键词工具量经实测 Trends 比例反推（来源见 [reference](reference.md#calibration-and-the-anchor)）。备选：thesaurus ≈25,700/日（更接近小 AI 词，但夜间有零点）、chairs ≈143,000/日（100% 非零，但压扁极小的词）；过大的 weather / calculator / pizza 会压扁小词。方法参考 [Krazydad](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
+全端统一内置 **MEKA v1 59 锚点多档位基线表**（版本 `2026-11-19`，±50% tolerance；美国默认起始锚点 `sudoku` **88,000 次/日**，同表还包含从 `psi to bar` / `kph to mph` 到 `netflix` / `gmail` / `amazon` 的 10 档美国锚点，以及 CA/GB/DE/FR/JP/全球多档锚点，详见[地区基准](baselines.md)）。方法参考 [Krazydad](https://blog.krazydad.com/2018/05/18/comparing-apples-oranges-and-futoshikis-using-google-trends/) 与 [G-TAB](https://arxiv.org/abs/2007.13861)。
 
 `examples/baselines.json` 是 version 2：`{"version":2,"anchors":[{term,geo,dailySearches,tolerance?}],"windowAnchors":{"short"?:string,"long"?:string}}`。用 `GTFA_BASELINES=/path/to/baselines.json` 覆盖 CLI（`ask --validate` / `snapshot`）、`gtfa-mcp`（stdio 与 `--http`）和 Actor；库调用可用 `baselines` 传入同结构。版本 2 格式没有 property/category 字段，因此内建和用户锚点都只在 Web、category 0 生效，不会为其他过滤条件外推。缓存、filter 和基线匹配先把 `geo` trim 后转大写；显式空字符串 `""` 表示 Worldwide（包括用户锚点行），不会回退到 `US`；缺少 `geo` 的文件行无效。归一化后的同 term+geo 用户锚点优先于内建；`windowAnchors` 的词必须存在于 `anchors` 或内建锚点中。version 1 会被拒绝，无效文件会明确报错而不是静默回退。显式 `anchor` 会同时覆盖主窗口和 7d 窗口；单次调用的 `anchor` 参数优先于 Actor 的服务级锚点设置。
 
@@ -407,15 +409,15 @@ ratio         = round2(mean(non-gap term scores) / anchorLevel)
 
 修改 `GTFA_BASELINES` 之后，请使用 CLI 的 `--fresh` 或 MCP 的 `fresh: true` 来绕过已保存的快照。
 
-**English summary.** Automatic selection matches the region and window; [regional baselines](baselines.md) include sources, periods, validation and uncertainty. US anchors are: `sudoku` (US 63,000/day) for `now 1-H` / `now 4-H` / `now 1-d`, `gpts` (US 3,500/day) for `now 7-d` and longer. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. Built-in and user baselines apply only to Web search in category 0; other CLI filters keep the traffic objects with null numeric fields. `geo` is trimmed and uppercased for matching, while `""` stays Worldwide; explicit empty-geo baseline rows calibrate Worldwide; missing file geos are rejected. Only snapshot Popular/Rising `estDaily` fields remain present, and they are always `null`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
+**English summary.** All surfaces share the unified MEKA v1 baseline catalog (59 Google Ads Keyword Planner anchors across US, CA, GB, DE, FR, JP, and Worldwide; see [regional baselines](baselines.md)); the US starting anchor is `sudoku` (88,000/day, ±50%), with automatic 2nd-round multi-tier MEKA retry when `trends_snapshot` is unpinned and round 1 falls out of range. A version 2 `baselines.json` can replace/add anchors and remap `windowAnchors.short` / `.long`; load it with `GTFA_BASELINES`. Built-in and user baselines apply only to Web search in category 0; other CLI filters keep the traffic objects with null numeric fields. `geo` is trimmed and uppercased for matching, while `""` stays Worldwide; explicit empty-geo baseline rows calibrate Worldwide; missing file geos are rejected. Only snapshot Popular/Rising `estDaily` fields remain present, and they are always `null`. An explicit `anchor` / `--anchor` wins for both the requested and 7-day windows; a per-call `anchor` beats the Actor's server-wide anchor input. `anchor7d` reports the 7-day baseline.
 
 **注意事项：**
 
 - “searches/day”是由兴趣比例 × 锚点标定推出的**估计**，不是 Google 实测搜索量；锚点本身也有误差，`low` / `high` 只反映 `tolerance`。
 - 锚点与被查词的 0–100 标尺来自同一次 `[term, anchor]` 对比；不同 `geo` / `time` / `anchor` 的流量不可直接横比。
-- 请求窗口不是 `now 7-d` 时，主尝试结束后，只要不是 `BLOCKED` / `RATE_LIMITED` 就顺序做一次 `[term, 7d anchor]` 的 `now 7-d` Explore 对比（默认 7d 锚点由地区决定，美国为 `gpts`，显式 `anchor` 时改用该锚点）；普通主窗口 `NETWORK_ERROR` 等错误本身不会阻止该尝试。Popular / Rising 表仍只来自主窗口，不会为 7d 重复拉表。主窗口为 `BLOCKED` / `RATE_LIMITED` 时跳过该额外请求。主窗口本身就是 `now 7-d` 时，`chart7d` 直接复用主 `chart`，同样不产生第二次上游请求。
+- 默认主窗口为 `now 7-d`，`chart7d` / `traffic7d` 直接复用主结果不发第二次请求。请求窗口不是 `now 7-d` 时，主尝试结束后，只要不是 `BLOCKED` / `RATE_LIMITED` 就顺序做一次 `now 7-d` Explore 对比（默认 7d 锚点由 MEKA 地区目录决定，显式 `anchor` 时改用该锚点）；普通主窗口 `NETWORK_ERROR` 等错误本身不会阻止该尝试。Popular / Rising 表仍只来自主窗口，不会为 7d 重复拉表。主窗口为 `BLOCKED` / `RATE_LIMITED` 时跳过该额外请求。
 - gap 点（见上一节规则）不参与 `anchorLevel`、流量聚合、裁决和折线连接；主窗口与 7d 窗口各自独立排除 gap。
-- `fresh: false` 只复用同 term + filter + anchor 的快照；缓存键同时包含窗口和锚点词，因此 1d `sudoku` 与 7d `gpts` 快照不会互相命中；失败、partial 和 `blocked` 快照永不复用为缓存响应。
+- `fresh: false` 只复用同 term + filter + anchor 的快照；缓存键同时包含窗口和锚点词，不同窗口或锚点的快照不会互相命中；失败、partial 和 `blocked` 快照永不复用为缓存响应。
 - 图表时间轴默认 `UTC`；显式 `tz`（MCP）/ `--tz`（CLI）/ `timeZone`（库）优先于 `GTFA_TZ`，都没有时为 `UTC`。时区通过 `Intl.DateTimeFormat` 的 `timeZone` 计算日历字段（正确处理 DST），而不是固定偏移；非法 IANA 名称返回 `INVALID_INPUT`。
 - 图文件写在 `.gtfa/charts/`（MCP 进程可用 `GTFA_CHART_DIR` 覆盖，快照目录可用 `GTFA_SNAPSHOT_DIR` 覆盖）；`chart` 与 `chart7d` 各自使用对应快照 ID 加时区 slug 与短 SHA-1 哈希的 `.svg`（如 `traffic-fixture-utc-bdfd4d8d.svg` / `traffic-fixture-asia-shanghai-b485a3cf.svg`；主窗口为 `now 7-d` 时共用同一文件）。哈希基于规范化 IANA 时区名，大小写变体共享同一文件，而 `Etc/GMT+1` 与 `Etc/GMT-1` 会得到不同文件名。若目录不可写，对应 `path` 为 `null`；默认不内联 SVG，需要文本时设置 `svg: true` / `--svg`。
 - 普通 7d 请求错误导致没有快照，或主窗口 `BLOCKED` / `RATE_LIMITED` 导致 7d 请求被跳过时，`weekError` 兜底保留：`chart7d: { svg: "", path: null }`，`traffic7d` 数值全为 `null`、`gapCount: 0`，`anchor7d` 只含 `term` / `dailySearches` / `tolerance` / `source` / `note`（`level` / `ratio` 为 `null`），并在 `meta.warnings` 说明原因。调用方 signal 取消或整体 deadline 会取消整个 snapshot 调用，不进入该兜底，也不承诺返回这些字段；单个 7d 请求错误仍可作为 warning/兜底保留。
@@ -432,7 +434,8 @@ ratio         = round2(mean(non-gap term scores) / anchorLevel)
 | --- | --- | --- | --- | --- |
 | `keywords` | string[1–5]，每项 1–100 | 是 | — | 要对比的不同关键词 |
 | `geo` | string | 否 | `US` | 国家 / 地区 |
-| `time` | Explore 枚举 | 否 | `now 1-d` | 时间窗 |
+| `time` | Explore 枚举 | 否 | `now 7-d` | 时间窗 |
+| `calibrate` | boolean | 否 | `false` | `true` 时附带多档位 MEKA `batchVolume` 批量搜索量估算（CLI 为 `--calibrate`） |
 | `timeoutMs` | integer（1000–60000） | 否 | 30000 | 本次 Explore 请求超时（毫秒） |
 
 > **去重：** trim + 大小写折叠后若有重复，直接 `INVALID_INPUT`，不发请求。
