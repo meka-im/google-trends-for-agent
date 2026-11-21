@@ -68,6 +68,20 @@ function api() {
     if (path === 'api/gtfa.baselines') {
       return Response.json(summarizeMekaCatalog());
     }
+    if (path.startsWith('api/gtfa.version')) {
+      return Response.json({
+        pluginVersion: '0.2.40',
+        baselineCatalogRevision: '2026-11-19',
+        egress: 'local',
+        actorId: null,
+        latestRelease: null,
+        pluginUpdateAvailable: false,
+        observedActor: null,
+        actorUpdateAvailable: false,
+        checkedAt: '2026-11-21T00:00:00.000Z',
+        checkError: null,
+      });
+    }
     if (path === 'api/gtfa.baselines-sync') {
       const status = {
         ...summarizeMekaCatalog(),
@@ -157,7 +171,7 @@ describe('settings interactions', () => {
   it('keeps edits local until Save, and Discard restores without writing', async () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    expect(network.requests).toHaveLength(0);
+    expect(network.requests.filter(row => row.url !== 'api/gtfa.version')).toHaveLength(0);
     await chooseGeo(user, 'GB');
     expect(backend.saved().geo).toBe('US');
     expect(button('save').disabled).toBe(false);
@@ -252,7 +266,7 @@ describe('connection diagnostic interactions', () => {
   it('shows real keyword counts only after a click and clears verification after edits', async () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     render(<ConfigPage ctx={backend.ctx} t={t} />);
-    expect(network.requests).toHaveLength(0);
+    expect(network.requests.filter(row => row.url !== 'api/gtfa.version')).toHaveLength(0);
     expect(screen.queryByText(t('connectionReady'))).toBeNull();
     await user.click(button('testConnection'));
     expect(await screen.findByText(t('connectionReady'))).toBeTruthy();
@@ -303,17 +317,20 @@ describe('connection diagnostic interactions', () => {
   it('aborts the request when cancelled or unmounted and prevents duplicate clicks', async () => {
     const backend = host(); const network = api(); const user = userEvent.setup();
     let signal: AbortSignal | null | undefined;
-    const pending = (_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      signal = init?.signal;
-      signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')), { once: true });
-    });
+    const pending = (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).startsWith('api/gtfa.version')) return Promise.resolve(new Response(null, { status: 404 }));
+      return new Promise<Response>((_resolve, reject) => {
+        signal = init?.signal;
+        signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')), { once: true });
+      });
+    };
     network.fetch.mockImplementation(pending);
     const page = render(<ConfigPage ctx={backend.ctx} t={t} />);
     await user.click(button('testConnection'));
     expect(button('testing').disabled).toBe(true);
     expect((screen.getByRole('combobox', { name: t('geo') }) as HTMLInputElement).disabled).toBe(true);
     await user.click(button('testing'));
-    expect(network.fetch).toHaveBeenCalledTimes(1);
+    expect(network.fetch.mock.calls.filter(([url]) => String(url) === 'api/gtfa.test-connection')).toHaveLength(1);
     await user.click(button('testCancel'));
     expect(await screen.findByText(t('testCancelled'))).toBeTruthy();
     expect(signal?.aborted).toBe(true);

@@ -10,6 +10,8 @@ import { BASELINE_CATALOG_REVISION } from './baseline-catalog.js';
 import type { GtfaTool, ToolLiveSettings } from './tools.js';
 import { parseActorRuntime } from './actor-runtime.js';
 import { VERSION } from './version.js';
+import { describeActorRuntimeDrift } from './version-check.js';
+import type { EgressMode } from './options.js';
 import type { QueryPhase } from './query-progress.js';
 
 const API = 'https://api.apify.com/v2';
@@ -126,7 +128,7 @@ export class OnDemandActorClient {
 /** Local result reuse avoids starting an Actor at all on a snapshot cache hit. */
 export async function callActorTool(client: OnDemandActorClient, options: {
   token: string; actorId: string; name: GtfaTool['name']; input: Record<string, unknown>;
-  settings: ToolLiveSettings; started?: (id: string) => void; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
+  settings: ToolLiveSettings; egress?: EgressMode; started?: (id: string) => void; signal?: AbortSignal; progress?: (phase: QueryPhase) => void;
 }) {
   throwIfAborted(options.signal);
   const { input, settings, name } = options;
@@ -170,9 +172,7 @@ export async function callActorTool(client: OnDemandActorClient, options: {
     throwIfAborted(options.signal);
     result = { ...output.result, meta: { ...row(output.result.meta), actorRunId: output.runId, execution: 'on-demand', actorRuntime: output.runtime,
       ...(output.usageUsd !== undefined ? { actorUsageUsd: output.usageUsd } : {}) } };
-    const runtimeWarning = !output.runtime ? 'Actor version is unverified; update the Actor before checking version parity.'
-      : output.runtime.version !== VERSION || output.runtime.baselineCatalogRevision !== BASELINE_CATALOG_REVISION
-        ? `Actor v${output.runtime.version} and client v${VERSION} differ in package or baseline revision; update the older component.` : null;
+    const runtimeWarning = describeActorRuntimeDrift(output.runtime, VERSION, BASELINE_CATALOG_REVISION, options.egress).warning;
     if (runtimeWarning) result.warnings = [...(Array.isArray(result.warnings) ? result.warnings : []), runtimeWarning];
     for (const snapshot of output.snapshots) {
       const parsed = storedSnapshotSchema.safeParse(snapshot);

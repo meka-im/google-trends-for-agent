@@ -239,6 +239,7 @@ describe('dsh host routes', () => {
       '/api/gtfa.baselines',
       '/api/gtfa.baselines-sync',
       '/api/gtfa.dashboard',
+      '/api/gtfa.version',
     ].sort());
   });
 

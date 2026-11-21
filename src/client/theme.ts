@@ -54,6 +54,7 @@ export const SETTINGS_CSS = `
 .gtfa-actor-choice-copy>span { font-size:10px; color:var(--gtfa-muted); overflow-wrap:anywhere; }
 .gtfa-actor-build { display:inline-flex; align-items:center; gap:5px; flex-shrink:0; padding:3px 7px; border-radius:5px; color:var(--gtfa-muted); background:var(--gtfa-hover); font-size:10px; white-space:nowrap; }
 .gtfa-actor-build.ready { color:var(--gtfa-green); background:var(--gtfa-green-soft); }
+.gtfa-actor-build.outdated { color:var(--dsw-alias-state-warning-primary,#b45309); background:color-mix(in srgb,#f59e0b 12%,var(--gtfa-surface)); }
 .gtfa-actor-build.building { color:var(--dsw-alias-state-warning-primary,#9a752c); background:color-mix(in srgb,currentColor 8%,var(--gtfa-surface)); }
 .gtfa-actor-build.failed { color:var(--dsw-alias-state-error-primary,#c55151); background:color-mix(in srgb,currentColor 8%,var(--gtfa-surface)); }
 .gtfa-actor-radio { display:flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; border:1px solid var(--gtfa-line); border-radius:50%; }
@@ -381,6 +382,40 @@ export const SETTINGS_CSS = `
   .gtfa-diagnostic-note { padding:12px 15px; }
   .gtfa-diagnostic-footer { padding:11px 15px; flex-wrap:wrap; gap:6px 12px; }
 }
+.gtfa-update-banner { --gtfa-amber:var(--dsw-alias-state-warning-primary,#b45309); --gtfa-amber-btn:#d97706; --gtfa-amber-soft:color-mix(in srgb,#f59e0b 10%,var(--gtfa-surface)); --gtfa-amber-line:color-mix(in srgb,#d97706 28%,var(--gtfa-line)); border:1px solid color-mix(in srgb,var(--gtfa-accent) 24%,var(--gtfa-line)); border-radius:11px; background:var(--gtfa-accent-soft); overflow:hidden; margin-bottom:14px; }
+.gtfa-settings:not(.gtfa-dashboard) .gtfa-update-banner { margin-bottom:0; }
+.gtfa-update-banner.warn { border-color:var(--gtfa-amber-line); background:var(--gtfa-amber-soft); }
+.gtfa-update-banner.neutral { border-color:var(--gtfa-line); background:var(--gtfa-surface); }
+.gtfa-update-row { display:flex; align-items:center; gap:11px; padding:10px 13px; flex-wrap:wrap; }
+.gtfa-update-icon { width:28px; height:28px; border-radius:8px; flex:none; display:inline-flex; align-items:center; justify-content:center; background:color-mix(in srgb,var(--gtfa-accent) 13%,var(--gtfa-surface)); color:var(--gtfa-accent); }
+.gtfa-update-banner.warn .gtfa-update-icon { background:color-mix(in srgb,#f59e0b 16%,var(--gtfa-surface)); color:var(--gtfa-amber); }
+.gtfa-update-banner.neutral .gtfa-update-icon { background:var(--gtfa-green-soft); color:var(--gtfa-green); }
+.gtfa-update-copy { flex:1; min-width:190px; display:grid; gap:2px; }
+.gtfa-update-title { display:flex; align-items:center; flex-wrap:wrap; gap:7px; font-size:12.5px; font-weight:600; color:var(--gtfa-ink); }
+.gtfa-update-sub { margin:0; font-size:11.5px; color:var(--gtfa-muted); line-height:1.45; }
+.gtfa-ver-pill { display:inline-flex; align-items:center; gap:4px; padding:1px 6.5px; border-radius:999px; font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; background:color-mix(in srgb,var(--gtfa-accent) 13%,var(--gtfa-surface)); color:var(--gtfa-accent); }
+.gtfa-ver-pill.warn { background:color-mix(in srgb,#f59e0b 15%,var(--gtfa-surface)); color:var(--gtfa-amber); }
+.gtfa-ver-pill.ok { background:var(--gtfa-green-soft); color:var(--gtfa-green); }
+.gtfa-update-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-left:auto; }
+.gtfa-update-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; height:30px; padding:0 11px; border:1px solid var(--gtfa-line); border-radius:7px; background:var(--gtfa-surface); color:var(--gtfa-ink); font-size:12px; font-weight:550; cursor:pointer; text-decoration:none; white-space:nowrap; transition:border-color .14s,background .14s,color .14s; }
+.gtfa-settings a.gtfa-update-btn { color:var(--gtfa-ink); text-decoration:none; }
+.gtfa-update-btn:not(:disabled):hover { border-color:color-mix(in srgb,var(--gtfa-accent) 44%,var(--gtfa-line)); background:var(--gtfa-hover); }
+.gtfa-update-btn.primary { background:var(--gtfa-accent); border-color:var(--gtfa-accent); color:#fff; }
+.gtfa-update-btn.primary:not(:disabled):hover { background:#1d4ed8; border-color:#1d4ed8; }
+.gtfa-update-btn.warn { background:var(--gtfa-amber-btn); border-color:var(--gtfa-amber-btn); color:#fff; }
+.gtfa-update-btn.warn:not(:disabled):hover { background:#b45309; border-color:#b45309; }
+.gtfa-update-btn.ghost { border-color:transparent; background:transparent; color:var(--gtfa-muted); padding:0 7px; }
+.gtfa-update-btn.ghost:not(:disabled):hover { background:var(--gtfa-hover); color:var(--gtfa-ink); }
+.gtfa-update-btn.icon-only { width:28px; height:28px; padding:0; }
+.gtfa-update-drawer { border-top:1px solid color-mix(in srgb,var(--gtfa-accent) 16%,var(--gtfa-line)); background:var(--gtfa-surface); padding:12px 14px; display:grid; gap:10px; }
+.gtfa-update-banner.warn .gtfa-update-drawer { border-top-color:color-mix(in srgb,#d97706 18%,var(--gtfa-line)); }
+.gtfa-update-highlights { margin:0; padding-left:16px; font-size:11.5px; color:var(--gtfa-muted); display:grid; gap:3px; line-height:1.5; }
+.gtfa-update-cmd { display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:8px; background:var(--gtfa-soft); border:1px solid var(--gtfa-line); font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:11.5px; color:var(--gtfa-ink); }
+.gtfa-update-cmd code { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; scrollbar-width:none; }
+.gtfa-update-drawer-foot { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; font-size:11px; color:var(--gtfa-muted); line-height:1.45; }
+.gtfa-update-drawer-foot a { color:var(--gtfa-accent); text-decoration:none; font-weight:550; }
+.gtfa-update-drawer-foot a:hover { text-decoration:underline; }
+.gtfa-update-feedback { margin:0; padding:7px 13px; border-top:1px solid var(--gtfa-line); font-size:11px; color:var(--gtfa-muted); background:var(--gtfa-soft); }
 @media(prefers-color-scheme:dark) {
   .gtfa-settings {
     --gtfa-ink:var(--dsw-alias-label-primary,#e9edf6);
