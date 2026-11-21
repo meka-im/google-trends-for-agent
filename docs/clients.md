@@ -1,93 +1,54 @@
-# Muse, GrokBot and Dots
+# Client Setup Router
 
-**Use Apify on demand by default for all three clients**, with either the public
-Actor or your own deployment. This keeps Google Trends requests on the Actor's
-network rather than the client's VM or machine. Apify can still be challenged or
-rate-limited; it is not a guarantee of access. Local CLI/stdio remains an option
-for development or when the user explicitly chooses direct access.
+**Agents: identify which host/client you are running in, then follow ONLY your matching guide below before configuring or calling tools.**
 
-## Choose an Actor
+| Client / Bot | Recommended route | Auth method | Dedicated guide |
+| --- | --- | --- | --- |
+| **DeepSeek Harness (dsh)** | Native in-process plugin (Local / Public Actor / Own Actor) | Built-in Apify device OAuth (or manual token) | [dsh setup guide](clients/dsh.md) |
+| **GrokBot** | Apify managed remote MCP (`https://mcp.apify.com?tools=meka.im/google-trends-for-agent`) | Native MCP OAuth (remove any legacy `*.apify.actor` Standby connection first) | [GrokBot setup guide](clients/grokbot.md) |
+| **Muse** | Apify connector/API or managed remote MCP | **Secure credential form (Bearer `APIFY_TOKEN`)** — bypasses Muse's DCR OAuth bug | [Muse setup guide](clients/muse.md) |
+| **Dots & Web Agents** | Host MCP Settings UI (`mcp.apify.com`) or sandbox CLI `--egress actor-public` | Host Settings OAuth/Bearer, or `APIFY_TOKEN` env secret | [Dots setup guide](clients/dots.md) |
+| **Claude Code & Claude Desktop** | Remote HTTP MCP (`mcp.apify.com`) or local stdio `gtfa-mcp` | `/mcp` OAuth or `APIFY_TOKEN` in stdio `env` | [Claude setup guide](clients/claude.md) |
+| **OpenAI Codex CLI & App** | Remote MCP (`codex mcp add`) or local stdio `gtfa-mcp` | `codex mcp login` OAuth or `APIFY_TOKEN` in stdio `env` | [Codex setup guide](clients/codex.md) |
+| **Cursor, VS Code, Windsurf & Cline** | Streamable HTTP `mcp.json` or local stdio `gtfa-mcp` | OAuth (or Bearer header if IDE loops on OAuth) | [Cursor & VS Code setup guide](clients/cursor-vscode.md) |
+| **OpenClaw & Generic CLI / Local Agents** | Local CLI (`gtfa`) or stdio / HTTP MCP (`gtfa-mcp`) | Direct (`--egress local`) or `--egress actor-public` + `APIFY_TOKEN` | [OpenClaw & CLI guide](clients/openclaw.md) |
+
+---
+
+## Choose an Apify Actor (shared by all cloud routes)
 
 | Deployment | Actor | Managed MCP URL |
 | --- | --- | --- |
 | Public, no deployment needed | `meka.im/google-trends-for-agent` | `https://mcp.apify.com?tools=meka.im/google-trends-for-agent` |
-| Your own, after a successful build | Your account's `<username>/<actor-name>` | `https://mcp.apify.com?tools=<username>/<actor-name>` |
+| Your own, after a successful build | `<username>/<actor-name>` | `https://mcp.apify.com?tools=<username>/<actor-name>` |
 
-Replace both placeholders for your deployment; the signed-in account must have
-access to it. Keep Server / Standby disabled. Both choices run queries on demand
-and charge compute, proxy and storage usage to the caller's Apify account. The
-public Actor needs no deployment; self-deployments need their own builds and
-updates. See [deployment](../README.md#deploy-it-yourself) and
-[costs](reference.md#actor-costs).
+- Keep **Server / Standby disabled**. Never connect to legacy `https://<user>--google-trends-for-agent.apify.actor/mcp` URLs (they return HTTP 400 `actor-standby-mode-not-enabled`).
+- Both public and own Actors run **on demand** and exit immediately after returning results; compute, residential proxy, and storage usage are billed to the caller's Apify account (works on Apify's Free plan $5 monthly credits). See [deployment](../README.md#deploy-it-yourself) and [Actor costs](reference.md#actor-costs).
+- Apify's OAuth scope is account-wide `full_api_access` (the account owner approves it). Never paste an `APIFY_TOKEN` into chat messages, prompts, URLs, or Actor inputs—always use OAuth or the client's secure credential/env store.
 
-The managed gateway excludes full-permission Actors. If your deployment has
-that permission level, use the authenticated connector/API route; see
-[Apify's eligibility rules](https://docs.apify.com/mcp#excluded-actors).
+---
 
-## Connect the client
+## Calling the Actor via remote MCP or connector (shared schema)
 
-| Client | Recommended connection | Acceptance evidence |
-| --- | --- | --- |
-| Muse | Use its authenticated Apify connector/API to run the selected Actor. Use the managed MCP URL if the Host exposes native remote MCP registration. | Record whether the call used a connector or a native registered tool. |
-| GrokBot | Register the managed MCP URL as a native remote connection and sign in through Apify OAuth. | The connection is active and its Actor tool appears in the client's actual tool list. |
-| Dots | Use the managed MCP URL in the client's available MCP configuration. The Codex CLI setup below applies where that CLI integration is available. | Verify the actual session's tool list; CLI acceptance alone does not establish GUI acceptance. |
+Apify's managed gateway exposes an Actor tool (e.g. `meka-dot-im--google-trends-for-agent`) plus run, Dataset, key-value-store, and abort helpers—**not** the four direct `trends_*` tool names (those are provided by local `gtfa-mcp` and the dsh plugin).
 
-Use the client's secure credential storage for a Bearer token only when OAuth
-is unavailable. Apify's OAuth scope is account-wide `full_api_access`; the account
-owner approves it. Never put a token in the server URL, prompt, or Actor input.
-If native registration is unavailable, an Apify connector/API call is still the
-recommended execution path; report it as such.
-
-For clients accepting `mcpServers` JSON, use:
-
-```json
-{
-  "mcpServers": {
-    "google-trends-apify": {
-      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
-    }
-  }
-}
-```
-
-For the Codex CLI, register and authorize the remote server:
-
-```sh
-codex mcp add google-trends-apify --url 'https://mcp.apify.com?tools=meka.im/google-trends-for-agent'
-codex mcp login google-trends-apify
-```
-
-Use your own deployment's URL in either example when selected. Follow the
-client's registration format and open a fresh session after configuration.
-See [Apify MCP configuration](https://docs.apify.com/mcp) and
-[Codex MCP commands](https://learn.chatgpt.com/docs/developer-commands#codex-mcp).
-
-## Call the Actor and read the result
-
-The gateway exposes an Actor tool plus run/storage/abort helpers. Discover the
-actual name with the client's tool list; it does not expose four direct
-`trends_*` tools. A connector/API instead starts the same selected Actor through
-the Apify platform. Neither path needs a local `gtfa-mcp` process.
-
-For a simple summary, pass ordinary Actor input (defaults to `US`, `now 7-d`):
+### Option 1: Ordinary Actor input (writes Dataset + `OUTPUT`)
 
 ```json
 {
   "tool": "snapshot",
-  "terms": ["ChatGPT"],
+  "terms": ["Sora"],
   "geo": "US",
   "window": "now 7-d",
   "timeoutMs": 60000
 }
 ```
 
-Start once. If the run is still active, inspect that same run rather than
-starting another. Read ordinary results from its Dataset and `OUTPUT` record;
-read chart records from its key-value store. A `SUCCEEDED` run alone does not
-prove that Google returned data: inspect result status, errors and `fetchedAt`.
+### Option 2: Native `toolRequest` (full 4-tool envelopes in KV store `TOOL_RESPONSE`)
 
-For the full four-tool envelopes, limits and inline SVG, use the Actor's
-`toolRequest` input instead. This also works through the gateway or a connector:
+Read `TOOL_RESPONSE` from the run's default key-value store (`result` is the full envelope; `runtime` reports `version` and `baselineCatalogRevision`). Native `toolRequest` runs legitimately have 0 Dataset rows—do not treat 0 Dataset rows as failure.
+
+**Single-term snapshot (`trends_snapshot`, note field `term`):**
 
 ```json
 {
@@ -95,57 +56,39 @@ For the full four-tool envelopes, limits and inline SVG, use the Actor's
     "protocol": 1,
     "name": "trends_snapshot",
     "input": {
-      "term": "ChatGPT",
+      "term": "Sora",
       "geo": "US",
       "time": "now 7-d",
       "fresh": true,
-      "svg": true,
       "timeoutMs": 60000
     }
   }
 }
 ```
 
-Read `TOOL_RESPONSE` from that run's key-value store: `result` is the full tool
-envelope and `runtime` reports its package/baseline versions. Native requests can
-have zero Dataset rows. Change `name` and `input` using the
-[four-tool field guide](mcp-api.md); for example `trends_now` takes
-`geos: ["US"], hours: 24, limit: 3` in `input`, and `trends_compare` supports
-`calibrate: true` for multi-tier MEKA `batchVolume` estimates.
-
-## Local stdio MCP or CLI with Apify egress
-
-If a client (such as Dots, Codex CLI, Claude Desktop, or a Muse/agent shell)
-supports local stdio MCP or CLI commands and you want the four direct
-`trends_*` tool names while still routing Google Trends requests through Apify's
-residential proxy, pass `--egress actor-public` (or `--egress actor-own --actor <id>`)
-with `APIFY_TOKEN` in the client's secure environment:
+**Multi-term comparison with search-volume calibration (`trends_compare`, note field `keywords`, NOT `terms`):**
 
 ```json
 {
-  "mcpServers": {
-    "google-trends": {
-      "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
-      "env": { "APIFY_TOKEN": "<your-apify-token>" }
+  "toolRequest": {
+    "protocol": 1,
+    "name": "trends_compare",
+    "input": {
+      "keywords": ["ChatGPT", "Claude", "Gemini"],
+      "geo": "US",
+      "time": "now 7-d",
+      "calibrate": true,
+      "timeoutMs": 60000
     }
   }
 }
 ```
 
-CLI equivalents:
+Full field reference for all four tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`): [MCP field guide](mcp-api.md) and [Reference](reference.md).
 
-```sh
-APIFY_TOKEN=... gtfa snapshot Sora --egress actor-public --json --pretty
-APIFY_TOKEN=... gtfa compare Sora Veo --calibrate --egress actor-public --json
-gtfa baselines --sync --json
-```
+## Acceptance & error rules (all clients)
 
-Environment variables `GTFA_EGRESS` (`local` | `actor-public` | `actor-own`) and
-`GTFA_APIFY_ACTOR` set the same routing defaults for both `gtfa` and `gtfa-mcp`.
-
-Record the selected Actor, connection type, actual runtime, result status and
-`fetchedAt` during acceptance. A handshake or tool list verifies connection only.
-Stop that path after `BLOCKED` or `RATE_LIMITED`; do not switch deployments or
-egress to route around it. Read null calibration values honestly. Cancel an
-owned run when abandoning a call, and keep the Actor's 300-second runtime bound.
+- Start one run and inspect it; do not start duplicate runs while one is active.
+- A `SUCCEEDED` run alone does not prove data arrived: inspect `result.status`, `result.error`, `runtime.version`, `runtime.baselineCatalogRevision`, and `meta.fetchedAt`.
+- Report `null` calibration values honestly; never substitute internal hints (such as `anchorTargetDaily`) as final volume estimates.
+- On `BLOCKED` or `RATE_LIMITED`, stop that validation path and report the error plus `retryAfterSec` when present.
