@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EN } from '../src/client/index.js';
 import { UpdateBanner, dismissKeyForStatus, resolveUpdateMode } from '../src/client/update-banner.js';
 import { createVersionStatusMonitor, extractReleaseHighlights } from '../src/dsh-version.js';
+import { QueryHistoryStore } from '../src/query-history.js';
 import {
   GTFA_UPGRADE_COMMAND,
   compareSemver,
@@ -135,6 +136,52 @@ describe('createVersionStatusMonitor', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(failedRefresh.checkError).toBe('rate-limited');
     expect(failedRefresh.latestRelease?.version).toBe('0.2.41');
+  });
+
+  it('bootstraps outdated personal Actor from existing query history on first open and respects clearActorRuntime', async () => {
+    const dir = makeTempDir();
+    const store = new QueryHistoryStore(dir);
+    await store.save({
+      tool: 'trends_compare',
+      input: { keywords: ['ChatGPT', 'Claude'], geo: 'US', time: 'now 7-d' },
+      result: {
+        ok: true,
+        status: 'ok',
+        meta: {
+          fetchedAt: '2026-11-21T10:00:00.000Z',
+          actorRuntime: { version: '0.2.24', baselineCatalogRevision: '2026-11-16' },
+        },
+      },
+      source: 'agent',
+      egress: 'actor-own',
+      defaultGeo: 'US',
+      startedAt: Date.parse('2026-11-21T10:00:00.000Z'),
+    });
+
+    const fetchMock = vi.fn(async () => Response.json({
+      tag_name: 'v0.2.40',
+      html_url: 'https://github.com/meka-im/google-trends-for-agent/releases/tag/v0.2.40',
+      published_at: '2026-11-21T08:00:00.000Z',
+      body: '- Current release',
+    }));
+
+    const monitor = createVersionStatusMonitor({
+      getSnapshotDir: () => dir,
+      fetch: fetchMock as unknown as typeof fetch,
+      now: () => new Date('2026-11-21T14:00:00.000Z'),
+      pluginVersion: '0.2.40',
+      baselineCatalogRevision: '2026-11-19',
+    });
+
+    const first = await monitor.status({ egress: 'actor-own', apifyActor: '0QSAYBsCxgHbfADGp' });
+    expect(first.actorUpdateAvailable).toBe(true);
+    expect(first.observedActor?.version).toBe('0.2.24');
+
+    // After clicking Update my Actor, old history records must not re-trigger the outdated flag.
+    await monitor.clearActorRuntime('0QSAYBsCxgHbfADGp');
+    const afterClear = await monitor.status({ egress: 'actor-own', apifyActor: '0QSAYBsCxgHbfADGp' });
+    expect(afterClear.actorUpdateAvailable).toBe(false);
+    expect(afterClear.observedActor).toBeNull();
   });
 });
 

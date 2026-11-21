@@ -915,10 +915,10 @@ export const ZH: Record<string, string> = {
 
 const styles: Record<string, CSSProperties> = {
   page: { display: 'grid', gap: 14, width: '100%', minWidth: 0, maxWidth: 820, padding: '4px 0 24px' },
-  section: { display: 'grid', gap: 16, padding: 20, border: '1px solid var(--gtfa-line)', borderRadius: 14, background: 'var(--gtfa-surface)', boxShadow: '0 1px 2px rgba(15,23,42,.03)' },
+  section: { display: 'grid', gap: 13, padding: '17px 19px', border: '1px solid var(--gtfa-line)', borderRadius: 14, background: 'var(--gtfa-surface)', boxShadow: '0 1px 2px rgba(15,23,42,.03)' },
   sectionHeader: { display: 'grid', gap: 2 },
-  sectionTitle: { margin: 0, fontSize: 14, lineHeight: 1.45, fontWeight: 650, letterSpacing: '-.015em' },
-  sectionDescription: { margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--gtfa-muted)' },
+  sectionTitle: { margin: 0, fontSize: 13.5, lineHeight: 1.4, fontWeight: 650, letterSpacing: '-.015em' },
+  sectionDescription: { margin: 0, fontSize: 11.5, lineHeight: 1.5, color: 'var(--gtfa-muted)' },
   field: { display: 'grid', minWidth: 0 },
   label: { marginBottom: 6, fontSize: 12, fontWeight: 550 },
   hint: { margin: '5px 0 0', fontSize: 11, lineHeight: 1.55, color: 'var(--gtfa-muted)' },
@@ -926,7 +926,7 @@ const styles: Record<string, CSSProperties> = {
   warning: { margin: '6px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--dsw-alias-state-warning-primary, #d97706)' },
   input: { boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 36, padding: '7px 11px', border: '1px solid var(--gtfa-line)',
     borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5 },
-  segment: { position: 'relative', display: 'grid', alignContent: 'start', gap: 8, padding: '12px 14px', minHeight: 78, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
+  segment: { position: 'relative', display: 'grid', alignContent: 'start', gap: 6, padding: '10px 12px', minHeight: 68, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gtfa-line)',
     borderRadius: 11, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12.5, cursor: 'pointer' },
   segmentActive: { borderColor: 'var(--gtfa-accent)', background: 'var(--gtfa-accent-soft)' },
   switchRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 32, fontSize: 12.5 },
@@ -937,9 +937,9 @@ const styles: Record<string, CSSProperties> = {
   switchThumbOn: { transform: 'translateX(16px)' },
   readOnlyTerm: { boxSizing: 'border-box', minWidth: 0, padding: '4px 0', fontFamily: 'var(--ds-font-family-code, Menlo, monospace)',
     fontSize: 12, overflowWrap: 'anywhere' },
-  saveBar: { position: 'sticky', bottom: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
-    marginTop: 2, marginBottom: 8, padding: '11px 16px', border: '1px solid var(--gtfa-line)', borderRadius: 12,
-    background: 'color-mix(in srgb,var(--gtfa-surface) 92%,transparent)', backdropFilter: 'blur(10px)' },
+  saveBar: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+    marginTop: 2, marginBottom: 4, padding: '10px 15px', border: '1px solid var(--gtfa-line)', borderRadius: 12,
+    background: 'var(--gtfa-surface)' },
   button: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', minHeight: 32,
     border: '1px solid var(--gtfa-line)', borderRadius: 8, background: 'var(--gtfa-surface)', color: 'var(--gtfa-ink)', font: 'inherit', fontSize: 12, fontWeight: 550, cursor: 'pointer' },
   buttonSmall: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px', minHeight: 28,
@@ -1890,18 +1890,19 @@ export function ActorSelection({ state, value, t, disabled, pending = false, ref
         {state.actors.map((actor, index) => {
           const active = actor.id === value;
           const build = actorBuildState(actor.lastBuildStatus, actor.lastBuildId);
-          return <button key={actor.id} type="button" role="radio" aria-checked={active} className="gtfa-actor-choice"
+          const isOutdated = Boolean(outdatedActor && actor.id === outdatedActor.id && build.tone === 'ready');
+          return <button key={actor.id} type="button" role="radio" aria-checked={active} className={`gtfa-actor-choice${isOutdated ? ' outdated' : ''}`}
             disabled={disabled} tabIndex={active || !selected && index === 0 ? 0 : -1} onClick={() => onChange(actor.id)}>
             <span className="gtfa-actor-choice-icon"><Icon name="server" size={18} /></span>
             <span className="gtfa-actor-choice-copy"><strong>{actor.title ?? actor.name}</strong>
               <span>{[actor.username, actor.name].filter(Boolean).join('/')}</span></span>
-            <span className={`gtfa-actor-build ${outdatedActor && actor.id === outdatedActor.id && build.tone === 'ready' ? 'outdated' : build.tone}`}><span className="gtfa-dot" />{outdatedActor && actor.id === outdatedActor.id && build.tone === 'ready' ? template(t('actorOutdatedBadge'), { version: outdatedActor.version }) : t(build.label)}</span>
+            <span className={`gtfa-actor-build ${isOutdated ? 'outdated' : build.tone}`}><span className="gtfa-dot" />{isOutdated ? template(t('actorOutdatedBadge'), { version: outdatedActor!.version }) : t(build.label)}</span>
             <span className="gtfa-actor-radio" aria-hidden="true">{active ? <Icon name="check" size={11} /> : null}</span>
           </button>;
         })}
       </div>
       <div className="gtfa-actor-update-row"><p className="gtfa-picker-meta">{t('actorSelectionHint')}</p>
-        {selected && onUpdate ? <button type="button" className="gtfa-button gtfa-quiet-button" style={styles.buttonSmall}
+        {selected && onUpdate ? <button type="button" className={`gtfa-button ${outdatedActor && selected.id === outdatedActor.id ? 'gtfa-button-warn' : 'gtfa-quiet-button'}`} style={styles.buttonSmall}
           disabled={disabled || refreshing || ['RUNNING', 'READY'].includes(selected.lastBuildStatus ?? '')} onClick={onUpdate}>
           <Icon name="refresh" size={12} />{t('actorUpdate')}</button> : null}</div>
     </> : <div className={`gtfa-picker-state${needsLogin ? ' login' : ''}`} role={state.status === 'error' && !needsLogin ? 'alert' : 'status'}>
