@@ -1,0 +1,55 @@
+name: Publish npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run checks and npm publish --dry-run without publishing
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run check:docs
+      - run: npm audit --audit-level=low
+      - run: npm run check:package
+      - name: Dry-run publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: npm publish --dry-run --access public
+      - name: Publish package to npm
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VER=$(node -p "require('./package.json').version")
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/${PKG_NAME}/${PKG_VER}")
+          if [ "$STATUS" = "200" ]; then
+            echo "${PKG_NAME}@${PKG_VER} is already published on npm; skipping."
+            exit 0
+          fi
+          npm publish --provenance --access public
