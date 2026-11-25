@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "anchors": [
+    { "term": "gpts", "geo": "US", "dailySearches": 3500, "tolerance": 0.5 },
+    { "term": "sudoku", "geo": "US", "dailySearches": 63000, "tolerance": 0.5 }
+  ],
+  "windowAnchors": { "short": "sudoku", "long": "gpts" }
+}

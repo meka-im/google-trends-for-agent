@@ -1,0 +1,137 @@
+{
+  "name": "google-trends-for-agent",
+  "version": "0.2.41",
+  "description": "Search-interest signals for AI agents — an unofficial Google Trends client",
+  "type": "module",
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.3 <0.3.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": "./dist/dsh-client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "gtfa": "./dist/cli.js",
+    "gtfa-mcp": "./dist/mcp-bin.js"
+  },
+  "files": [
+    "dist",
+    "dsh",
+    "locale",
+    "icon.svg",
+    "AGENTS.md",
+    "README.md",
+    "README.zh-CN.md",
+    ".actor/README.md",
+    "docs/mcp-api.md",
+    "docs/reference.md",
+    "docs/baselines.md",
+    "docs/testing.md",
+    "docs/releasing.md",
+    "docs/clients.md",
+    "docs/clients",
+    "LICENSE",
+    "CHANGELOG.md",
+    "examples/baselines.json",
+    "docs/assets"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc && node scripts/build-client.mjs && node -e \"for (const f of ['dist/cli.js', 'dist/mcp-bin.js']) require('node:fs').chmodSync(f, 0o755)\"",
+    "start": "node dist/actor.js",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.interactions.json",
+    "trends": "tsx src/cli.ts",
+    "prepare": "npm run build",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:package": "node scripts/check-package.mjs",
+    "test:compat": "node scripts/test-dsh-compat.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "apify": "^3.7.2",
+    "tough-cookie": "^6.0.2",
+    "undici": "^6.21.0",
+    "zod": "^4.6.7"
+  },
+  "bundleDependencies": [
+    "apify"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "overrides": {
+    "@crawlee/core": {
+      "minimatch": "11.0.8"
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.11",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.28.2",
+    "jsdom": "26.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.12"
+  },
+  "keywords": [
+    "agents",
+    "ai-agents",
+    "llm-tools",
+    "tool-calling",
+    "structured-output",
+    "google-trends",
+    "trends",
+    "search-interest",
+    "cli",
+    "mcp",
+    "dsh-plugin"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh/cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meka-im/google-trends-for-agent.git"
+  },
+  "homepage": "https://github.com/meka-im/google-trends-for-agent",
+  "bugs": {
+    "url": "https://github.com/meka-im/google-trends-for-agent/issues"
+  },
+  "author": "MEKA <im@meka.im>"
+}

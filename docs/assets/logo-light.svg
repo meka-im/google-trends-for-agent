@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120" role="img" aria-label="google-trends-for-agent">
+  <rect width="640" height="120" rx="20" fill="#ffffff"/>
+  <svg x="22" y="24" width="72" height="72" viewBox="0 0 64 64">
+    <defs>
+      <linearGradient id="gtfa-light-s1" x1="10" y1="50" x2="28" y2="20" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#1D4ED8"/>
+        <stop offset="55%" stop-color="#2563EB"/>
+        <stop offset="100%" stop-color="#38BDF8"/>
+      </linearGradient>
+      <linearGradient id="gtfa-light-s2" x1="22" y1="22" x2="39" y2="43" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#60A5FA"/>
+        <stop offset="48%" stop-color="#4F46E5"/>
+        <stop offset="100%" stop-color="#312E81"/>
+      </linearGradient>
+      <linearGradient id="gtfa-light-s3" x1="33" y1="43" x2="56" y2="12" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#0284C7"/>
+        <stop offset="48%" stop-color="#06B6D4"/>
+        <stop offset="100%" stop-color="#34D399"/>
+      </linearGradient>
+      <linearGradient id="gtfa-light-sh1" x1="28" y1="26" x2="17" y2="38" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#0B1120" stop-opacity="0.42"/>
+        <stop offset="100%" stop-color="#0B1120" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="gtfa-light-sh2" x1="39" y1="38" x2="28" y2="27" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#0B1120" stop-opacity="0.46"/>
+        <stop offset="100%" stop-color="#0B1120" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="gtfa-light-hi" x1="36" y1="36" x2="54" y2="14" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+        <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.34"/>
+        <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.1"/>
+      </linearGradient>
+    </defs>
+    <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#gtfa-light-s1)" stroke-width="12.4" stroke-linecap="round"/>
+    <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#gtfa-light-sh1)" stroke-width="12.4" stroke-linecap="round"/>
+    <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#gtfa-light-s2)" stroke-width="12.4" stroke-linecap="round"/>
+    <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#gtfa-light-sh2)" stroke-width="12.4" stroke-linecap="round"/>
+    <line x1="36.8" y1="39.5" x2="52.8" y2="16.2" stroke="url(#gtfa-light-s3)" stroke-width="12.4" stroke-linecap="round"/>
+    <line x1="38.4" y1="36.8" x2="51.2" y2="18.2" stroke="url(#gtfa-light-hi)" stroke-width="4.2" stroke-linecap="round"/>
+  </svg>
+  <text x="114" y="59" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="33" font-weight="700" fill="#1a2233">google-trends-for-agent</text>
+  <text x="116" y="87" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="16" fill="#697386">search-interest signals for AI agents</text>
+</svg>

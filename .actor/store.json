@@ -1,0 +1,27 @@
+{
+  "seoTitle": "Google Trends for AI Agents \u2014 On-demand",
+  "seoDescription": "Open-source Google Trends Actor: run a query, get results and exit. No idle server. Available through the Apify MCP gateway.",
+  "categories": [
+    "AI",
+    "OPEN_SOURCE"
+  ],
+  "defaultRunOptions": {
+    "build": "latest",
+    "timeoutSecs": 300,
+    "memoryMbytes": 256
+  },
+  "actorStandby": {
+    "isEnabled": false
+  },
+  "isSourceCodeHidden": false,
+  "exampleRunInput": {
+    "tool": "snapshot",
+    "terms": [
+      "Sora"
+    ],
+    "geo": "US",
+    "window": "now 7-d",
+    "anchor": ""
+  },
+  "pricing": "usage-only (no Actor fee): pay per platform usage, no monetization"
+}
