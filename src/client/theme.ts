@@ -119,24 +119,37 @@ export const SETTINGS_CSS = `
 .gtfa-account-menu button:not(:disabled):hover { background:var(--gtfa-hover); }
 .gtfa-oauth-foot { padding:0 16px 14px; display:grid; gap:8px; }
 .gtfa-oauth-code-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
-.gtfa-free-credit,.gtfa-usage-banner { --gtfa-card-ink:var(--gtfa-ink); --gtfa-card-muted:var(--gtfa-muted); --gtfa-card-accent:var(--gtfa-accent); --gtfa-card-line:var(--gtfa-line); --gtfa-card-progress:var(--gtfa-accent); --gtfa-card-warning:#d97706; --gtfa-card-error:#dc2626; position:relative; isolation:isolate; overflow:hidden; container:gtfa-credit / inline-size; margin:0; padding:12px 15px; border:0; border-top:1px solid var(--gtfa-card-line); border-radius:0; color:var(--gtfa-card-ink); background:var(--gtfa-surface); }
-.gtfa-free-credit-copy { position:relative; z-index:1; width:100%; }
+.gtfa-free-credit {
+  --gtfa-card-ink:#fff; --gtfa-card-muted:rgba(219,234,254,.92); --gtfa-card-accent:#fff; --gtfa-card-line:rgba(255,255,255,.16);
+  position:relative; isolation:isolate; overflow:hidden; container:gtfa-credit / inline-size;
+  margin:12px 15px 14px; padding:16px 18px;
+  border:1px solid rgba(255,255,255,.18); border-radius:12px;
+  color:#fff; background:linear-gradient(135deg,#1d4ed8 0%,#2563eb 56%,#3b82f6 100%);
+  box-shadow:0 8px 22px rgba(37,99,235,.22);
+}
+.gtfa-usage-banner { --gtfa-card-ink:var(--gtfa-ink); --gtfa-card-muted:var(--gtfa-muted); --gtfa-card-accent:var(--gtfa-accent); --gtfa-card-line:var(--gtfa-line); --gtfa-card-progress:var(--gtfa-accent); --gtfa-card-warning:#d97706; --gtfa-card-error:#dc2626; position:relative; isolation:isolate; overflow:hidden; container:gtfa-credit / inline-size; margin:0; padding:12px 15px; border:0; border-top:1px solid var(--gtfa-card-line); border-radius:0; color:var(--gtfa-card-ink); background:var(--gtfa-surface); }
+.gtfa-free-credit-copy { position:relative; z-index:1; width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.gtfa-free-credit-main { min-width:0; }
 .gtfa-credit-eyebrow { display:block; color:var(--gtfa-card-muted); font-size:10.5px; font-weight:600; letter-spacing:.8px; }
-.gtfa-credit-value { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin-top:6px; }
-.gtfa-credit-value strong { color:var(--gtfa-card-accent); font-size:30px; font-weight:720; letter-spacing:-.03em; line-height:1.15; font-variant-numeric:tabular-nums; }
-.gtfa-credit-value>span { color:var(--gtfa-card-ink); font-size:13.5px; font-weight:550; }
-.gtfa-free-credit-estimate { margin:5px 0 12px; font-size:12px; color:var(--gtfa-card-muted); }
-.gtfa-free-credit-copy small { display:block; margin-top:9px; font-size:10.5px; color:var(--gtfa-quiet); }
-.gtfa-free-credit-actions { display:flex; align-items:center; gap:14px; font-size:12px; }
-.gtfa-settings a.gtfa-credit-cta { display:inline-flex; align-items:center; padding:7px 14px; border-radius:8px; background:var(--gtfa-card-accent); color:#fff; font-weight:600; text-decoration:none; }
-.gtfa-settings a.gtfa-credit-cta:hover { background:#1d4ed8; }
-.gtfa-settings a.gtfa-credit-pricing { color:var(--gtfa-card-muted); text-decoration:none; }
+.gtfa-credit-value { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin-top:5px; }
+.gtfa-credit-value strong { color:var(--gtfa-card-accent); font-size:28px; font-weight:740; letter-spacing:-.03em; line-height:1.1; font-variant-numeric:tabular-nums; }
+.gtfa-credit-value>span { color:var(--gtfa-card-ink); font-size:13.5px; font-weight:600; }
+.gtfa-free-credit-estimate { margin:5px 0 0; font-size:12px; color:var(--gtfa-card-muted); }
+.gtfa-free-credit-copy small { display:block; margin-top:6px; font-size:10.5px; color:rgba(191,219,254,.82); }
+.gtfa-free-credit-actions { display:flex; align-items:center; gap:14px; font-size:12px; flex-shrink:0; }
+.gtfa-settings a.gtfa-credit-cta { display:inline-flex; align-items:center; padding:8px 15px; border-radius:9px; background:#fff; color:#1d4ed8; font-weight:650; text-decoration:none; box-shadow:0 2px 8px rgba(15,23,42,.12); white-space:nowrap; }
+.gtfa-settings a.gtfa-credit-cta:hover { background:#eff6ff; }
+.gtfa-settings a.gtfa-credit-pricing { color:rgba(239,246,255,.94); font-weight:550; text-decoration:none; white-space:nowrap; }
 .gtfa-settings a.gtfa-credit-pricing:hover { text-decoration:underline; }
 .gtfa-free-credit a:focus-visible,.gtfa-usage-banner button:focus-visible,.gtfa-usage-banner summary:focus-visible { outline-color:var(--gtfa-card-accent); }
-.gtfa-credit-art { display:none; }
+.gtfa-credit-art { display:block; position:absolute; right:0; top:0; bottom:0; width:260px; height:100%; pointer-events:none; z-index:0; opacity:.85; }
+.gtfa-usage-banner .gtfa-credit-art { display:block; }
+@container gtfa-credit (max-width:460px) {
+  .gtfa-free-credit-copy { flex-direction:column; align-items:flex-start; gap:12px; }
+}
 @container gtfa-credit (max-width:340px) {
   .gtfa-credit-value { gap:8px; }
-  .gtfa-credit-value strong { font-size:26px; }
+  .gtfa-credit-value strong { font-size:24px; }
   .gtfa-credit-value>span { font-size:12.5px; }
 }
 .gtfa-defaults-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }

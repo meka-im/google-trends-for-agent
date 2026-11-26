@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard, resultSeries } from '../src/client/dashboard.js';
 import { TrendChart } from '../src/client/trend-chart.js';
 import { DashboardController } from '../src/client/dashboard-state.js';
-import { DASHBOARD_EN } from '../src/client/dashboard-locale.js';
+import { DASHBOARD_EN, DASHBOARD_ZH } from '../src/client/dashboard-locale.js';
+import { DASHBOARD_CSS } from '../src/client/dashboard-theme.js';
 import type { ActorRunRecord, QueryRecord, SavedQuery } from '../src/query-history-types.js';
 
 const t = (key: string) => DASHBOARD_EN[key] ?? key;
@@ -111,6 +112,10 @@ describe('dashboard interactions', () => {
     await waitFor(() => expect(h.rows()).toHaveLength(1));
     await user.click(screen.getByRole('button', { name: 'Estimate daily searches' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Estimated searches' }).getAttribute('aria-pressed')).toBe('true'));
+    const sourceLink = screen.getByRole('link', { name: DASHBOARD_EN.dashAnchorSourceLink });
+    expect(sourceLink.getAttribute('href')).toBe('https://meka.im/datasets/google-trends-anchors');
+    expect(sourceLink.getAttribute('target')).toBe('_blank');
+    expect(sourceLink.getAttribute('rel')).toBe('noopener noreferrer');
   });
   it('cancels deletion, then clears a selected result and updates totals without a query', async () => {
     const h = api(), user = userEvent.setup(), { container } = render(<Dashboard t={t} />);
@@ -276,5 +281,159 @@ describe('dashboard interactions', () => {
     await user.click(screen.getByRole('button', { name: 'View' }));
     expect(screen.getByRole('tab', { name: 'Query' }).getAttribute('aria-selected')).toBe('true');
     expect(h.queries()).toHaveLength(beforeQueries);
+  });
+
+  it('shows a concise local rate-limit banner with Actor switch CTA and clean failed-state details', async () => {
+    const id = '00000000-0000-4000-8000-000000000429';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['Cursor', 'Claude', 'DeepSeek'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'local', status: 'blocked', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 6600, actorRunId: null, costUsd: 0, errorCode: 'RATE_LIMITED',
+    };
+    const failedResult = {
+      ok: false, status: 'blocked', onDemand: true, series: [],
+      error: { code: 'RATE_LIMITED', message: 'Google Trends rate limit (HTTP 429). Wait a few seconds before retrying; lower request rate or set HTTPS_PROXY/HTTP_PROXY.' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      if (body?.action === 'query') return Response.json({ ok: true, result: failedResult });
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'local', geo: 'US', cache: true } });
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const openSettings = vi.fn();
+    const user = userEvent.setup();
+    const { container } = render(<Dashboard t={t} openSettings={openSettings} renderSettings={() => <div data-testid="embedded-settings">Embedded Settings Form</div>} />);
+    await screen.findByText('v0.2.44');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.className).toContain('gd-local-alert');
+    expect(alert.textContent).toContain(DASHBOARD_EN.dashLocalFailRateLimited);
+    expect(alert.textContent).toContain(DASHBOARD_EN.dashLocalFailBody);
+    // Raw technical detail lives inside expanded Query details rather than bloating the top banner.
+    expect(alert.textContent).not.toContain('HTTP 429');
+
+    // No redundant bottom .gd-error bar, no misleading "Insufficient comparison data" pills, and no empty volume cards.
+    expect(container.querySelector('.gd-error')).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashNoSharedSeries)).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashDailyVolume)).toBeNull();
+
+    // Query details is expanded automatically and holds the raw error detail cleanly.
+    const details = container.querySelector('.gd-query-details') as HTMLDetailsElement;
+    expect(details.open).toBe(true);
+    expect(details.textContent).toContain('HTTP 429');
+
+    // 1-click CTA opens the clean embedded settings view directly without calling navigation.openBundle.
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashLocalFailCta }));
+    expect(screen.getByTestId('embedded-settings')).toBeDefined();
+    expect(openSettings).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashBackToQuery }));
+    expect(screen.queryByTestId('embedded-settings')).toBeNull();
+  });
+
+  it('hides the switch-to-Actor banner on an older local failure once current egress is already an Actor', async () => {
+    const id = '00000000-0000-4000-8000-000000000430';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['Cursor', 'Claude', 'DeepSeek'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'local', status: 'blocked', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 6600, actorRunId: null, costUsd: 0, errorCode: 'RATE_LIMITED',
+    };
+    const failedResult = {
+      ok: false, status: 'blocked', onDemand: true, series: [],
+      error: { code: 'RATE_LIMITED', message: 'Google Trends rate limit (HTTP 429).' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const { container } = render(<Dashboard t={t} renderSettings={() => <div />} />);
+    await screen.findByText(DASHBOARD_EN.dashFailedEmptyHintSwitched);
+    expect(container.querySelector('.gd-local-alert')).toBeNull();
+    expect(container.querySelector('.gd-error')).toBeNull();
+    expect(screen.queryByRole('button', { name: DASHBOARD_EN.dashLocalFailCta })).toBeNull();
+  });
+
+  it('keeps dashboard English/Chinese dictionaries in sync and removes the !important error margin override', () => {
+    expect(Object.keys(DASHBOARD_ZH).sort()).toEqual(Object.keys(DASHBOARD_EN).sort());
+    expect(DASHBOARD_CSS).not.toContain('margin:0 0 16px!important');
+  });
+
+  it('clears the previous query result immediately while a new query is in flight', async () => {
+    let finishSecond!: () => void;
+    const secondDelay = new Promise<void>(resolve => { finishSecond = resolve; });
+    let queryCount = 0;
+    const rows: QueryRecord[] = [];
+    const results = new Map<string, SavedQuery>();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      if (url.includes('?progress=')) return Response.json({ ok: true, progress: { requestId: url.split('?progress=')[1], phase: 'starting', startedAt: Date.now() } });
+      if (body?.action === 'query') {
+        queryCount += 1;
+        if (queryCount === 2) await secondDelay;
+        const term = body.input.term as string;
+        const id = `00000000-0000-4000-8000-${String(queryCount).padStart(12, '0')}`;
+        const record: QueryRecord = { id, tool: body.name, terms: [term], geo: body.input.geo, time: body.input.time, source: 'manual', egress: 'actor-public', status: 'ok', cached: false,
+          createdAt: new Date().toISOString(), fetchedAt: new Date().toISOString(), durationMs: 1000, actorRunId: `run-${id}`, costUsd: 0.0002, errorCode: null };
+        const result = { ok: true, status: 'ok', onDemand: true, series: [{ keyword: term, average: 50, latest: 50, peak: 50, points: [{ t: '2026-11-25', value: 50 }, { t: '2026-11-26', value: 50 }] }], filter: { geo: record.geo, time: record.time }, meta: { queryRecordId: id } };
+        rows.unshift(record); results.set(id, { record, result, actorRuns: [] });
+        return Response.json({ ok: true, result });
+      }
+      if (url.includes('?id=')) return Response.json({ ok: true, ...results.get(decodeURIComponent(url.split('?id=')[1]!)) });
+      return Response.json({ ok: true, version: '0.2.44', records: rows, actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const user = userEvent.setup();
+    render(<Dashboard t={t} />);
+    await screen.findByText('v0.2.44');
+
+    const input = screen.getByRole('textbox', { name: /Keywords/ });
+    await user.type(input, 'duo');
+    await user.click(screen.getByRole('button', { name: 'Query trends' }));
+    await screen.findByRole('heading', { name: 'duo' });
+
+    await user.clear(input);
+    await user.type(input, 'poke');
+    await user.click(screen.getByRole('button', { name: 'Query trends' }));
+
+    // Previous result ("duo") clears immediately instead of staying on screen during loading.
+    expect(screen.queryByRole('heading', { name: 'duo' })).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashEmptyResult)).toBeNull();
+    expect(screen.getByRole('progressbar')).toBeDefined();
+
+    finishSecond();
+    await screen.findByRole('heading', { name: 'poke' });
+  });
+
+  it('shows a 1-click Open settings banner when an Actor query fails due to missing Apify auth', async () => {
+    const id = '00000000-0000-4000-8000-000000000401';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['ChatGPT', 'Claude'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'actor-public', status: 'error', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 400, actorRunId: null, costUsd: 0, errorCode: 'INVALID_INPUT',
+    };
+    const failedResult = {
+      ok: false, status: 'error', onDemand: true, series: [],
+      error: { code: 'INVALID_INPUT', message: 'Apify rejected the token or OAuth session. Sign in again.' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const user = userEvent.setup();
+    const { container } = render(<Dashboard t={t} renderSettings={() => <div data-testid="embedded-settings">Settings</div>} />);
+    await screen.findByText(DASHBOARD_EN.dashActorSetupTitle);
+    expect(container.querySelector('.gd-error')).toBeNull();
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashActorSetupCta }));
+    expect(screen.getByTestId('embedded-settings')).toBeDefined();
   });
 });
