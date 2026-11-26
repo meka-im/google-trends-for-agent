@@ -783,6 +783,7 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
   const errorCode = typeof error.code === 'string' ? error.code : null;
   const errorMessage = typeof error.message === 'string' ? error.message : null;
   const isLocalFailure = !result.ok && record.egress === 'local' && errorCode !== 'INVALID_INPUT';
+  const showLocalSwitchBanner = isLocalFailure && (!egress || egress === 'local');
   const failedEmpty = !result.ok && chartSeries.length === 0;
   const hasRelated = !comparison && (array(tables.popular).length > 0 || array(tables.rising).length > 0);
   const isZh = t('dashGeo') === '地区';
@@ -818,10 +819,10 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  if (record.tool === 'trends_now') return <div className="gd-results">{isLocalFailure ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
+  if (record.tool === 'trends_now') return <div className="gd-results">{showLocalSwitchBanner ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
   const showLegend = !failedEmpty && (legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length));
   return <div className="gd-results">
-    {isLocalFailure ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}
+    {showLocalSwitchBanner ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}
     <div className="gd-result-grid">
       <article className="gd-card gd-chart-card">
         <div className="gd-result-head">
@@ -867,7 +868,7 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
         {failedEmpty ? <div className="gd-failed-empty">
           <span className="gd-failed-empty-icon"><Icon name="chart" size={20} /></span>
           <h4>{t('dashFailedEmptyTitle')}</h4>
-          <p>{t(isLocalFailure ? 'dashFailedEmptyHintLocal' : 'dashFailedEmptyHintActor')}</p>
+          <p>{t(showLocalSwitchBanner ? 'dashFailedEmptyHintLocal' : isLocalFailure ? 'dashFailedEmptyHintSwitched' : 'dashFailedEmptyHintActor')}</p>
           <div className="gd-failed-terms">
             {record.terms.map((term, index) => <span key={term}><i style={{ background: colors[index] }} />{term}</span>)}
           </div>

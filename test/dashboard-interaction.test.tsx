@@ -331,6 +331,31 @@ describe('dashboard interactions', () => {
     expect(screen.queryByTestId('embedded-settings')).toBeNull();
   });
 
+  it('hides the switch-to-Actor banner on an older local failure once current egress is already an Actor', async () => {
+    const id = '00000000-0000-4000-8000-000000000430';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['Cursor', 'Claude', 'DeepSeek'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'local', status: 'blocked', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 6600, actorRunId: null, costUsd: 0, errorCode: 'RATE_LIMITED',
+    };
+    const failedResult = {
+      ok: false, status: 'blocked', onDemand: true, series: [],
+      error: { code: 'RATE_LIMITED', message: 'Google Trends rate limit (HTTP 429).' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const { container } = render(<Dashboard t={t} renderSettings={() => <div />} />);
+    await screen.findByText(DASHBOARD_EN.dashFailedEmptyHintSwitched);
+    expect(container.querySelector('.gd-local-alert')).toBeNull();
+    expect(container.querySelector('.gd-error')).toBeNull();
+    expect(screen.queryByRole('button', { name: DASHBOARD_EN.dashLocalFailCta })).toBeNull();
+  });
+
   it('keeps dashboard English/Chinese dictionaries in sync and removes the !important error margin override', () => {
     expect(Object.keys(DASHBOARD_ZH).sort()).toEqual(Object.keys(DASHBOARD_EN).sort());
     expect(DASHBOARD_CSS).not.toContain('margin:0 0 16px!important');
