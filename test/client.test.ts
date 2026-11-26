@@ -308,7 +308,8 @@ describe('safe error labels and bounded retries', () => {
     });
     const recovered = await client.query({ queries: ['bitcoin'], dataTypes: ['interestOverTime'] });
     expect(recovered.status).toBe('ok');
-    expect(calls).toBe(3);
+    // 2 retried 429s on bootstrap + 3 normal requests (bootstrap, explore, widget).
+    expect(calls).toBe(5);
 
     calls = 0;
     const always429 = vi.fn<Transport>().mockResolvedValue(response('', 429));
