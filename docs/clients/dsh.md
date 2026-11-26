@@ -11,20 +11,34 @@ DeepSeek Harness (`dsh`) runs `google-trends-for-agent` as a **native in-process
 
 ## Install
 
+<p align="center">
+  <img src="../assets/demo-dsh-install-en.svg" alt="Animated walkthrough of installing google-trends-for-agent in DeepSeek Harness for macOS" width="800">
+</p>
+
+- **DeepSeek Harness Desktop (macOS):** open **Plugins → + Install plugin**, enter **`google-trends-for-agent`** directly (do not paste a full `npmjs.com` web URL), and click **Install**—no manual `allowBuilds` editing required.
+- **dsh CLI (`dsh web`):**
+
+```sh
+dsh plugin --profile web add google-trends-for-agent
+```
+
+After installing or upgrading, **fully quit and reopen dsh** so the backend loads the new build.
+
+<details>
+<summary>Alternative: installing unreleased commits from GitHub <code>main</code></summary>
+
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-The first install usually prints a build-approval key and exits. Append that exact key (ending in the commit hash) to `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`), keeping all existing keys:
+The first GitHub install usually prints a build-approval key and exits. Append that exact key (ending in the commit hash) as an `allowBuilds:` map to `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`), keeping all existing keys, then re-run:
 
 ```yaml
 allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
 
-> Use a map (`: true`) under `allowBuilds:`—a YAML list will fail. Re-run the `dsh plugin add` command after saving the file.
-
-After installing or upgrading, **fully quit and reopen dsh** so the backend loads the new build.
+</details>
 
 ## Configure egress & Apify OAuth
 

@@ -104,26 +104,24 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 Check both package-download and data-fetch connectivity:
 
 ```sh
-curl -I https://github.com
+curl -I https://registry.npmjs.org
 curl -I https://trends.google.com
 ```
 
-If `npx …` exits 128 with empty stdout/stderr, the GitHub package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/git errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
+If `npx …` exits non-zero with empty stdout/stderr, the npm package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/npm errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
 
 ## dsh plugin
 
-Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
+Prerequisites: DeepSeek Harness Desktop for macOS or `dsh` CLI (**Node >=24.9** and **pnpm >=10** on `PATH`; `npm i -g @deepseek-ai/dsh pnpm@10`). The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`).
 
-`dsh plugin --profile web add github:meka-im/google-trends-for-agent` mounts the bare `google-trends-for-agent` row (`gtfa`). The bundle registers four native in-process tools and a `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
+Installing `google-trends-for-agent` from npm (either via Desktop **Plugins → + Install plugin → `google-trends-for-agent`** or `dsh plugin --profile web add google-trends-for-agent`) mounts the bundle directly with zero manual `allowBuilds` setup. The bundle registers four native in-process tools and a `gtfa` skill. By default it does not use MCP, the Actor endpoint, the `gtfa` CLI, or `@modelcontextprotocol/sdk`; the `actor-public` and `actor-own` egress routes call an Actor.
 
-The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
+When installing unreleased commits from GitHub `main` (`dsh plugin --profile web add github:meka-im/google-trends-for-agent`), the first run usually prints a build-approval key and fails; append that key (ending in the commit hash) as an `allowBuilds:` map with `: true` (never an `onlyBuiltDependencies:` list) to `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (keeping existing keys) and re-run:
 
 ```yaml
 allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
-
-pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
 The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed.
 

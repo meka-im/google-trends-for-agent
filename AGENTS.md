@@ -76,20 +76,23 @@ For local MCP, restart the client, then call `trends_ask` with a single term. `t
 
 ## dsh plugin
 
-Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
+Prerequisites: dsh Desktop for macOS or `dsh` CLI (**Node >=24.9** and **pnpm >=10** on `PATH`; `npm i -g @deepseek-ai/dsh pnpm@10`). The gtfa CLI/MCP alone only require Node 20+ (`engines.node: >=20`).
+
+Install from npm (no manual `allowBuilds` required):
+
+- **DeepSeek Harness Desktop:** Plugins → `+ Install plugin` → enter `google-trends-for-agent` directly (do not paste a full `npmjs.com` web URL).
+- **dsh CLI:**
 
 ```sh
-dsh plugin --profile web add github:meka-im/google-trends-for-agent
+dsh plugin --profile web add google-trends-for-agent
 ```
 
-The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
+If installing unreleased commits from GitHub `main` (`dsh plugin --profile web add github:meka-im/google-trends-for-agent`), the first run usually prints a key and fails; append the printed key as an `allowBuilds:` map with `: true` (not an `onlyBuiltDependencies:` list) to `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (keeping existing keys) and re-run:
 
 ```yaml
 allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
-
-pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
 
 The plugin provides four native in-process tools (`trends_ask`, `trends_snapshot`, `trends_compare`, `trends_now`) and a `gtfa` skill. By default it does not start an MCP server, run the `gtfa` CLI, or call the Actor. The plugin is enabled by default after install. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed. Egress defaults to `local`; `actor-public` relays through the public `meka.im/google-trends-for-agent` Actor, and `actor-own` relays through a deployment in your own account (deploy or pick it on the same page). Both Actor routes run on demand with the residential proxy inside the Actor.
 
