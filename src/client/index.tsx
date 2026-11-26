@@ -2170,6 +2170,7 @@ export interface ConfigPageProps {
 
 /** Settings page. Exported for server-render tests. */
 export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors', initialAdvancedOpen = false }: ConfigPageProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -2468,6 +2469,27 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, [building, actors, deployTarget, t]);
 
   const edit = (patch: Partial<Draft>) => { setTestResult(null); setDraft(current => ({ ...current, ...patch })); };
+
+  useEffect(() => {
+    let timers: number[] = [];
+    const scrollToForm = () => {
+      if (!pendingSettingsScroll || snapshot.status !== 'ready') return;
+      pendingSettingsScroll = false;
+      const run = () => {
+        const el = formRef.current;
+        if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start', behavior: 'instant' });
+      };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+      else run();
+      timers.push(window.setTimeout(run, 180));
+    };
+    scrollToForm();
+    settingsScrollListeners.add(scrollToForm);
+    return () => {
+      settingsScrollListeners.delete(scrollToForm);
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [snapshot.status]);
   const editAnchor = (index: number, patch: Partial<AnchorDraft>) => setDraft(current => ({
     ...current,
     anchors: current.anchors.map((anchor, i) => i === index ? { ...anchor, ...patch } : anchor),
@@ -2747,7 +2769,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     };
   }, [versionStatus, draft.egress, draft.actor]);
 
-  return <form className="gtfa-settings" style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
+  return <form ref={formRef} className="gtfa-settings" style={{ ...styles.page, scrollMarginTop: 20 }} onSubmit={event => { event.preventDefault(); void save(); }}>
     <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
     <UpdateBanner
       surface="settings"
@@ -2974,6 +2996,13 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   </form>;
 }
 
+let pendingSettingsScroll = false;
+const settingsScrollListeners = new Set<() => void>();
+function requestSettingsScroll(): void {
+  pendingSettingsScroll = true;
+  for (const notify of settingsScrollListeners) notify();
+}
+
 function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view?: 'summary' | 'page' }) {
   return view === 'summary' ? <>{t('summary')}</> : <ConfigPage ctx={ctx} t={t} />;
 }
@@ -2994,6 +3023,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'google-trends', locale: NS },
       () => <Dashboard t={t} controller={dashboard} openSettings={() => {
+        requestSettingsScroll();
         const navigation = ctx.get?.('pluginNavigation') as { openBundle?: (name: string) => void } | undefined;
         navigation?.openBundle?.(PACKAGE);
       }} />));
