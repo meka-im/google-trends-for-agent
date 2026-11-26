@@ -1,0 +1,361 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="448" viewBox="0 0 820 448" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif">
+<defs>
+  <clipPath id="dshzh-win"><rect width="820" height="406" rx="14"/></clipPath>
+  <clipPath id="dshzh-typed"><rect x="294.0" y="178.0" width="0" height="22.0"><animate attributeName="width" values="0.0;0.0;7.8;15.6;23.4;31.2;39.0;46.8;54.6;62.4;70.2;78.0;85.8;93.6;101.4;109.2;117.0;124.8;132.6;140.4;148.2;156.0;163.8;171.6;179.4;183.4;0.0;0.0" keyTimes="0.0000;0.1646;0.1715;0.1777;0.1838;0.1900;0.1962;0.2023;0.2085;0.2146;0.2208;0.2269;0.2331;0.2392;0.2454;0.2515;0.2577;0.2638;0.2700;0.2762;0.2823;0.2885;0.2946;0.3008;0.3069;0.4077;0.4115;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></rect></clipPath>
+  <filter id="dshzh-shadow" x="-12%" y="-12%" width="124%" height="132%">
+    <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.18"/>
+  </filter>
+  <linearGradient id="dshzh-s1" x1="10" y1="50" x2="28" y2="20" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#1D4ED8"/><stop offset="55%" stop-color="#2563EB"/><stop offset="100%" stop-color="#38BDF8"/>
+  </linearGradient>
+  <linearGradient id="dshzh-s2" x1="22" y1="22" x2="39" y2="43" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#60A5FA"/><stop offset="48%" stop-color="#4F46E5"/><stop offset="100%" stop-color="#312E81"/>
+  </linearGradient>
+  <linearGradient id="dshzh-s3" x1="33" y1="43" x2="56" y2="12" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#0284C7"/><stop offset="48%" stop-color="#06B6D4"/><stop offset="100%" stop-color="#34D399"/>
+  </linearGradient>
+</defs>
+
+<rect width="820" height="448" fill="transparent"/>
+
+<!-- Real DeepSeek Harness macOS Window (no fake header bar) -->
+<g clip-path="url(#dshzh-win)">
+  <rect width="820" height="406" fill="#ffffff"/>
+
+  <!-- Left unified sidebar (#eceef2, matching real screenshot) -->
+  <rect x="0" y="0" width="178" height="406" fill="#eceef2"/>
+  <line x1="178" y1="0" x2="178" y2="406" stroke="#e2e5ea" stroke-width="1"/>
+
+  <!-- Sidebar collapse glyph top-left -->
+  <rect x="14" y="12" width="13" height="11" rx="2" fill="none" stroke="#6b7280" stroke-width="1.2"/>
+  <line x1="18.5" y1="12" x2="18.5" y2="23" stroke="#6b7280" stroke-width="1.2"/>
+
+  <!-- Brand row: official deepseek HARNESS logo (from dsh favicon.svg) -->
+  <g transform="translate(13 34) scale(0.35)">
+    <path d="M48.8354 10.0479C48.3232 9.79199 48.1025 10.2798 47.8032 10.5278C47.7007 10.6079 47.6143 10.7119 47.5273 10.8076C46.7793 11.624 45.9048 12.1597 44.7622 12.0957C43.0923 12 41.666 12.5356 40.4058 13.8398C40.1377 12.2319 39.2476 11.272 37.8926 10.6558C37.1836 10.3359 36.4668 10.0156 35.9702 9.31982C35.6235 8.82373 35.5293 8.27197 35.356 7.72754C35.2456 7.3999 35.1353 7.06396 34.7651 7.00781C34.3633 6.94385 34.2056 7.2876 34.0479 7.57568C33.418 8.75195 33.1733 10.0479 33.1973 11.3599C33.2524 14.312 34.4736 16.6641 36.8999 18.3359C37.1758 18.5278 37.2466 18.7197 37.1597 19C36.9946 19.5757 36.7974 20.1357 36.624 20.7119C36.5137 21.0801 36.3486 21.1597 35.9624 21C34.6309 20.4321 33.481 19.5918 32.4644 18.5757C30.7393 16.8721 29.1792 14.9917 27.2334 13.52C26.7764 13.1758 26.3193 12.856 25.8467 12.5518C23.8618 10.584 26.1069 8.96777 26.627 8.77588C27.1704 8.57568 26.8159 7.8877 25.0591 7.896C23.3022 7.90381 21.6953 8.50391 19.647 9.30371C19.3477 9.42383 19.0322 9.51172 18.7095 9.58398C16.8501 9.22363 14.9199 9.14355 12.9033 9.37598C9.10596 9.80762 6.07275 11.6396 3.84326 14.7681C1.16455 18.5278 0.53418 22.7998 1.30664 27.2559C2.11768 31.9521 4.46582 35.8398 8.07373 38.8799C11.8159 42.0322 16.1255 43.5762 21.041 43.2803C24.0269 43.104 27.3516 42.6963 31.1016 39.4561C32.0469 39.936 33.0396 40.1279 34.686 40.272C35.9546 40.3921 37.1758 40.208 38.1211 40.0078C39.6021 39.688 39.4995 38.2881 38.9639 38.0322C34.623 35.9678 35.5762 36.8081 34.71 36.1279C36.9155 33.4639 40.2402 30.6958 41.54 21.728C41.6426 21.0161 41.5557 20.5679 41.54 19.9917C41.5322 19.6396 41.6108 19.5039 42.0049 19.4639C43.0923 19.3359 44.1479 19.0317 45.1167 18.4878C47.9292 16.9199 49.064 14.3438 49.3315 11.2559C49.3711 10.7837 49.3237 10.2959 48.8354 10.0479ZM24.3262 37.8398C20.1196 34.4639 18.0791 33.3521 17.2358 33.3999C16.4482 33.4482 16.5898 34.3682 16.7632 34.9678C16.9443 35.5601 17.1812 35.9683 17.5117 36.4878C17.7402 36.832 17.8979 37.3442 17.2832 37.728C15.9282 38.584 13.5728 37.4399 13.4624 37.3838C10.7207 35.7358 8.42822 33.5601 6.81348 30.584C5.25342 27.7197 4.34766 24.6479 4.19775 21.3677C4.1582 20.5757 4.38672 20.2959 5.15869 20.1519C6.17529 19.96 7.22314 19.9199 8.23926 20.0718C12.5327 20.7119 16.1885 22.6719 19.2529 25.7759C21.002 27.5439 22.3252 29.6558 23.6885 31.7202C25.1377 33.9121 26.6978 36 28.6831 37.7119C29.3843 38.312 29.9434 38.7681 30.479 39.104C28.8643 39.2881 26.1699 39.3281 24.3262 37.8398ZM26.3433 24.6001C26.3433 24.248 26.6191 23.9678 26.9658 23.9678C27.0444 23.9678 27.1152 23.9839 27.1782 24.0078C27.2651 24.04 27.3438 24.0879 27.4067 24.1602C27.5171 24.272 27.5801 24.4321 27.5801 24.6001C27.5801 24.9521 27.3042 25.2319 26.9575 25.2319C26.6108 25.2319 26.3433 24.9521 26.3433 24.6001ZM32.6064 27.8799C32.2046 28.0479 31.8027 28.1919 31.4165 28.208C30.8179 28.2397 30.1641 27.9922 29.8096 27.688C29.2583 27.2158 28.8643 26.9521 28.6987 26.1279C28.6279 25.7759 28.6675 25.2319 28.7305 24.9199C28.8721 24.248 28.7144 23.8159 28.2495 23.4238C27.8716 23.104 27.3911 23.0161 26.8633 23.0161C26.666 23.0161 26.4849 22.9277 26.3511 22.856C26.1304 22.7441 25.9492 22.4639 26.1226 22.1201C26.1777 22.0078 26.4458 21.7358 26.5088 21.688C27.2256 21.272 28.0527 21.4077 28.8169 21.7197C29.5259 22.0161 30.0615 22.5601 30.834 23.3281C31.6216 24.2559 31.7632 24.5117 32.2124 25.208C32.5669 25.752 32.8901 26.312 33.1104 26.9521C33.2446 27.3521 33.0713 27.6802 32.6064 27.8799Z" fill="#111827" fill-rule="nonzero"/>
+  </g>
+  <text x="34" y="47" font-size="12.5" font-weight="700" letter-spacing="-0.2" fill="#111827">deepseek</text>
+  <rect x="93" y="36.5" width="46" height="14" rx="3" fill="#111827"/>
+  <text x="116" y="46.2" text-anchor="middle" font-size="7.5" font-weight="700" letter-spacing="0.5" fill="#ffffff">HARNESS</text>
+
+  <!-- + New chat pill -->
+  <rect x="10" y="61" width="158" height="27" rx="13.5" fill="#f7f8fa" stroke="#dfe3e8" stroke-width="1"/>
+  <circle cx="67" cy="74.5" r="5" fill="none" stroke="#374151" stroke-width="1.2"/>
+  <path d="M64.5 74.5 L69.5 74.5 M67 72 L67 77" stroke="#374151" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="77" y="78.5" font-size="11.5" font-weight="500" fill="#1f2937">新会话</text>
+
+  <!-- Nav 1: Plugins -->
+  <rect x="8" y="99" width="162" height="25" rx="6" fill="#dce0e6">
+    <animate attributeName="fill" values="#dce0e6;transparent;#dce0e6;#dce0e6" keyTimes="0.0000;0.7192;0.9908;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+  </rect>
+  <path d="M18 111.5 L24 111.5 M21 108.5 L21 114.5" stroke="#374151" stroke-width="1.4" stroke-linecap="round"/>
+  <text x="32" y="115.5" font-size="11.5" font-weight="500" fill="#111827">插件</text>
+
+  <!-- Nav 2: Automations -->
+  <circle cx="21" cy="138" r="4.5" fill="none" stroke="#4b5563" stroke-width="1.3"/>
+  <path d="M21 135.5 L21 138 L23 139.5" fill="none" stroke="#4b5563" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="32" y="142" font-size="11.5" fill="#374151">自动化任务</text>
+
+  <!-- Nav 3 (appears in Act 4): Google Trends -->
+  <g opacity="0">
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0.0000;0.6523;0.6708;0.9692;0.9908;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    <rect x="8" y="152" width="162" height="25" rx="6" fill="transparent">
+      <animate attributeName="fill" values="transparent;#dce0e6;transparent;transparent" keyTimes="0.0000;0.7192;0.9908;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="8" y="152" width="162" height="25" rx="6" fill="none" stroke="#2563eb" stroke-width="2" opacity="0">
+      <animate attributeName="opacity" values="0;0;0.55;0;0" keyTimes="0.0000;0.6985;0.7062;0.7215;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    </rect>
+    <g transform="translate(14 157.5) scale(0.22)">
+      <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#dshzh-s1)" stroke-width="12.4" stroke-linecap="round"/>
+      <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#dshzh-s2)" stroke-width="12.4" stroke-linecap="round"/>
+      <line x1="36.8" y1="39.5" x2="52.8" y2="16.2" stroke="url(#dshzh-s3)" stroke-width="12.4" stroke-linecap="round"/>
+    </g>
+    <text x="32" y="168.5" font-size="11.5" font-weight="600" fill="#111827">Google Trends</text>
+  </g>
+
+  <!-- Nav 4+: More & Workspace (shifts down cleanly when Google Trends inserts) -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 28;0 28;0 0;0 0" keyTimes="0.0000;0.6523;0.6708;0.9692;0.9908;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    <rect x="17.5" y="161" width="3" height="3" rx="0.6" fill="#4b5563"/>
+    <rect x="22" y="161" width="3" height="3" rx="0.6" fill="#4b5563"/>
+    <rect x="17.5" y="165.5" width="3" height="3" rx="0.6" fill="#4b5563"/>
+    <rect x="22" y="165.5" width="3" height="3" rx="0.6" fill="#4b5563"/>
+    <text x="32" y="168.5" font-size="11.5" fill="#374151">更多</text>
+
+    <text x="14" y="200" font-size="10.5" font-weight="500" fill="#6b7280">工作区</text>
+    <circle cx="122" cy="196.5" r="3.2" fill="none" stroke="#6b7280" stroke-width="1.1"/>
+    <line x1="124.5" y1="199" x2="126.5" y2="201" stroke="#6b7280" stroke-width="1.1"/>
+    <line x1="136" y1="196.5" x2="145" y2="196.5" stroke="#6b7280" stroke-width="1.1"/>
+    <rect x="155" y="192.5" width="8" height="8" rx="1.5" fill="none" stroke="#6b7280" stroke-width="1.1"/>
+
+    <rect x="14" y="213" width="10" height="8" rx="1.5" fill="none" stroke="#3b82f6" stroke-width="1.2"/>
+    <text x="30" y="221" font-size="11" fill="#374151">默认工作区</text>
+    <text x="20" y="241" font-size="11" fill="#4b5563">新会话</text>
+  </g>
+
+  <!-- Bottom-left brand account (MEKA, zero personal info) -->
+  <circle cx="20" cy="385" r="8" fill="#1e293b"/>
+  <rect x="16" y="381" width="3.4" height="3.4" rx="0.8" fill="#ffffff"/>
+  <rect x="20.6" y="381" width="3.4" height="3.4" rx="0.8" fill="#93c5fd"/>
+  <rect x="16" y="385.6" width="3.4" height="3.4" rx="0.8" fill="#93c5fd"/>
+  <rect x="20.6" y="385.6" width="3.4" height="3.4" rx="0.8" fill="#ffffff"/>
+  <text x="34" y="389" font-size="11" font-weight="600" fill="#374151">MEKA</text>
+
+  <!-- VIEW 1: Plugins Page (Acts 1–3) -->
+  <g opacity="1">
+    <animate attributeName="opacity" values="1;0;1;1" keyTimes="0.0000;0.7192;0.9908;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+    <text x="210" y="48" font-size="17" font-weight="700" fill="#111827">插件</text>
+    <text x="210" y="67" font-size="11.5" fill="#6b7280">安装、启用和配置插件</text>
+    <circle cx="338" cy="63" r="5" fill="none" stroke="#9ca3af" stroke-width="1"/>
+    <text x="338" y="66.5" text-anchor="middle" font-size="7.5" fill="#9ca3af">i</text>
+
+    <!-- Refresh & + Install plugin pills -->
+    <rect x="640" y="37" width="60" height="28" rx="8" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="670" y="55" text-anchor="middle" font-size="11.5" font-weight="500" fill="#374151">刷新</text>
+
+    <rect x="708" y="37" width="94" height="28" rx="8" fill="#111827"/>
+    <text x="755" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="#ffffff">+ 安装插件</text>
+    <rect x="706" y="35" width="98" height="32" rx="10" fill="none" stroke="#2563eb" stroke-width="2.2" opacity="0">
+      <animate attributeName="opacity" values="0;0;0.55;0;0" keyTimes="0.0000;0.0754;0.0831;0.0985;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    </rect>
+
+    <text x="210" y="114" font-size="11.5" font-weight="600" fill="#374151">内置插件配置</text>
+    <g><rect x="206" y="132" width="590" height="48" rx="8" fill="#ffffff"/><rect x="210" y="139" width="34" height="34" rx="8" fill="#eef2ff"/><circle cx="227" cy="156" r="6" fill="none" stroke="#4f46e5" stroke-width="1.8"/><text x="256" y="153" font-size="12.5" font-weight="600" fill="#111827">工作区与文件</text><text x="256" y="169" font-size="11" fill="#6b7280">读取、编辑本地项目与目录结构</text><rect x="752" y="147" width="32" height="18" rx="9" fill="#d1d5db"/><circle cx="761" cy="156" r="7" fill="#ffffff"/><line x1="210" y1="182" x2="790" y2="182" stroke="#f3f4f6" stroke-width="1"/></g><g><rect x="206" y="186" width="590" height="48" rx="8" fill="#ffffff"/><rect x="210" y="193" width="34" height="34" rx="8" fill="#e0f2fe"/><circle cx="227" cy="210" r="6" fill="none" stroke="#0284c7" stroke-width="1.8"/><text x="256" y="207" font-size="12.5" font-weight="600" fill="#111827">网页搜索与抓取</text><text x="256" y="223" font-size="11" fill="#6b7280">联网检索并提取实时网页正文</text><rect x="752" y="201" width="32" height="18" rx="9" fill="#d1d5db"/><circle cx="761" cy="210" r="7" fill="#ffffff"/><line x1="210" y1="236" x2="790" y2="236" stroke="#f3f4f6" stroke-width="1"/></g><g><rect x="206" y="240" width="590" height="48" rx="8" fill="#ffffff"/><rect x="210" y="247" width="34" height="34" rx="8" fill="#f3e8ff"/><circle cx="227" cy="264" r="6" fill="none" stroke="#7c3aed" stroke-width="1.8"/><text x="256" y="261" font-size="12.5" font-weight="600" fill="#111827">终端命令执行</text><text x="256" y="277" font-size="11" fill="#6b7280">在工作区受控运行 Shell 与构建脚本</text><rect x="752" y="255" width="32" height="18" rx="9" fill="#d1d5db"/><circle cx="761" cy="264" r="7" fill="#ffffff"/><line x1="210" y1="290" x2="790" y2="290" stroke="#f3f4f6" stroke-width="1"/></g><g><rect x="206" y="294" width="590" height="48" rx="8" fill="#ffffff"/><rect x="210" y="301" width="34" height="34" rx="8" fill="#ede9fe"/><circle cx="227" cy="318" r="6" fill="none" stroke="#4338ca" stroke-width="1.8"/><text x="256" y="315" font-size="12.5" font-weight="600" fill="#111827">模型与工具路由</text><text x="256" y="331" font-size="11" fill="#6b7280">统一管理 MCP 服务与子代理调用</text><rect x="752" y="309" width="32" height="18" rx="9" fill="#d1d5db"/><circle cx="761" cy="318" r="7" fill="#ffffff"/><line x1="210" y1="344" x2="790" y2="344" stroke="#f3f4f6" stroke-width="1"/></g>
+  </g>
+
+  <!-- VIEW 2: Real Google Trends Plugin Dashboard (Act 4, matching Screenshot 2) -->
+  <g opacity="0">
+    <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.7192;0.9908;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+    <!-- Top plugin header bar -->
+    <rect x="178" y="0" width="642" height="42" fill="#ffffff"/>
+    <line x1="178" y1="42" x2="820" y2="42" stroke="#e5e7eb" stroke-width="1"/>
+
+    <g transform="translate(194 12) scale(0.28)">
+      <line x1="11.5" y1="46.5" x2="24.8" y2="23.5" stroke="url(#dshzh-s1)" stroke-width="12.4" stroke-linecap="round"/>
+      <line x1="24.8" y1="23.5" x2="36.8" y2="39.5" stroke="url(#dshzh-s2)" stroke-width="12.4" stroke-linecap="round"/>
+      <line x1="36.8" y1="39.5" x2="52.8" y2="16.2" stroke="url(#dshzh-s3)" stroke-width="12.4" stroke-linecap="round"/>
+    </g>
+    <text x="218" y="25" font-size="12.5" font-weight="700" fill="#111827">Google Trends</text>
+
+    <!-- Center Query | History switcher -->
+    <rect x="444" y="8" width="114" height="26" rx="7" fill="#f3f4f6"/>
+    <rect x="447" y="10.5" width="52" height="21" rx="5" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.8"/>
+    <text x="473" y="24.5" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">查询</text>
+    <text x="528" y="24.5" text-anchor="middle" font-size="11" fill="#6b7280">记录 1</text>
+
+    <!-- Right Public Actor & Settings pills -->
+    <rect x="650" y="9" width="84" height="24" rx="6" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+    <circle cx="662" cy="21" r="3" fill="#10b981"/>
+    <text x="696" y="24.5" text-anchor="middle" font-size="10.5" font-weight="500" fill="#374151">公共 Actor</text>
+
+    <rect x="740" y="9" width="66" height="24" rx="6" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="773" y="24.5" text-anchor="middle" font-size="10.5" font-weight="500" fill="#374151">插件设置</text>
+
+    <!-- Query bar -->
+    <rect x="196" y="54" width="610" height="32" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+    <circle cx="211" cy="70" r="4" fill="none" stroke="#9ca3af" stroke-width="1.2"/>
+    <line x1="214" y1="73" x2="216.5" y2="75.5" stroke="#9ca3af" stroke-width="1.2"/>
+    <text x="224" y="74" font-size="11.5" font-weight="500" fill="#111827">Cursor, Claude, DeepSeek</text>
+    <rect x="526" y="61" width="28" height="18" rx="4" fill="#f3f4f6"/>
+    <text x="540" y="73.5" text-anchor="middle" font-size="10" fill="#6b7280">3 / 5</text>
+    <line x1="562" y1="60" x2="562" y2="80" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="572" y="74" font-size="11" fill="#374151">美国 (US)</text>
+    <line x1="654" y1="60" x2="654" y2="80" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="664" y="74" font-size="11" fill="#374151">过去一周</text>
+    <rect x="732" y="57.5" width="70" height="25" rx="6" fill="#2563eb"/>
+    <text x="767" y="73.5" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">查询趋势</text>
+
+    <!-- Left results card -->
+    <rect x="196" y="102" width="420" height="278" rx="10" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="212" y="124" font-size="13" font-weight="700" fill="#111827">Cursor vs Claude vs DeepSeek</text>
+    <rect x="416" y="111.5" width="46" height="16" rx="4" fill="#ecfdf5"/>
+    <text x="439" y="122.5" text-anchor="middle" font-size="9.5" font-weight="600" fill="#047857">已校准</text>
+    <text x="212" y="140" font-size="10" fill="#6b7280">兴趣指数 (0–100) · 美国 (US) · 过去一周 · 公共 Actor · 4.2 s</text>
+
+    <!-- Legend pills -->
+    <rect x="212" y="150" width="60" height="16" rx="4" fill="#eff6ff" stroke="#bfdbfe" stroke-width="0.8"/>
+    <circle cx="221" cy="158" r="2.5" fill="#2563eb"/>
+    <text x="228" y="161.5" font-size="9.5" fill="#1e40af">Cursor</text>
+    <rect x="278" y="150" width="60" height="16" rx="4" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="0.8"/>
+    <circle cx="287" cy="158" r="2.5" fill="#7c3aed"/>
+    <text x="294" y="161.5" font-size="9.5" fill="#5b21b6">Claude</text>
+    <rect x="344" y="150" width="72" height="16" rx="4" fill="#f0fdfa" stroke="#99f6e4" stroke-width="0.8"/>
+    <circle cx="353" cy="158" r="2.5" fill="#0d9488"/>
+    <text x="360" y="161.5" font-size="9.5" fill="#115e59">DeepSeek</text>
+
+    
+      <line x1="214" y1="186" x2="604" y2="186" stroke="#f1f5f9" stroke-width="1"/>
+      <line x1="214" y1="220" x2="604" y2="220" stroke="#f1f5f9" stroke-width="1"/>
+      <line x1="214" y1="254" x2="604" y2="254" stroke="#f1f5f9" stroke-width="1"/>
+      <path d="M220 248 C275 242, 320 225, 375 212 C430 200, 485 186, 540 176 L598 168" fill="none" stroke="#0d9488" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M220 256 C275 250, 320 238, 375 231 C430 225, 485 212, 540 206 L598 198" fill="none" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M220 264 C275 260, 320 255, 375 248 C430 244, 485 239, 540 234 L598 228" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round"/>
+    
+
+    <!-- Comparison summary table -->
+    <line x1="212" y1="286" x2="600" y2="286" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="212" y="301" font-size="9.5" font-weight="600" fill="#6b7280">关键词</text>
+    <text x="454" y="301" text-anchor="end" font-size="9.5" font-weight="600" fill="#6b7280">平均</text>
+    <text x="522" y="301" text-anchor="end" font-size="9.5" font-weight="600" fill="#6b7280">最新</text>
+    <text x="594" y="301" text-anchor="end" font-size="9.5" font-weight="600" fill="#6b7280">峰值</text>
+
+    <line x1="212" y1="308" x2="600" y2="308" stroke="#f3f4f6" stroke-width="1"/>
+    <rect x="212" y="317" width="6" height="6" rx="1.5" fill="#2563eb"/>
+    <text x="224" y="323" font-size="10.5" font-weight="500" fill="#111827">Cursor</text>
+    <text x="454" y="323" text-anchor="end" font-size="10.5" fill="#374151">18</text>
+    <text x="522" y="323" text-anchor="end" font-size="10.5" fill="#374151">21</text>
+    <text x="594" y="323" text-anchor="end" font-size="10.5" fill="#374151">24</text>
+
+    <line x1="212" y1="331" x2="600" y2="331" stroke="#f3f4f6" stroke-width="1"/>
+    <rect x="212" y="340" width="6" height="6" rx="1.5" fill="#7c3aed"/>
+    <text x="224" y="346" font-size="10.5" font-weight="500" fill="#111827">Claude</text>
+    <text x="454" y="346" text-anchor="end" font-size="10.5" fill="#374151">36</text>
+    <text x="522" y="346" text-anchor="end" font-size="10.5" fill="#374151">44</text>
+    <text x="594" y="346" text-anchor="end" font-size="10.5" fill="#374151">51</text>
+
+    <line x1="212" y1="354" x2="600" y2="354" stroke="#f3f4f6" stroke-width="1"/>
+    <rect x="212" y="363" width="6" height="6" rx="1.5" fill="#0d9488"/>
+    <text x="224" y="369" font-size="10.5" font-weight="500" fill="#111827">DeepSeek</text>
+    <text x="454" y="369" text-anchor="end" font-size="10.5" fill="#374151">52</text>
+    <text x="522" y="369" text-anchor="end" font-size="10.5" fill="#374151">68</text>
+    <text x="594" y="369" text-anchor="end" font-size="10.5" fill="#374151">74</text>
+
+    <!-- Right calibrated search-volume card -->
+    <rect x="626" y="102" width="180" height="278" rx="10" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="640" y="123" font-size="11.5" font-weight="700" fill="#111827">估算日均搜索量</text>
+
+    <rect x="640" y="136" width="152" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="650" y="153" font-size="10.5" fill="#475569">Cursor</text>
+    <text x="650" y="175" font-size="14" font-weight="700" fill="#2563eb">~34k / day</text>
+
+    <rect x="640" y="202" width="152" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="650" y="219" font-size="10.5" fill="#475569">Claude</text>
+    <text x="650" y="241" font-size="14" font-weight="700" fill="#7c3aed">~78k / day</text>
+
+    <rect x="640" y="268" width="152" height="58" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="650" y="285" font-size="10.5" fill="#475569">DeepSeek</text>
+    <text x="650" y="307" font-size="14" font-weight="700" fill="#0d9488">~112k / day</text>
+
+    <text x="640" y="348" font-size="9.5" fill="#6b7280">基于 MEKA v1 锚点校准估算。</text>
+    <text x="806" y="394" text-anchor="end" font-size="9.5" fill="#9ca3af">v0.2.43</text>
+  </g>
+
+  <!-- Modal dialog (exact Screenshot 1 styling) -->
+  <g opacity="0">
+    <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0.0000;0.0846;0.0985;0.6423;0.6577;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    <rect x="0" y="0" width="820" height="406" fill="#0f172a" fill-opacity="0.22"/>
+
+    <g filter="url(#dshzh-shadow)">
+      <rect x="256" y="54" width="466" height="298" rx="18" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+
+      <!-- State A: Package input modal -->
+      <g opacity="1">
+        <animate attributeName="opacity" values="1;0;1" keyTimes="0.0000;0.4077;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+        <text x="702" y="78" font-size="14" fill="#9ca3af">×</text>
+        <text x="489" y="88" text-anchor="middle" font-size="15.5" font-weight="700" fill="#111827">安装插件</text>
+
+        <!-- npm / Git repo toggle pills -->
+        <rect x="389" y="104" width="200" height="28" rx="8" fill="#f3f4f6"/>
+        <rect x="392" y="106.5" width="94" height="23" rx="6" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.8"/>
+        <text x="439" y="122" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">npm 包</text>
+        <text x="537" y="122" text-anchor="middle" font-size="11.5" fill="#6b7280">Git 仓库</text>
+
+        <!-- Input field -->
+        <rect x="280" y="168" width="418" height="42" rx="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.2"/>
+        <rect x="280" y="168" width="418" height="42" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="2" opacity="0">
+          <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.1423;0.4077;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+        </rect>
+
+        <g clip-path="url(#dshzh-typed)">
+          <text x="294" y="194" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="13" font-weight="600" fill="#111827">google-trends-for-agent</text>
+        </g>
+
+        <rect x="294" y="179" width="2" height="20" rx="1" fill="#2563eb" opacity="0">
+          <animate attributeName="x" values="294.0;294.0;301.8;309.6;317.4;325.2;333.0;340.8;348.6;356.4;364.2;372.0;379.8;387.6;395.4;403.2;411.0;418.8;426.6;434.4;442.2;450.0;457.8;465.6;473.4;475.4;294.0;294.0" keyTimes="0.0000;0.1646;0.1715;0.1777;0.1838;0.1900;0.1962;0.2023;0.2085;0.2146;0.2208;0.2269;0.2331;0.2392;0.2454;0.2515;0.2577;0.2638;0.2700;0.2762;0.2823;0.2885;0.2946;0.3008;0.3069;0.4077;0.4115;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.1423;0.3231;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+        </rect>
+
+        <text x="282" y="228" font-size="11" fill="#0369a1">直接填写包名 google-trends-for-agent（不要粘贴 npmjs.com 网址）</text>
+
+        <!-- Footer buttons -->
+        <rect x="546" y="268" width="68" height="32" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+        <text x="580" y="288" text-anchor="middle" font-size="12" font-weight="500" fill="#374151">取消</text>
+
+        <rect x="622" y="268" width="76" height="32" rx="8" fill="#111827"/>
+        <text x="660" y="288" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">安装</text>
+        <rect x="620" y="266" width="80" height="36" rx="10" fill="none" stroke="#2563eb" stroke-width="2.2" opacity="0">
+          <animate attributeName="opacity" values="0;0;0.55;0;0" keyTimes="0.0000;0.3731;0.3808;0.3962;1.0000" dur="13.0s" repeatCount="indefinite"/>
+        </rect>
+      </g>
+
+      <!-- State B: Real light-themed pnpm log modal (exact Screenshot 1 anatomy) -->
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.4077;0.6577;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+        <text x="702" y="78" font-size="14" fill="#9ca3af">×</text>
+
+        <!-- Status badge: amber installing -> emerald checkmark -->
+        <g opacity="1">
+          <animate attributeName="opacity" values="1;0;1" keyTimes="0.0000;0.5654;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+          <circle cx="489" cy="84" r="14" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="60 28"/>
+          <text x="489" y="114" text-anchor="middle" font-size="15" font-weight="700" fill="#111827">正在安装插件</text>
+          <text x="489" y="131" text-anchor="middle" font-size="11" fill="#6b7280">正在通过 pnpm 解析并下载 npm 包…</text>
+        </g>
+        <g opacity="0">
+          <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.5654;0.6577;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+          <circle cx="489" cy="84" r="14" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+          <path d="M483.5 84 L487 87.5 L494.5 80" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="489" y="114" text-anchor="middle" font-size="15" font-weight="700" fill="#111827">插件安装成功</text>
+          <text x="489" y="131" text-anchor="middle" font-size="11" fill="#059669">已添加到桌面配置，重启客户端后启用后端</text>
+        </g>
+
+        <!-- Centered light pill card for package name -->
+        <rect x="280" y="142" width="418" height="44" rx="10" fill="#f8fafc" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="489" y="161" text-anchor="middle" font-size="13" font-weight="700" fill="#111827">google-trends-for-agent</text>
+        <text x="489" y="177" text-anchor="middle" font-size="10.5" fill="#6b7280">npm · v0.2.43</text>
+
+        <text x="282" y="206" font-size="11" fill="#6b7280">收起安装详情</text>
+        <g opacity="0">
+          <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.5654;0.6577;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+          <rect x="646" y="192" width="52" height="22" rx="7" fill="#111827"/>
+          <text x="672" y="206.5" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">完成</text>
+        </g>
+
+        <!-- Light bordered pnpm console box (exact Screenshot 1 look) -->
+        <rect x="280" y="220" width="418" height="114" rx="10" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+        <line x1="280" y1="248" x2="698" y2="248" stroke="#e5e7eb" stroke-width="1"/>
+        <circle cx="294" cy="234" r="3" fill="#10b981"/>
+        <text x="303" y="238" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="11" font-weight="600" fill="#111827">$ pnpm add google-trends-for-agent</text>
+        <g opacity="0">
+          <animate attributeName="opacity" values="0;1;0;0" keyTimes="0.0000;0.5654;0.6577;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/>
+          <rect x="632" y="225" width="54" height="18" rx="9" fill="#dcfce7"/>
+          <text x="659" y="237.5" text-anchor="middle" font-size="10" font-weight="600" fill="#15803d">退出码 0</text>
+        </g>
+
+        <text x="294" y="270" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="10.5" fill="#4b5563" opacity="0">
+          Packages: +97  ·  resolved from registry.npmjs.org
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0.0000;0.4269;0.4423;0.6462;0.6577;1.0000" dur="13.0s" repeatCount="indefinite"/>
+        </text>
+        <text x="294" y="292" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="11" font-weight="600" fill="#059669" opacity="0">
+          + google-trends-for-agent 0.2.43
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0.0000;0.4885;0.5038;0.6462;0.6577;1.0000" dur="13.0s" repeatCount="indefinite"/>
+        </text>
+        <text x="294" y="314" font-family="JetBrains Mono,Menlo,Consolas,monospace" font-size="10.5" fill="#374151" opacity="0">
+          Done in 17.1s using pnpm v11.28.5 (zero allowBuilds)
+          <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0.0000;0.5462;0.5615;0.6462;0.6577;1.0000" dur="13.0s" repeatCount="indefinite"/>
+        </text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Animated macOS cursor -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="490 185;490 185;756 51;756 51;370 189;370 189;662 284;662 284;662 284;86 164;86 164;640 198;640 198;490 185" keyTimes="0.0000;0.0192;0.0692;0.0908;0.1269;0.3154;0.3577;0.3962;0.6308;0.6808;0.7154;0.7731;0.9538;1.0000" dur="13.0s" repeatCount="indefinite"/>
+    <path d="M0 0 L0 17 L4.5 13 L8 20 L10.6 18.8 L7.1 11.8 L12.5 11.5 Z" fill="#111827" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+
+  <rect x="0.5" y="0.5" width="819" height="405" rx="13.5" fill="none" stroke="#d1d5db" stroke-width="1"/>
+</g>
+
+<!-- 4-step progress strip -->
+<g><rect x="10" y="416" width="194" height="24" rx="12" fill="#e5e7eb"><animate attributeName="fill" values="#111827;#e5e7eb;#e5e7eb;#e5e7eb;#111827" keyTimes="0.0000;0.1423;0.4077;0.6500;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></rect><text x="107.0" y="432" text-anchor="middle" font-size="11.5" font-weight="600" fill="#4b5563">1. 打开安装插件<animate attributeName="fill" values="#ffffff;#4b5563;#4b5563;#4b5563;#ffffff" keyTimes="0.0000;0.1423;0.4077;0.6500;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></text></g><g><rect x="212" y="416" width="194" height="24" rx="12" fill="#e5e7eb"><animate attributeName="fill" values="#e5e7eb;#2563eb;#e5e7eb;#e5e7eb" keyTimes="0.0000;0.1423;0.4077;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></rect><text x="309.0" y="432" text-anchor="middle" font-size="11.5" font-weight="600" fill="#4b5563">2. 输入 npm 包名<animate attributeName="fill" values="#4b5563;#ffffff;#4b5563;#4b5563" keyTimes="0.0000;0.1423;0.4077;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></text></g><g><rect x="414" y="416" width="194" height="24" rx="12" fill="#e5e7eb"><animate attributeName="fill" values="#e5e7eb;#2563eb;#e5e7eb;#e5e7eb" keyTimes="0.0000;0.4077;0.6500;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></rect><text x="511.0" y="432" text-anchor="middle" font-size="11.5" font-weight="600" fill="#4b5563">3. 自动完成安装<animate attributeName="fill" values="#4b5563;#ffffff;#4b5563;#4b5563" keyTimes="0.0000;0.4077;0.6500;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></text></g><g><rect x="616" y="416" width="194" height="24" rx="12" fill="#e5e7eb"><animate attributeName="fill" values="#e5e7eb;#10b981;#e5e7eb;#e5e7eb" keyTimes="0.0000;0.6500;0.9846;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></rect><text x="713.0" y="432" text-anchor="middle" font-size="11.5" font-weight="600" fill="#4b5563">4. 打开面板查询<animate attributeName="fill" values="#4b5563;#ffffff;#4b5563;#4b5563" keyTimes="0.0000;0.6500;0.9846;1.0000" calcMode="discrete" dur="13.0s" repeatCount="indefinite"/></text></g>
+</svg>

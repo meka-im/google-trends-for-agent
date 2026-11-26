@@ -151,24 +151,39 @@ If `npx …` exits non-zero with empty stdout/stderr, the npm package fetch fail
 
 ## dsh plugin
 
-Prerequisites: dsh requires **Node >=24.9** and **pnpm >=10** on PATH (`allowBuilds` needs pnpm 10; tested with 10.34.6). Install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`. The gtfa CLI/MCP alone require Node 20+ (`engines.node: >=20`). Without pnpm on PATH, plugin installation fails with `spawn pnpm ENOENT` / `pnpm was not found`.
+<p align="center">
+  <img src="docs/assets/demo-dsh-install-en.svg" alt="Animated walkthrough of installing google-trends-for-agent in DeepSeek Harness for macOS" width="800">
+</p>
+<p align="center"><sub>DeepSeek Harness (macOS): open <b>Plugins → + Install plugin</b>, enter <code>google-trends-for-agent</code> directly (no npmjs.com URL), then restart to load the backend.</sub></p>
+
+- **DeepSeek Harness Desktop (macOS):** open **Plugins → + Install plugin**, enter the npm package name **`google-trends-for-agent`** directly (do not paste a full `npmjs.com` web URL), and install with one click—no manual `allowBuilds` editing required.
+- **dsh CLI (`dsh web`):** requires **Node >=24.9** and **pnpm >=10** on `PATH` (install dsh with `npm i -g @deepseek-ai/dsh` and pnpm with `npm i -g pnpm@10`; CLI/MCP alone only require Node 20+):
+
+```sh
+dsh plugin --profile web add google-trends-for-agent
+```
+
+After installing or upgrading the plugin, fully quit and reopen dsh to load its backend. Saving plugin settings applies them immediately.
+
+<details>
+<summary>Alternative: installing unreleased commits from GitHub <code>main</code></summary>
+
+To test unreleased commits from `main` instead of the published npm package, install from GitHub:
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-After installing or upgrading the plugin, fully quit and reopen dsh to load its backend. Saving plugin settings applies them immediately.
-
-The first run usually prints a key and fails; a cached build in the pnpm store may pass immediately. Append the block below, using the exact key pnpm prints (ending in the commit hash), to the YAML dsh already generated at `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`). Keep all existing keys; do not overwrite the file. Then re-run the command. For another profile, replace `web` in both the command and the path:
+The first run usually prints a build-approval key and fails (unless cached in the pnpm store). Append the printed key (ending in the commit hash) as an `allowBuilds:` map entry to `$DSH_HOME/profiles/web/pnpm-workspace.yaml` (`DSH_HOME` defaults to `~/.dsh`), keeping all existing keys, then re-run:
 
 ```yaml
 allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
 
-pnpm's box may wrap the key across lines — copy it from this template, only the commit hash changes.
+Use `: true` under `allowBuilds:` rather than an `onlyBuiltDependencies:` list; the key changes whenever `main` advances.
 
-pnpm suggests an `onlyBuiltDependencies:` list; dsh profiles require an `allowBuilds:` map with `: true` (a list under `allowBuilds` fails). The key changes whenever main moves; re-add it after updates.
+</details>
 
 The plugin is enabled by default after install and provides four native tools plus a `gtfa` skill. In dsh 0.2.2-rc.1, open **dsh web → Plugins → Google Trends** (the installed-plugin card), then under **Components** click the **Google Trends / gtfa** row to open the settings page. Choose **Local (this machine)**, **Public Actor**, or **My own Actor** under **Egress**, then click **Save**; login itself needs no Save. When the Host provides its credentials service, both Actor routes offer **Sign in with Apify**: the page shows Apify's official authorization link and user code, checks pending status every 2 seconds while honoring Apify's polling interval (including `slow_down`), pauses when closed, resumes when reopened, and restarts an expired attempt. Apify's only current device OAuth scope is `full_api_access`—full Apify API access, not access limited to this Actor or tool.
 

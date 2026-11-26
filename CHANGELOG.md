@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.43 — 2026-11-26
+
+### dsh install walkthrough & docs alignment
+- Add animated bilingual DeepSeek Harness (macOS) installation walkthrough SVGs (`docs/assets/demo-dsh-install-en.svg`, `docs/assets/demo-dsh-install-zh.svg`) embedded in `README.md`, `README.zh-CN.md`, and `docs/clients/dsh.md`.
+- Simplify primary dsh install docs (`README.md`, `README.zh-CN.md`, `AGENTS.md`, `docs/reference.md`, `docs/clients/dsh.md`) to direct npm package installation (`google-trends-for-agent`), keeping GitHub `main` + `allowBuilds` as an optional development alternative.
+
 ## 0.2.42 — 2026-11-26
 
 ### npm release & documentation alignment

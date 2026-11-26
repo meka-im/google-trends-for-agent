@@ -149,24 +149,39 @@ curl -I https://trends.google.com
 
 ## dsh 插件
 
-前置条件：dsh 需要 **Node >=24.9**，并确保 **pnpm >=10** 在 PATH 中（`allowBuilds` 需要 pnpm 10；测试版本为 10.34.6）。用 `npm i -g @deepseek-ai/dsh` 安装 dsh，用 `npm i -g pnpm@10` 安装 pnpm。仅使用 gtfa CLI/MCP 时仍只需 Node 20+（`engines.node: >=20`）。PATH 中没有 pnpm 时，插件安装会报 `spawn pnpm ENOENT` / `pnpm was not found`。
+<p align="center">
+  <img src="docs/assets/demo-dsh-install-zh.svg" alt="DeepSeek Harness Mac 客户端安装 google-trends-for-agent 插件动画演示" width="800">
+</p>
+<p align="center"><sub>DeepSeek Harness (Mac)：打开<b>插件 → + 安装插件</b>，直接输入 npm 包名 <code>google-trends-for-agent</code>（不要填 npmjs.com 网址），安装完成后重启客户端即可加载后端。</sub></p>
+
+- **DeepSeek Harness Mac 桌面端**：打开**插件 → + 安装插件**，在输入框中直接填写 npm 包名 **`google-trends-for-agent`**（不要粘贴 `npmjs.com/package/...` 网页链接）一键安装，无需手动修改 `allowBuilds`。
+- **dsh CLI（`dsh web`）**：需要 **Node >=24.9** 且 **pnpm >=10** 在 `PATH` 中（`npm i -g @deepseek-ai/dsh pnpm@10`；仅用 `gtfa` CLI/MCP 时只需 Node 20+）：
+
+```sh
+dsh plugin --profile web add google-trends-for-agent
+```
+
+安装或升级插件后，请完全退出并重新打开 dsh，以加载插件后端。插件设置保存后立即生效。
+
+<details>
+<summary>备选：从 GitHub <code>main</code> 安装未发包源码</summary>
+
+如需直接测试 `main` 分支最新未发版提交，可改为从 GitHub 安装：
 
 ```sh
 dsh plugin --profile web add github:meka-im/google-trends-for-agent
 ```
 
-安装或升级插件后，请完全退出并重新打开 dsh，以加载插件后端。插件设置保存后立即生效。
-
-首次运行通常会打印 key 并失败；pnpm store 已缓存构建时可能直接成功。将下方代码块以 pnpm 打印的完整 key（以 commit hash 结尾）**追加**到 dsh 已生成的 `$DSH_HOME/profiles/web/pnpm-workspace.yaml`（`DSH_HOME` 默认为 `~/.dsh`），保留已有键，不要覆盖文件，然后重跑。使用其他 profile 时，同时替换命令和路径中的 `web`：
+首次运行通常会打印构建批准 key 并失败（若 pnpm store 已缓存可能直接成功）。将 pnpm 打印的完整 key（以 commit hash 结尾）以 `allowBuilds:` map 格式追加到 `$DSH_HOME/profiles/web/pnpm-workspace.yaml`（`DSH_HOME` 默认为 `~/.dsh`），保留已有键并重跑命令：
 
 ```yaml
 allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
 
-pnpm 的提示框可能把 key 折成多行，请从本模板复制，只需改 commit hash。
+请使用带 `: true` 的 `allowBuilds:` map（不要写成列表）；`main` 前进后 key 会变化，更新后需重新添加。
 
-pnpm 的报错建议使用 `onlyBuiltDependencies:` 列表；dsh profile 应使用带 `: true` 的 `allowBuilds:` map（在 `allowBuilds` 下写列表会失败）。main 更新后 key 会变化，需要重新添加。
+</details>
 
 插件安装后默认启用，提供四个原生工具和 `gtfa` skill。在 dsh 0.2.2-rc.1 中，打开 **dsh web → Plugins → Google Trends** 已安装插件卡片，在详情页 **Components** 下点击 **Google Trends / gtfa** 行进入设置页。在 **Connection（连接方式）** 区块选择 **本机直连**、**公共 Actor** 或 **我自己的 Actor**，再点 **Save（保存）** 应用 egress；登录本身不需要 Save。Host 提供 credentials service 时，两条 Actor 路线都提供 **Sign in with Apify（登录 Apify）**：页面显示 Apify 官方授权链接和 user code；pending 时每 2 秒查询一次状态并遵守 Apify 的 polling interval（包括 `slow_down`），关闭页面暂停、重新打开继续，过期后重新发起。Apify 当前的 device OAuth scope 只有 `full_api_access`——这是完整 Apify API 访问权限，不是仅限本 Actor 或本工具的权限。
 
