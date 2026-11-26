@@ -4,7 +4,13 @@ const mocks = vi.hoisted(() => ({ fetch: vi.fn(), agent: vi.fn(function(this: ob
 vi.mock('undici', () => ({ ProxyAgent: mocks.agent, fetch: mocks.fetch }));
 
 import { createDefaultTransport } from '../src/transport.js';
-import { ACTOR_PROXY_DEFAULTS, ApifyProxySession, actorProxyInput, createRotatingTransport } from '../src/actor-proxy.js';
+import {
+  ACTOR_PROXY_DEFAULTS,
+  ApifyProxySession,
+  actorProxyInput,
+  createRotatingTransport,
+  resolveActorProxySession,
+} from '../src/actor-proxy.js';
 
 afterEach(() => vi.clearAllMocks());
 
@@ -105,5 +111,50 @@ describe('Actor proxy wiring', () => {
     expect(reasons).toEqual(['network']);
     expect(provider.newUrl).toHaveBeenCalledTimes(2);
     expect((await transport(request)).status).toBe(200);
+  });
+
+  it('falls back from unavailable RESIDENTIAL proxy to default Apify proxy, then direct egress', async () => {
+    const warnings: string[] = [];
+    const autoProvider = { newUrl: vi.fn(async (id?: string | number) => `http://proxy.example:8000?session=${id}`) };
+
+    const requested = await resolveActorProxySession(undefined, {
+      isAtHome: true,
+      createProxyConfiguration: vi.fn(async () => autoProvider),
+    });
+    expect(requested.mode).toBe('requested');
+    expect(requested.session?.currentUrl).toContain('session=');
+
+    const fallbackAuto = await resolveActorProxySession(undefined, {
+      isAtHome: true,
+      onFallback: msg => warnings.push(msg),
+      createProxyConfiguration: vi.fn(async cfg => {
+        if (Array.isArray(cfg.apifyProxyGroups)) throw new Error('RESIDENTIAL group unavailable');
+        return autoProvider;
+      }),
+    });
+    expect(fallbackAuto.mode).toBe('fallback-auto-proxy');
+    expect(fallbackAuto.session?.currentUrl).toContain('session=');
+    expect(warnings.at(-1)).toContain('falling back to default Apify proxy');
+
+    const fallbackDirect = await resolveActorProxySession(undefined, {
+      isAtHome: true,
+      onFallback: msg => warnings.push(msg),
+      createProxyConfiguration: vi.fn(async () => { throw new Error('no proxy quota'); }),
+    });
+    expect(fallbackDirect.mode).toBe('direct-fallback');
+    expect(fallbackDirect.session).toBeNull();
+    expect(warnings.at(-1)).toContain('falling back to direct egress');
+
+    const disabled = await resolveActorProxySession({ useApifyProxy: false }, {
+      isAtHome: true,
+      createProxyConfiguration: vi.fn(),
+    });
+    expect(disabled.mode).toBe('disabled');
+    expect(disabled.session).toBeNull();
+
+    await expect(resolveActorProxySession({ proxyUrls: ['http://custom:8080'] }, {
+      isAtHome: true,
+      createProxyConfiguration: vi.fn(async () => { throw new Error('bad custom proxy'); }),
+    })).rejects.toThrow('bad custom proxy');
   });
 });

@@ -1,0 +1,35 @@
+name: Apify Actor Health
+
+on:
+  schedule:
+    - cron: '17 3,15 * * *'
+  workflow_dispatch:
+    inputs:
+      force_probe:
+        description: Run a live Actor probe even when notice is NONE
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apify-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check Actor health
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: Check and recover Apify Actor status
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          FORCE_PROBE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_probe && 'true' || 'false' }}
+        run: node scripts/apify-health.mjs

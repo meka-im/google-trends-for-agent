@@ -212,15 +212,16 @@ export function createTools(options: ToolsOptions = {}): GtfaTool[] {
   const scoped = (context: ToolCallContext | undefined, timeoutMs?: number) => {
     throwIfAborted(context?.signal);
     const signal = context?.signal ?? options.signal;
+    const effectiveDefaultMaxRetries = context?.maxRetries === 0 ? 0 : options.defaultMaxRetries;
     const scopedTransport: Transport = signal
       ? request => transport({ ...request, signal })
       : transport;
-    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool' });
+    const client = new TrendsClient({ ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool', ...(effectiveDefaultMaxRetries !== undefined ? { defaultMaxRetries: effectiveDefaultMaxRetries } : {}) });
     const query = (input: unknown) => {
       const body = input && typeof input === 'object' ? { ...(input as Record<string, unknown>) } : {};
       return queryTrends(timeoutMs !== undefined ? { ...body, timeoutMs } : input, { client, signal });
     };
-    return { client, query, shared: { ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool' as const, ...(timeoutMs !== undefined ? { timeoutMs } : {}) } };
+    return { client, query, shared: { ...options, transport: scopedTransport, limiter, signal, timeoutSurface: 'tool' as const, ...(effectiveDefaultMaxRetries !== undefined ? { maxRetries: effectiveDefaultMaxRetries } : {}), ...(timeoutMs !== undefined ? { timeoutMs } : {}) } };
   };
 
   const ask: GtfaTool = {

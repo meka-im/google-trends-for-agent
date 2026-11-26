@@ -1,7 +1,7 @@
 import { Actor } from 'apify';
 import { isStandbyRun } from './http.js';
 import { ACTOR_RESPONSE_KEY, runToolRequest } from './actor-request.js';
-import { ApifyProxySession, actorProxyInput, createRotatingTransport } from './actor-proxy.js';
+import { createRotatingTransport, resolveActorProxySession } from './actor-proxy.js';
 import { createDefaultTransport, errorLabel, type Transport } from './transport.js';
 import { createTools, type GtfaTool } from './tools.js';
 import { loadBaselinesFromEnv } from './traffic.js';
@@ -40,32 +40,27 @@ try {
   const geo = geoInput.toUpperCase() === 'WORLDWIDE' ? '' : geoInput;
   const anchor = text(input.anchor, '');
   const baselines = await loadBaselinesFromEnv();
-  const proxyInput = actorProxyInput(input.proxyConfiguration);
-  const hasCustomProxy = Array.isArray(proxyInput.proxyUrls) && proxyInput.proxyUrls.length > 0;
-
   let proxyTransport: Transport | undefined;
-  if (Actor.isAtHome() || hasCustomProxy) {
-    // Reuse the Actor SDK's proxy configuration and the existing HTTPS_PROXY path;
-    // only the URL (and later the session id) is new here.
-    const proxyConfiguration = await Actor.createProxyConfiguration(proxyInput as never);
-    if (proxyConfiguration) {
-      const session = new ApifyProxySession(proxyConfiguration);
-      const url = await session.rotate();
-      if (url) {
-        proxyTransport = createRotatingTransport(session, {
-          createTransport: proxyUrl => createDefaultTransport({ HTTPS_PROXY: proxyUrl }),
-          onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : reason === 'challenge' ? 'a Google challenge' : 'a failed proxy connection'}.`),
-          onError: error => console.error(`Proxy rotation failed; keeping the current egress (${errorLabel(error)}).`),
-        });
-        console.log('Egress: Apify proxy (rotates on HTTP 429 or a Google challenge).');
-      } else if (Actor.isAtHome()) {
-        throw new Error('Apify proxy returned no URL. Check that the selected proxy group and country are available to this account.');
-      } else {
-        console.warn('Apify proxy is unavailable locally; continuing with direct egress.');
-      }
-    } else {
-      console.log('Egress: direct (proxy disabled in Actor input).');
-    }
+  const resolvedProxy = await resolveActorProxySession(input.proxyConfiguration, {
+    isAtHome: Actor.isAtHome(),
+    createProxyConfiguration: cfg => Actor.createProxyConfiguration(cfg as never),
+    onFallback: message => console.warn(message),
+  });
+  if (resolvedProxy.session) {
+    proxyTransport = createRotatingTransport(resolvedProxy.session, {
+      createTransport: proxyUrl => createDefaultTransport({ HTTPS_PROXY: proxyUrl }),
+      onRotate: reason => console.log(`Rotated Apify proxy session after ${reason === 'rate_limited' ? 'HTTP 429' : reason === 'challenge' ? 'a Google challenge' : 'a failed proxy connection'}.`),
+      onError: error => console.error(`Proxy rotation failed; keeping the current egress (${errorLabel(error)}).`),
+    });
+    console.log(
+      resolvedProxy.mode === 'fallback-auto-proxy'
+        ? 'Egress: default Apify proxy fallback (rotates on HTTP 429 or a Google challenge).'
+        : 'Egress: Apify proxy (rotates on HTTP 429 or a Google challenge).',
+    );
+  } else if (resolvedProxy.mode === 'disabled') {
+    console.log('Egress: direct (proxy disabled in Actor input).');
+  } else if (resolvedProxy.mode === 'direct-fallback') {
+    console.log('Egress: direct fallback (Apify proxy unavailable).');
   } else {
     console.log('Egress: direct (outside the Apify platform).');
   }
@@ -73,6 +68,7 @@ try {
   const snapshotDir = process.env.GTFA_SNAPSHOT_DIR || '/tmp/gtfa/snapshots';
   const chartDir = process.env.GTFA_CHART_DIR || '/tmp/gtfa/charts';
   const relayTransport = proxyTransport ?? createDefaultTransport();
+  const retryOptions = proxyTransport ? { defaultMaxRetries: 2 as const } : {};
   const tools: GtfaTool[] = createTools({
     transport: relayTransport,
     defaultGeo: geo,
@@ -81,12 +77,13 @@ try {
     snapshotDir,
     chartDir,
     minIntervalMs: 1500,
+    ...retryOptions,
   });
 
   if (input.toolRequest !== undefined) {
     const response = await runToolRequest(input.toolRequest, {
       snapshotDir, chartDir,
-      create: settings => createTools({ ...settings, settings: () => settings, transport: relayTransport, minIntervalMs: 1500 }),
+      create: settings => createTools({ ...settings, settings: () => settings, transport: relayTransport, minIntervalMs: 1500, ...retryOptions }),
     });
     await Actor.setValue(ACTOR_RESPONSE_KEY, response);
     await Actor.exit();

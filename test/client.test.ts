@@ -295,4 +295,31 @@ describe('safe error labels and bounded retries', () => {
     expect(bad.error?.code).toBe('TRENDS_PROTOCOL_CHANGED');
     expect(bad.error?.message).toContain('newer gtfa');
   });
+
+  it('honors defaultMaxRetries unless raw input specifies maxRetries explicitly', async () => {
+    let calls = 0;
+    const ok = fixtureTransport();
+    const flakyThenOk: Transport = async req => (++calls <= 2 ? response('', 429) : ok.transport(req));
+    const client = new TrendsClient({
+      transport: flakyThenOk,
+      minIntervalMs: 0,
+      sleep: async () => {},
+      defaultMaxRetries: 2,
+    });
+    const recovered = await client.query({ queries: ['bitcoin'], dataTypes: ['interestOverTime'] });
+    expect(recovered.status).toBe('ok');
+    expect(calls).toBe(3);
+
+    calls = 0;
+    const always429 = vi.fn<Transport>().mockResolvedValue(response('', 429));
+    const clientNoOverride = new TrendsClient({
+      transport: always429,
+      minIntervalMs: 0,
+      sleep: async () => {},
+      defaultMaxRetries: 2,
+    });
+    const noRetry = await clientNoOverride.query({ queries: ['bitcoin'], dataTypes: ['interestOverTime'], maxRetries: 0 });
+    expect(noRetry.error?.code).toBe('RATE_LIMITED');
+    expect(always429).toHaveBeenCalledTimes(1);
+  });
 });

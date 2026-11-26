@@ -1,5 +1,6 @@
 import {
   createDefaultTransport,
+  errorLabel,
   isChallengeResponse,
   isRateLimitResponse,
   type Transport,
@@ -22,6 +23,77 @@ export function actorProxyInput(value: unknown): ActorProxyInput {
 
 export interface ProxyUrlProvider {
   newUrl(sessionId?: string | number): Promise<string | undefined>;
+}
+
+export interface ResolvedActorProxy {
+  session: ApifyProxySession | null;
+  mode: 'requested' | 'fallback-auto-proxy' | 'direct-fallback' | 'disabled' | 'local-direct';
+  fallbackReason?: string;
+}
+
+export interface ResolveActorProxyDeps {
+  isAtHome: boolean;
+  createProxyConfiguration: (input: ActorProxyInput) => Promise<ProxyUrlProvider | undefined>;
+  onFallback?: (message: string) => void;
+}
+
+/**
+ * Initialize an Apify proxy session with bounded fallback so callers or automated
+ * test accounts lacking RESIDENTIAL proxy permissions fall back cleanly instead of
+ * failing before querying Google Trends. Explicit custom `proxyUrls` still fail fast.
+ */
+export async function resolveActorProxySession(rawInput: unknown, deps: ResolveActorProxyDeps): Promise<ResolvedActorProxy> {
+  const proxyInput = actorProxyInput(rawInput);
+  const hasCustomProxy = Array.isArray(proxyInput.proxyUrls) && proxyInput.proxyUrls.length > 0;
+  const explicitlyDisabled = Boolean(
+    rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+    && (rawInput as Record<string, unknown>).useApifyProxy === false
+    && !hasCustomProxy,
+  );
+  if (explicitlyDisabled) return { session: null, mode: 'disabled' };
+  if (!deps.isAtHome && !hasCustomProxy) return { session: null, mode: 'local-direct' };
+
+  const tryInit = async (cfg: ActorProxyInput): Promise<ApifyProxySession | null> => {
+    const provider = await deps.createProxyConfiguration(cfg);
+    if (!provider) return null;
+    const session = new ApifyProxySession(provider);
+    const url = await session.rotate();
+    return url ? session : null;
+  };
+
+  let lastError: unknown;
+  try {
+    const session = await tryInit(proxyInput);
+    if (session) return { session, mode: 'requested' };
+  } catch (error) {
+    lastError = error;
+  }
+
+  const reason = lastError ? errorLabel(lastError) : 'empty-url';
+  if (hasCustomProxy) {
+    throw lastError instanceof Error ? lastError : new Error('Custom proxy returned no URL.');
+  }
+  if (!deps.isAtHome) {
+    deps.onFallback?.('Apify proxy is unavailable locally; continuing with direct egress.');
+    return { session: null, mode: 'direct-fallback', fallbackReason: reason };
+  }
+
+  const constrained = (Array.isArray(proxyInput.apifyProxyGroups) && proxyInput.apifyProxyGroups.length > 0)
+    || Boolean(proxyInput.apifyProxyCountry);
+  if (constrained) {
+    try {
+      const autoSession = await tryInit({ useApifyProxy: true });
+      if (autoSession) {
+        deps.onFallback?.(`Requested Apify proxy failed (${reason}); falling back to default Apify proxy.`);
+        return { session: autoSession, mode: 'fallback-auto-proxy', fallbackReason: reason };
+      }
+    } catch {
+      // Fall through to direct egress fallback.
+    }
+  }
+
+  deps.onFallback?.('Apify proxy unavailable for this account; falling back to direct egress.');
+  return { session: null, mode: 'direct-fallback', fallbackReason: reason };
 }
 
 /**
