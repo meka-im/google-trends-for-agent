@@ -155,7 +155,7 @@ describe('Apify client helpers and OAuth URL validation', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth-start', expect.objectContaining({ method: 'POST', cache: 'no-store' }));
   });
 
-  it('registers plugins.bundle.config for 1-click settings navigation via openBundle', () => {
+  it('registers plugins.row.config cleanly and embeds 1-click settings inside the Dashboard panel', () => {
     const registrations: Array<{ slot: string; options: Record<string, unknown>; component: (props: Record<string, unknown>) => unknown }> = [];
     const openBundle = vi.fn();
     const ctx = {
@@ -180,13 +180,14 @@ describe('Apify client helpers and OAuth URL validation', () => {
 
     apply(ctx as never);
 
-    expect(registrations.find(entry => entry.slot === 'plugins.row.config')).toBeUndefined();
-    const bundleConfig = registrations.find(entry => entry.slot === 'plugins.bundle.config');
-    expect(bundleConfig?.options).toMatchObject({ name: 'plugins.bundle.config', key: 'google-trends-for-agent' });
+    expect(registrations.find(entry => entry.slot === 'plugins.bundle.config')).toBeUndefined();
+    const rowConfig = registrations.find(entry => entry.slot === 'plugins.row.config');
+    expect(rowConfig?.options).toMatchObject({ name: 'plugins.row.config', key: 'google-trends-for-agent#gtfa' });
 
     const mainSlot = registrations.find(entry => entry.slot === 'main');
     expect(mainSlot).toBeDefined();
-    const element = mainSlot!.component({}) as { props: { openSettings: () => void } };
+    const element = mainSlot!.component({}) as { props: { openSettings: () => void; renderSettings?: () => unknown } };
+    expect(typeof element.props.renderSettings).toBe('function');
     element.props.openSettings();
     expect(openBundle).toHaveBeenCalledWith('google-trends-for-agent');
   });

@@ -279,7 +279,7 @@ describe('dashboard interactions', () => {
     expect(h.queries()).toHaveLength(beforeQueries);
   });
 
-  it('shows a prominent switch-to-Actor callout on local rate-limit failure without empty volume card clutter', async () => {
+  it('shows a concise local rate-limit banner with Actor switch CTA and clean failed-state details', async () => {
     const id = '00000000-0000-4000-8000-000000000429';
     const createdAt = new Date().toISOString();
     const failedRecord: QueryRecord = {
@@ -302,27 +302,33 @@ describe('dashboard interactions', () => {
 
     const openSettings = vi.fn();
     const user = userEvent.setup();
-    const { container } = render(<Dashboard t={t} openSettings={openSettings} />);
+    const { container } = render(<Dashboard t={t} openSettings={openSettings} renderSettings={() => <div data-testid="embedded-settings">Embedded Settings Form</div>} />);
     await screen.findByText('v0.2.44');
 
     const alert = await screen.findByRole('alert');
     expect(alert.className).toContain('gd-local-alert');
     expect(alert.textContent).toContain(DASHBOARD_EN.dashLocalFailRateLimited);
-    expect(alert.textContent).toContain('Public Actor');
-    expect(alert.textContent).toContain('My own Actor');
-    expect(alert.textContent).toContain('HTTP 429');
+    expect(alert.textContent).toContain(DASHBOARD_EN.dashLocalFailBody);
+    // Raw technical detail lives inside expanded Query details rather than bloating the top banner.
+    expect(alert.textContent).not.toContain('HTTP 429');
 
     // No redundant bottom .gd-error bar, no misleading "Insufficient comparison data" pills, and no empty volume cards.
     expect(container.querySelector('.gd-error')).toBeNull();
     expect(screen.queryByText(DASHBOARD_EN.dashNoSharedSeries)).toBeNull();
     expect(screen.queryByText(DASHBOARD_EN.dashDailyVolume)).toBeNull();
 
-    // Query details is expanded automatically on failed queries.
+    // Query details is expanded automatically and holds the raw error detail cleanly.
     const details = container.querySelector('.gd-query-details') as HTMLDetailsElement;
     expect(details.open).toBe(true);
+    expect(details.textContent).toContain('HTTP 429');
 
+    // 1-click CTA opens the clean embedded settings view directly without calling navigation.openBundle.
     await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashLocalFailCta }));
-    expect(openSettings).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('embedded-settings')).toBeDefined();
+    expect(openSettings).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashBackToQuery }));
+    expect(screen.queryByTestId('embedded-settings')).toBeNull();
   });
 
   it('keeps dashboard English/Chinese dictionaries in sync and removes the !important error margin override', () => {

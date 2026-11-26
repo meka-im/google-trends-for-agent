@@ -1,7 +1,7 @@
 /**
  * Browser half of the gtfa dsh plugin.
  *
- * dsh's Plugins page renders a plugin's own page from `plugins.bundle.config`.
+ * dsh's Plugins page renders the standalone settings page via `plugins.row.config`.
  * The page reads the Host's Config-derived form (only `.volatile()` fields are
  * exposed) and writes path operations. `role('secret')` redacts the Apify token
  * on reads; a submitted token is persisted by dsh in the profile's
@@ -1836,15 +1836,28 @@ export function ApifyOAuthCard({
 
 function ApifySignupBar({ t }: { t: Translate; locale: string }) {
   return <aside className="gtfa-free-credit" aria-label={template(t('signupCredit'), { amount: APIFY_FREE_MONTHLY_CREDIT_USD })}>
+    <svg className="gtfa-credit-art" viewBox="0 0 260 120" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="gtfa-credit-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.24" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="M18 96 L64 78 L108 86 L154 52 L198 62 L248 22 L248 120 L18 120 Z" fill="url(#gtfa-credit-fill)" />
+      <path d="M18 96 L64 78 L108 86 L154 52 L198 62 L248 22" stroke="rgba(255,255,255,.32)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="248" cy="22" r="3.5" fill="rgba(255,255,255,.65)" />
+    </svg>
     <div className="gtfa-free-credit-copy">
-      <span className="gtfa-credit-eyebrow">{t('signupPlan')}</span>
-      <div className="gtfa-credit-value"><strong>${APIFY_FREE_MONTHLY_CREDIT_USD}</strong><span>{t('signupMonthly')}</span></div>
-      <p className="gtfa-free-credit-estimate">{t('signupEstimate')}</p>
+      <div className="gtfa-free-credit-main">
+        <span className="gtfa-credit-eyebrow">{t('signupPlan')}</span>
+        <div className="gtfa-credit-value"><strong>${APIFY_FREE_MONTHLY_CREDIT_USD}</strong><span>{t('signupMonthly')}</span></div>
+        <p className="gtfa-free-credit-estimate">{t('signupEstimate')}</p>
+        <small>{t('signupCreditNote')}</small>
+      </div>
       <div className="gtfa-free-credit-actions">
         <a className="gtfa-credit-cta" href={APIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('signupAction')}</a>
         <a className="gtfa-credit-pricing" href={APIFY_PRICING_URL} target="_blank" rel="noopener noreferrer">{t('pricingAction')}</a>
       </div>
-      <small>{t('signupCreditNote')}</small>
     </div>
   </aside>;
 }
@@ -2154,6 +2167,8 @@ function SectionHeader({ title, description, icon }: { title: string; descriptio
 export interface ConfigPageProps {
   ctx: ClientContext;
   t: Translate;
+  /** Called after saving configuration so embedded hosts can refresh immediately. */
+  onSaved?: () => void;
   /** Test seam: start from an edited draft for server-render coverage. */
   initialDraft?: Partial<Draft>;
   /** Test seam: start the usage card in a specific state for server-render coverage. */
@@ -2169,8 +2184,7 @@ export interface ConfigPageProps {
 }
 
 /** Settings page. Exported for server-render tests. */
-export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors', initialAdvancedOpen = false }: ConfigPageProps) {
-  const formRef = useRef<HTMLFormElement>(null);
+export function ConfigPage({ ctx, t, onSaved, initialDraft, initialUsage, initialActors, initialOAuth, initialAdvancedTab = 'anchors', initialAdvancedOpen = false }: ConfigPageProps) {
   const form = useMemo(() => ctx.configForms.get<Record<string, unknown>>(ENTRY), [ctx]);
   const describe = useMemo(() => ctx.configForms.describe(), [ctx]);
   const snapshot = useStore(form);
@@ -2469,27 +2483,6 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   }, [building, actors, deployTarget, t]);
 
   const edit = (patch: Partial<Draft>) => { setTestResult(null); setDraft(current => ({ ...current, ...patch })); };
-
-  useEffect(() => {
-    let timers: number[] = [];
-    const scrollToForm = () => {
-      if (!pendingSettingsScroll || snapshot.status !== 'ready') return;
-      pendingSettingsScroll = false;
-      const run = () => {
-        const el = formRef.current;
-        if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start', behavior: 'instant' });
-      };
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-      else run();
-      timers.push(window.setTimeout(run, 180));
-    };
-    scrollToForm();
-    settingsScrollListeners.add(scrollToForm);
-    return () => {
-      settingsScrollListeners.delete(scrollToForm);
-      for (const timer of timers) clearTimeout(timer);
-    };
-  }, [snapshot.status]);
   const editAnchor = (index: number, patch: Partial<AnchorDraft>) => setDraft(current => ({
     ...current,
     anchors: current.anchors.map((anchor, i) => i === index ? { ...anchor, ...patch } : anchor),
@@ -2582,6 +2575,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
         setDraft(cleaned);
         setBaseline(draftKey(cleaned));
         setNotice(t('saved'));
+        onSaved?.();
         if (draft.egress !== 'local' && (tokenChanged || egressChanged)) {
           requestUsage(false);
           if (draft.egress === 'actor-own') requestActors(true);
@@ -2769,7 +2763,7 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
     };
   }, [versionStatus, draft.egress, draft.actor]);
 
-  return <form ref={formRef} className="gtfa-settings" style={{ ...styles.page, scrollMarginTop: 20 }} onSubmit={event => { event.preventDefault(); void save(); }}>
+  return <form className="gtfa-settings" style={styles.page} onSubmit={event => { event.preventDefault(); void save(); }}>
     <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
     <UpdateBanner
       surface="settings"
@@ -2996,37 +2990,31 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   </form>;
 }
 
-let pendingSettingsScroll = false;
-const settingsScrollListeners = new Set<() => void>();
-function requestSettingsScroll(): void {
-  pendingSettingsScroll = true;
-  for (const notify of settingsScrollListeners) notify();
-}
-
 function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view?: 'summary' | 'page' }) {
   return view === 'summary' ? <>{t('summary')}</> : <ConfigPage ctx={ctx} t={t} />;
 }
 
-/** Register the bundle configuration page directly so 1-click navigation lands on the settings form. */
+/** Register standalone row settings in Plugins and embed the same settings directly inside the Dashboard for 1-click access. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { en: { ...EN, ...DASHBOARD_EN }, zh: { ...ZH, ...DASHBOARD_ZH } }), 'gtfa: dictionaries');
   const t = ctx.locale.bind(NS);
   const dashboard = new DashboardController();
   ctx.effect(() => () => dashboard.dispose(), 'gtfa: dashboard query lifecycle');
   ctx.effect(() => {
-    ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-      name: 'plugins.bundle.config',
-      key: PACKAGE,
+    ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+      name: 'plugins.row.config',
+      key: `${PACKAGE}#${ENTRY}`,
       locale: NS,
     }, (props: PluginConfigViewProps) => <ConfigView ctx={ctx} t={t} view={props.view} />));
-  }, 'gtfa: bundle configuration page');
+  }, 'gtfa: row configuration page');
   ctx.effect(() => {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'google-trends', locale: NS },
-      () => <Dashboard t={t} controller={dashboard} openSettings={() => {
-        requestSettingsScroll();
-        const navigation = ctx.get?.('pluginNavigation') as { openBundle?: (name: string) => void } | undefined;
-        navigation?.openBundle?.(PACKAGE);
-      }} />));
+      () => <Dashboard t={t} controller={dashboard}
+        renderSettings={() => <ConfigPage ctx={ctx} t={t} onSaved={() => { void dashboard.refresh(); }} />}
+        openSettings={() => {
+          const navigation = ctx.get?.('pluginNavigation') as { openBundle?: (name: string) => void } | undefined;
+          navigation?.openBundle?.(PACKAGE);
+        }} />));
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'google-trends', order: 25, label: () => t('dashboardTitle'), locale: NS },
       (props: { size?: number }) => <TrendsMark size={props.size ?? 20} />));
   }, 'gtfa: dashboard and sidebar');

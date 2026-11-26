@@ -298,7 +298,7 @@ function HistorySummaryStrip({ records, actorRuns, mode, days, setDays, loading,
   </div>;
 }
 
-export function Dashboard({ t, openSettings, controller: supplied }: { t: Translate; openSettings?: () => void; controller?: DashboardController }) {
+export function Dashboard({ t, openSettings, renderSettings, controller: supplied }: { t: Translate; openSettings?: () => void; renderSettings?: () => ReactNode; controller?: DashboardController }) {
   const own = useRef<DashboardController | null>(null);
   if (!supplied && !own.current) own.current = new DashboardController();
   const controller = supplied ?? own.current!;
@@ -323,6 +323,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
   const setRunSource = (value: string) => controller.set('runSource', value);
   const setRunPage = (value: number) => controller.set('runPage', value);
   const [clearing, setClearing] = useState<string[] | null>(null), [deleting, setDeleting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [versionStatus, setVersionStatus] = useState<VersionStatusSnapshot | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(() => readDismissedUpdateKey());
   const [copiedRunId, setCopiedRunId] = useState<string | null>(null);
@@ -403,12 +404,14 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
     writeDismissedUpdateKey(currentDismissKey);
     setDismissedKey(currentDismissKey);
   };
+  const canOpenSettings = Boolean(renderSettings || openSettings);
+  const handleOpenSettings = renderSettings ? () => { setSettingsOpen(true); } : openSettings;
   const reopenUpdate = () => {
     if (updateDismissed) {
       writeDismissedUpdateKey(null);
       setDismissedKey(null);
-    } else if (updateMode !== 'up-to-date' && openSettings) {
-      openSettings();
+    } else if (updateMode !== 'up-to-date' && handleOpenSettings) {
+      handleOpenSettings();
     }
   };
   return <div className="gtfa-settings gtfa-dashboard"><style>{SETTINGS_CSS + DASHBOARD_CSS}</style>
@@ -418,14 +421,28 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault(); const tabs = ['query', 'records'] as const, index = tabs.indexOf(tab);
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : (index + 1) % 2;
-        setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
-      }}>{(['query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} key={key} onClick={() => { setTab(key); void refresh(); }}>{t(key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
+        setSettingsOpen(false); setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
+      }}>{(['query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={!settingsOpen && tab === key} tabIndex={!settingsOpen && tab === key ? 0 : -1} key={key} onClick={() => { setSettingsOpen(false); setTab(key); void refresh(); }}>{t(key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
       <div className="gd-topbar-right">
-        {state ? <button type="button" className="gd-route-pill" disabled={!openSettings} onClick={openSettings}><i className={`gd-route-dot${actorWarnDot ? ' warn' : ''}`} />{egressLabel(state.settings.egress, t)}</button> : null}
-        <Button compact disabled={!openSettings} onClick={openSettings}><Icon name="sliders" size={14} />{t('dashSettings')}</Button>
+        {state ? <button type="button" className="gd-route-pill" disabled={!canOpenSettings} onClick={handleOpenSettings}><i className={`gd-route-dot${actorWarnDot ? ' warn' : ''}`} />{egressLabel(state.settings.egress, t)}</button> : null}
+        <button type="button" className={`gd-button compact${settingsOpen ? ' active' : ''}`} disabled={!canOpenSettings}
+          aria-pressed={renderSettings ? settingsOpen : undefined}
+          onClick={renderSettings ? () => setSettingsOpen(open => !open) : openSettings}>
+          <Icon name="sliders" size={14} />{t('dashSettings')}
+        </button>
       </div>
     </header>
     <div className="gd-workspace">
+      {settingsOpen && renderSettings ? <section className="gd-settings-view" aria-label={t('dashSettings')}>
+        <div className="gd-settings-bar">
+          <button type="button" className="gd-button compact" onClick={() => { setSettingsOpen(false); void refresh(); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            {t('dashBackToQuery')}
+          </button>
+          <h2>{t('dashSettings')}</h2>
+        </div>
+        {renderSettings()}
+      </section> : <>
       <UpdateBanner
         surface="dashboard"
         status={versionStatus}
@@ -434,8 +451,8 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
         egressOverride={state?.settings.egress}
         dismissed={updateDismissed}
         onDismiss={dismissUpdate}
-        onUpdateActor={openSettings}
-        onSwitchPublic={openSettings}
+        onUpdateActor={handleOpenSettings}
+        onSwitchPublic={handleOpenSettings}
       />
       {error ? <div className="gd-error" role="alert">{t(error)}<Button compact disabled={loading} onClick={() => { void refresh(); }}>{t('dashRefresh')}</Button></div> : null}
       {operation && tab !== 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
@@ -461,7 +478,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
           </div>
         </div>
         {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} openSettings={openSettings} t={t} /> : <div className="gd-card gd-empty">
+        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} openSettings={handleOpenSettings} t={t} /> : <div className="gd-card gd-empty">
           <Icon name="chart" size={30} />
           <h3>{t('dashEmptyResult')}</h3>
           <p>{t('dashEmptyHint')}</p>
@@ -562,6 +579,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
       </section>
       <footer className="gd-footer"><span>{t(tab === 'records' && recordsMode === 'runs' ? 'dashLedgerNote' : 'dashHistoryLimit')}</span>{state ? (updateMode !== 'up-to-date' ? <button type="button" className="gd-footer-ver" onClick={reopenUpdate}><span>v{state.version}</span><span className={`gd-footer-dot${actorWarnDot ? ' warn' : ''}`} /><span className={`gd-footer-tag${actorWarnDot ? ' warn' : ''}`}>{updateMode === 'actor-outdated' && versionStatus?.observedActor ? t('updateFooterActorOld').replace('{version}', versionStatus.observedActor.version) : updateFlags?.targetPluginVersion ? t('updateFooterAvailable').replace('{version}', updateFlags.targetPluginVersion) : t('updatePluginTitle')}</span></button> : <span>v{state.version}</span>) : <span>{t('dashLoading')}</span>}</footer>
       {clearing ? <ClearDialog count={clearing.length} t={t} busy={deleting} cancel={() => { if (!deleting) setClearing(null); }} confirm={() => { void clear(); }} /> : null}
+      </>}
     </div>
   </div>;
 }
@@ -708,8 +726,8 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   </div>;
 }
 
-function LocalFailureBanner({ errorCode, errorMessage, t, openSettings }: {
-  errorCode: string | null; errorMessage: string | null; t: Translate; openSettings?: () => void;
+function LocalFailureBanner({ errorCode, t, openSettings }: {
+  errorCode: string | null; t: Translate; openSettings?: () => void;
 }) {
   const titleKey = errorCode === 'RATE_LIMITED'
     ? 'dashLocalFailRateLimited'
@@ -718,20 +736,13 @@ function LocalFailureBanner({ errorCode, errorMessage, t, openSettings }: {
       : 'dashLocalFailGeneric';
   return <section className="gd-local-alert" role="alert">
     <div className="gd-local-alert-main">
-      <span className="gd-local-alert-icon"><Icon name="alert" size={18} /></span>
+      <span className="gd-local-alert-icon"><Icon name="alert" size={17} /></span>
       <div className="gd-local-alert-copy">
         <div className="gd-local-alert-head">
           <h3>{t(titleKey)}</h3>
           {errorCode ? <span className="gd-local-alert-code">{errorCode}</span> : null}
         </div>
         <p>{t('dashLocalFailBody')}</p>
-        <div className="gd-local-alert-chips">
-          <span className="gd-local-alert-chip"><Icon name="cloud" size={13} />{t('dashLocalFailOptionPublic')}</span>
-          <span className="gd-local-alert-chip"><Icon name="server" size={13} />{t('dashLocalFailOptionOwn')}</span>
-        </div>
-        {errorMessage ? <p className="gd-local-alert-detail">
-          <span>{t('dashRawErrorLabel')}: </span><code>{errorMessage}</code>
-        </p> : null}
       </div>
     </div>
     <button type="button" className="gd-button primary gd-local-alert-cta" disabled={!openSettings} onClick={openSettings}>
@@ -807,10 +818,10 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  if (record.tool === 'trends_now') return <div className="gd-results">{isLocalFailure ? <LocalFailureBanner errorCode={errorCode} errorMessage={errorMessage} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
+  if (record.tool === 'trends_now') return <div className="gd-results">{isLocalFailure ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
   const showLegend = !failedEmpty && (legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length));
   return <div className="gd-results">
-    {isLocalFailure ? <LocalFailureBanner errorCode={errorCode} errorMessage={errorMessage} t={t} openSettings={openSettings} /> : null}
+    {isLocalFailure ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}
     <div className="gd-result-grid">
       <article className="gd-card gd-chart-card">
         <div className="gd-result-head">
@@ -887,7 +898,7 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
             <span>{t('dashQueryStatus')}</span>
             <span className="gd-badge blocked">{errorCode}</span>
           </div> : null}
-          <details className="gd-query-details" open={!result.ok}><summary><span>{t('dashQueryDetails')}</span><svg className="gd-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></summary><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')], [t('dashDetailActorCost'), costSummaryValue]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{costInfo.runs.length > 0 ? <div className="gd-detail-runs"><span className="gd-detail-runs-head">{t('dashDetailRunsList')} ({costInfo.runs.length})</span>{costInfo.runs.map(item => <div className="gd-detail-run-row" key={item.runId}><span className="gd-detail-run-meta"><span>{runPurposeText(item, t)}{item.anchor ? ` · ${t('dashAnchorTag')} ${item.anchor}` : ''}</span><code>{shortRunId(item.runId)}</code></span><span className="gd-detail-run-cost" title={exactCostTitle(item.costUsd)}>{item.costUsd !== null ? formatCostUsd(item.costUsd) : t('dashCostPending')}</span></div>)}</div> : null}</details>
+          <details className="gd-query-details" open={!result.ok}><summary><span>{t('dashQueryDetails')}</span><svg className="gd-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></summary><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')], [t('dashDetailActorCost'), costSummaryValue], ...(errorMessage ? [[t('dashRawErrorLabel'), errorMessage]] : [])].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{costInfo.runs.length > 0 ? <div className="gd-detail-runs"><span className="gd-detail-runs-head">{t('dashDetailRunsList')} ({costInfo.runs.length})</span>{costInfo.runs.map(item => <div className="gd-detail-run-row" key={item.runId}><span className="gd-detail-run-meta"><span>{runPurposeText(item, t)}{item.anchor ? ` · ${t('dashAnchorTag')} ${item.anchor}` : ''}</span><code>{shortRunId(item.runId)}</code></span><span className="gd-detail-run-cost" title={exactCostTitle(item.costUsd)}>{item.costUsd !== null ? formatCostUsd(item.costUsd) : t('dashCostPending')}</span></div>)}</div> : null}</details>
         </div>
         {hasRelated ? <div className="gd-card gd-related-card">
           <div className="gd-related-head">

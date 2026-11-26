@@ -123,7 +123,7 @@ allowBuilds:
   "google-trends-for-agent@https://codeload.github.com/meka-im/google-trends-for-agent/tar.gz/<commit>": true
 ```
 
-The plugin is enabled by default after install. Open **Plugins → Google Trends** (or click **Plugin settings** in the **Google Trends** panel) to open the settings page directly. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed.
+The plugin is enabled by default after install. Click **Plugin settings** directly in the **Google Trends** panel—or open **Plugins → Google Trends → Components → Google Trends / gtfa**—for the standalone settings page. In the **Connection** section, use the three-way **Egress** control to pick **Local (this machine)**, **Public Actor**, or **My own Actor**. Click **Save** to apply egress changes; no restart is needed.
 
 ### Apify OAuth and credential resolution
 
