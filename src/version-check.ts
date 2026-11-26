@@ -4,7 +4,7 @@ import { GTFA_SOURCE_URL, type EgressMode } from './options.js';
 
 export const GTFA_RELEASES_URL = `${GTFA_SOURCE_URL}/releases`;
 export const GTFA_LATEST_RELEASE_API_URL = 'https://api.github.com/repos/meka-im/google-trends-for-agent/releases/latest';
-export const GTFA_UPGRADE_COMMAND = 'dsh plugin --profile web add github:meka-im/google-trends-for-agent';
+export const GTFA_UPGRADE_COMMAND = 'dsh plugin --profile web add google-trends-for-agent@latest';
 export const VERSION_STATUS_PATH = '/api/gtfa.version';
 
 export interface ReleaseInfo {

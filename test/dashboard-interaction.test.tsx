@@ -410,4 +410,30 @@ describe('dashboard interactions', () => {
     finishSecond();
     await screen.findByRole('heading', { name: 'poke' });
   });
+
+  it('shows a 1-click Open settings banner when an Actor query fails due to missing Apify auth', async () => {
+    const id = '00000000-0000-4000-8000-000000000401';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['ChatGPT', 'Claude'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'actor-public', status: 'error', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 400, actorRunId: null, costUsd: 0, errorCode: 'INVALID_INPUT',
+    };
+    const failedResult = {
+      ok: false, status: 'error', onDemand: true, series: [],
+      error: { code: 'INVALID_INPUT', message: 'Apify rejected the token or OAuth session. Sign in again.' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const user = userEvent.setup();
+    const { container } = render(<Dashboard t={t} renderSettings={() => <div data-testid="embedded-settings">Settings</div>} />);
+    await screen.findByText(DASHBOARD_EN.dashActorSetupTitle);
+    expect(container.querySelector('.gd-error')).toBeNull();
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashActorSetupCta }));
+    expect(screen.getByTestId('embedded-settings')).toBeDefined();
+  });
 });

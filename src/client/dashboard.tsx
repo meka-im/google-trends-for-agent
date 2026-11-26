@@ -407,6 +407,10 @@ export function Dashboard({ t, openSettings, renderSettings, controller: supplie
   };
   const canOpenSettings = Boolean(renderSettings || openSettings);
   const handleOpenSettings = renderSettings ? () => { setSettingsOpen(true); } : openSettings;
+  const closeSettings = () => {
+    setSettingsOpen(false);
+    void refresh();
+  };
   const reopenUpdate = () => {
     if (updateDismissed) {
       writeDismissedUpdateKey(null);
@@ -422,13 +426,15 @@ export function Dashboard({ t, openSettings, renderSettings, controller: supplie
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault(); const tabs = ['query', 'records'] as const, index = tabs.indexOf(tab);
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : (index + 1) % 2;
-        setSettingsOpen(false); setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
+        if (settingsOpen) closeSettings();
+        else setSettingsOpen(false);
+        setTab(tabs[next]!); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
       }}>{(['query', 'records'] as const).map(key => <button type="button" role="tab" id={`gd-tab-${key}`} aria-controls={`gd-panel-${key}`} aria-selected={!settingsOpen && tab === key} tabIndex={!settingsOpen && tab === key ? 0 : -1} key={key} onClick={() => { setSettingsOpen(false); setTab(key); void refresh(); }}>{t(key === 'query' ? 'dashQuery' : 'dashRecords')}{key === 'records' ? <small>{records.length}</small> : null}</button>)}</nav>
       <div className="gd-topbar-right">
         {state ? <button type="button" className="gd-route-pill" disabled={!canOpenSettings} onClick={handleOpenSettings}><i className={`gd-route-dot${actorWarnDot ? ' warn' : ''}`} />{egressLabel(state.settings.egress, t)}</button> : null}
         <button type="button" className={`gd-button compact${settingsOpen ? ' active' : ''}`} disabled={!canOpenSettings}
           aria-pressed={renderSettings ? settingsOpen : undefined}
-          onClick={renderSettings ? () => setSettingsOpen(open => !open) : openSettings}>
+          onClick={renderSettings ? () => { if (settingsOpen) closeSettings(); else setSettingsOpen(true); } : openSettings}>
           <Icon name="sliders" size={14} />{t('dashSettings')}
         </button>
       </div>
@@ -436,7 +442,7 @@ export function Dashboard({ t, openSettings, renderSettings, controller: supplie
     <div className="gd-workspace">
       {settingsOpen && renderSettings ? <section className="gd-settings-view" aria-label={t('dashSettings')}>
         <div className="gd-settings-bar">
-          <button type="button" className="gd-button compact" onClick={() => { setSettingsOpen(false); void refresh(); }}>
+          <button type="button" className="gd-button compact" onClick={closeSettings}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
             {t('dashBackToQuery')}
           </button>
@@ -755,6 +761,26 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   </div>;
 }
 
+function ActionAlertBanner({ title, body, badge, ctaLabel, onAction }: {
+  title: string; body: string; badge?: string | null; ctaLabel: string; onAction?: () => void;
+}) {
+  return <section className="gd-local-alert" role="alert">
+    <div className="gd-local-alert-main">
+      <span className="gd-local-alert-icon"><Icon name="alert" size={17} /></span>
+      <div className="gd-local-alert-copy">
+        <div className="gd-local-alert-head">
+          <h3>{title}</h3>
+          {badge ? <span className="gd-local-alert-code">{badge}</span> : null}
+        </div>
+        <p>{body}</p>
+      </div>
+    </div>
+    <button type="button" className="gd-button primary gd-local-alert-cta" disabled={!onAction} onClick={onAction}>
+      <Icon name="sliders" size={14} />{ctaLabel}
+    </button>
+  </section>;
+}
+
 function LocalFailureBanner({ errorCode, t, openSettings }: {
   errorCode: string | null; t: Translate; openSettings?: () => void;
 }) {
@@ -763,21 +789,13 @@ function LocalFailureBanner({ errorCode, t, openSettings }: {
     : errorCode === 'BLOCKED'
       ? 'dashLocalFailBlocked'
       : 'dashLocalFailGeneric';
-  return <section className="gd-local-alert" role="alert">
-    <div className="gd-local-alert-main">
-      <span className="gd-local-alert-icon"><Icon name="alert" size={17} /></span>
-      <div className="gd-local-alert-copy">
-        <div className="gd-local-alert-head">
-          <h3>{t(titleKey)}</h3>
-          {errorCode ? <span className="gd-local-alert-code">{errorCode}</span> : null}
-        </div>
-        <p>{t('dashLocalFailBody')}</p>
-      </div>
-    </div>
-    <button type="button" className="gd-button primary gd-local-alert-cta" disabled={!openSettings} onClick={openSettings}>
-      <Icon name="sliders" size={14} />{t('dashLocalFailCta')}
-    </button>
-  </section>;
+  return <ActionAlertBanner
+    title={t(titleKey)}
+    body={t('dashLocalFailBody')}
+    badge={errorCode}
+    ctaLabel={t('dashLocalFailCta')}
+    onAction={openSettings}
+  />;
 }
 
 function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy, currentTerms, onRunRelated, onAddCompare, openSettings }: {
@@ -813,6 +831,13 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
   const errorMessage = typeof error.message === 'string' ? error.message : null;
   const isLocalFailure = !result.ok && record.egress === 'local' && errorCode !== 'INVALID_INPUT';
   const showLocalSwitchBanner = isLocalFailure && (!egress || egress === 'local');
+  const isActorConfigError = !result.ok && record.egress !== 'local' && errorCode === 'INVALID_INPUT'
+    && Boolean(errorMessage && /apify|actor|token|oauth|sign in/i.test(errorMessage));
+  const actionBanner = showLocalSwitchBanner
+    ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} />
+    : isActorConfigError
+      ? <ActionAlertBanner title={t('dashActorSetupTitle')} body={t('dashActorSetupBody')} badge={errorCode} ctaLabel={t('dashActorSetupCta')} onAction={openSettings} />
+      : null;
   const failedEmpty = !result.ok && chartSeries.length === 0;
   const hasRelated = !comparison && (array(tables.popular).length > 0 || array(tables.rising).length > 0);
   const isZh = t('dashGeo') === '地区';
@@ -848,10 +873,10 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  if (record.tool === 'trends_now') return <div className="gd-results">{showLocalSwitchBanner ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
+  if (record.tool === 'trends_now') return <div className="gd-results">{actionBanner}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure && !isActorConfigError ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
   const showLegend = !failedEmpty && (legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length));
   return <div className="gd-results">
-    {showLocalSwitchBanner ? <LocalFailureBanner errorCode={errorCode} t={t} openSettings={openSettings} /> : null}
+    {actionBanner}
     <div className="gd-result-grid">
       <article className="gd-card gd-chart-card">
         <div className="gd-result-head">
@@ -958,7 +983,7 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
         </div> : null}
       </aside>
     </div>
-    {errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}
+    {errorMessage && !isLocalFailure && !isActorConfigError ? <p className="gd-error" role="alert">{errorMessage}</p> : null}
     {warnings.length ? <details className="gd-warnings"><summary>{t('dashResultInfo')} · {warnings.length}</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}
   </div>;
 }

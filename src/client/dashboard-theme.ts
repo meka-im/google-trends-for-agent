@@ -353,7 +353,7 @@ export const DASHBOARD_CSS = `
 .gd-detail-run-meta{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;color:var(--gtfa-ink);font-weight:500}
 .gd-detail-run-meta code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--gtfa-muted);font-weight:400}
 .gd-detail-run-cost{font-variant-numeric:tabular-nums;font-weight:650;color:var(--gtfa-ink);white-space:nowrap}
-.gd-warnings{padding:12px 16px;border:1px solid var(--gtfa-line);border-radius:12px;margin-top:14px;font-size:11.5px;color:var(--gtfa-muted);background:var(--gtfa-surface)}
+.gd-warnings{padding:12px 16px;border:1px solid var(--gtfa-line);border-radius:12px;margin:0;font-size:11.5px;color:var(--gtfa-muted);background:var(--gtfa-surface)}
 .gd-warnings summary{cursor:pointer}
 .gd-warnings p{margin-top:8px;overflow-wrap:anywhere}
 
@@ -381,7 +381,7 @@ export const DASHBOARD_CSS = `
 }
 .gd-related-row:hover .gd-related-add,.gd-related-add:focus-visible{opacity:1;color:var(--gtfa-muted)}
 .gd-related-add:not(:disabled):hover{color:var(--gtfa-accent);background:var(--gtfa-accent-soft)}
-.gd-related{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.gd-related{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:0}
 .gd-related .gd-card{padding-bottom:10px}
 .gd-related p{display:flex;justify-content:space-between;gap:16px;padding:8px 20px;font-size:12px;border-top:1px solid var(--gtfa-soft)}
 
@@ -530,6 +530,10 @@ export const DASHBOARD_CSS = `
 .gd-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
 .gd-dialog-actions>.gd-button:last-child{color:#fff;background:#dc2626;border-color:#dc2626}
 
+@media(prefers-color-scheme:dark){
+  .gd-purpose-pill.batch-round,.gd-purpose-pill.single-retry,.gd-purpose-pill.estimate{background:color-mix(in srgb,#8b5cf6 18%,var(--gtfa-surface));color:#c4b5fd}
+  .gd-local-alert-icon,.gd-local-alert-code,.gd-error,.gd-error-code,.gd-badge.blocked,.gd-badge.error{color:var(--dsw-alias-state-error-primary,#f87171)}
+}
 @container gd (max-width:1060px){
   .gd-workspace{padding:18px 20px 24px}
   .gd-result-grid,.gd-loading-grid{grid-template-columns:1fr}
