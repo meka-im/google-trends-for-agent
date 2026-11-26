@@ -9,17 +9,19 @@ export interface TrendsResult {
   error?: { code: string; message: string; retryAfterSec?: number };
   meta: { upstreamRequests: number; durationMs: number; warnings: string[] };
 }
-export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; signal?: AbortSignal; timeoutSurface?: TimeoutSurface }
+export interface ClientOptions extends RateLimitOptions { transport?: Transport; limiter?: RateLimiter; signal?: AbortSignal; timeoutSurface?: TimeoutSurface; defaultMaxRetries?: 0 | 1 | 2 }
 export class TrendsClient {
   private readonly transport: Transport;
   private readonly limiter: RateLimiter;
   private readonly signal: AbortSignal | undefined;
   private readonly timeoutSurface: TimeoutSurface | undefined;
+  private readonly defaultMaxRetries: 0 | 1 | 2 | undefined;
   constructor(options: ClientOptions = {}) {
     this.transport = options.transport ?? createDefaultTransport();
     this.limiter = options.limiter ?? new RateLimiter(options);
     this.signal = options.signal;
     this.timeoutSurface = options.timeoutSurface;
+    this.defaultMaxRetries = options.defaultMaxRetries;
   }
   async query(raw: unknown): Promise<TrendsResult> {
     throwIfAborted(this.signal);
@@ -30,7 +32,10 @@ export class TrendsClient {
     let input: core.GTrendsInput | undefined;
     const meta = () => ({ upstreamRequests: session.upstreamRequests, durationMs: this.limiter.now() - started, warnings });
     try {
-      input = core.parseGTrendsInput(raw);
+      const effectiveRaw = this.defaultMaxRetries !== undefined && raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as Record<string, unknown>).maxRetries === undefined
+        ? { ...(raw as Record<string, unknown>), maxRetries: this.defaultMaxRetries }
+        : raw;
+      input = core.parseGTrendsInput(effectiveRaw);
       const i = input;
       const request = (url: string, method = 'GET'): Promise<string> => withRetry(
         () => session.request({ url, method, timeoutMs: i.timeoutMs ?? DEFAULT_EXPLORE_TIMEOUT_MS, signal: this.signal, timeoutSurface: this.timeoutSurface, headers: {
