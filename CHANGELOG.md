@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.44 — 2026-11-26
+
+### dsh UI polish, local-failure Actor CTA & 1-click settings
+- Register the dsh settings form directly on `plugins.bundle.config` so clicking **Plugin settings** (or opening **Plugins → Google Trends**) lands on the configuration form in **1 click** instead of requiring a second click into **Components → Google Trends / gtfa** (`src/client/index.tsx`, docs aligned).
+- Add a prominent, localized **Local direct request** failure alert banner (`RATE_LIMITED`, `BLOCKED`, and generic local failures) guiding users to switch to **Public Actor** or **My own Actor** with a 1-click **Switch to Public / Own Actor** CTA button (`src/client/dashboard.tsx`, `src/client/dashboard-locale.ts`, `src/client/dashboard-theme.ts`).
+- Polish failed-query dashboard details: remove the `!important` margin override on `.gd-error` that left 0px gap under the chart card, replace empty blank chart/stats/volume placeholders with a focused failed-state card, and auto-expand **Query details** with a structured status row.
+
 ## 0.2.43 — 2026-11-26
 
 ### dsh install walkthrough & docs alignment

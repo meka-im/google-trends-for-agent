@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard, resultSeries } from '../src/client/dashboard.js';
 import { TrendChart } from '../src/client/trend-chart.js';
 import { DashboardController } from '../src/client/dashboard-state.js';
-import { DASHBOARD_EN } from '../src/client/dashboard-locale.js';
+import { DASHBOARD_EN, DASHBOARD_ZH } from '../src/client/dashboard-locale.js';
+import { DASHBOARD_CSS } from '../src/client/dashboard-theme.js';
 import type { ActorRunRecord, QueryRecord, SavedQuery } from '../src/query-history-types.js';
 
 const t = (key: string) => DASHBOARD_EN[key] ?? key;
@@ -276,5 +277,56 @@ describe('dashboard interactions', () => {
     await user.click(screen.getByRole('button', { name: 'View' }));
     expect(screen.getByRole('tab', { name: 'Query' }).getAttribute('aria-selected')).toBe('true');
     expect(h.queries()).toHaveLength(beforeQueries);
+  });
+
+  it('shows a prominent switch-to-Actor callout on local rate-limit failure without empty volume card clutter', async () => {
+    const id = '00000000-0000-4000-8000-000000000429';
+    const createdAt = new Date().toISOString();
+    const failedRecord: QueryRecord = {
+      id, tool: 'trends_compare', terms: ['Cursor', 'Claude', 'DeepSeek'], geo: 'US', time: 'now 7-d',
+      source: 'manual', egress: 'local', status: 'blocked', cached: false, createdAt, fetchedAt: createdAt,
+      durationMs: 6600, actorRunId: null, costUsd: 0, errorCode: 'RATE_LIMITED',
+    };
+    const failedResult = {
+      ok: false, status: 'blocked', onDemand: true, series: [],
+      error: { code: 'RATE_LIMITED', message: 'Google Trends rate limit (HTTP 429). Wait a few seconds before retrying; lower request rate or set HTTPS_PROXY/HTTP_PROXY.' },
+      filter: { geo: 'US', time: 'now 7-d' }, meta: { queryRecordId: id },
+    };
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      if (body?.action === 'query') return Response.json({ ok: true, result: failedResult });
+      if (url.includes(`?id=${id}`)) return Response.json({ ok: true, record: failedRecord, result: failedResult, actorRuns: [] });
+      return Response.json({ ok: true, version: '0.2.44', records: [failedRecord], actorRuns: [], settings: { egress: 'local', geo: 'US', cache: true } });
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const openSettings = vi.fn();
+    const user = userEvent.setup();
+    const { container } = render(<Dashboard t={t} openSettings={openSettings} />);
+    await screen.findByText('v0.2.44');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.className).toContain('gd-local-alert');
+    expect(alert.textContent).toContain(DASHBOARD_EN.dashLocalFailRateLimited);
+    expect(alert.textContent).toContain('Public Actor');
+    expect(alert.textContent).toContain('My own Actor');
+    expect(alert.textContent).toContain('HTTP 429');
+
+    // No redundant bottom .gd-error bar, no misleading "Insufficient comparison data" pills, and no empty volume cards.
+    expect(container.querySelector('.gd-error')).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashNoSharedSeries)).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashDailyVolume)).toBeNull();
+
+    // Query details is expanded automatically on failed queries.
+    const details = container.querySelector('.gd-query-details') as HTMLDetailsElement;
+    expect(details.open).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: DASHBOARD_EN.dashLocalFailCta }));
+    expect(openSettings).toHaveBeenCalledOnce();
+  });
+
+  it('keeps dashboard English/Chinese dictionaries in sync and removes the !important error margin override', () => {
+    expect(Object.keys(DASHBOARD_ZH).sort()).toEqual(Object.keys(DASHBOARD_EN).sort());
+    expect(DASHBOARD_CSS).not.toContain('margin:0 0 16px!important');
   });
 });

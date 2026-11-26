@@ -1,7 +1,7 @@
 /**
  * Browser half of the gtfa dsh plugin.
  *
- * dsh's Plugins page renders a plugin's own page from `plugins.row.config`.
+ * dsh's Plugins page renders a plugin's own page from `plugins.bundle.config`.
  * The page reads the Host's Config-derived form (only `.volatile()` fields are
  * exposed) and writes path operations. `role('secret')` redacts the Apify token
  * on reads; a submitted token is persisted by dsh in the profile's
@@ -2974,23 +2974,23 @@ export function ConfigPage({ ctx, t, initialDraft, initialUsage, initialActors, 
   </form>;
 }
 
-function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view: 'summary' | 'page' }) {
-  return view === 'page' ? <ConfigPage ctx={ctx} t={t} /> : <>{t('summary')}</>;
+function ConfigView({ ctx, t, view }: { ctx: ClientContext; t: Translate; view?: 'summary' | 'page' }) {
+  return view === 'summary' ? <>{t('summary')}</> : <ConfigPage ctx={ctx} t={t} />;
 }
 
-/** Register the row configuration page while the Plugins page declares its slot. */
+/** Register the bundle configuration page directly so 1-click navigation lands on the settings form. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { en: { ...EN, ...DASHBOARD_EN }, zh: { ...ZH, ...DASHBOARD_ZH } }), 'gtfa: dictionaries');
   const t = ctx.locale.bind(NS);
   const dashboard = new DashboardController();
   ctx.effect(() => () => dashboard.dispose(), 'gtfa: dashboard query lifecycle');
   ctx.effect(() => {
-    ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
-      name: 'plugins.row.config',
-      key: `${PACKAGE}#${ENTRY}`,
+    ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
+      name: 'plugins.bundle.config',
+      key: PACKAGE,
       locale: NS,
     }, (props: PluginConfigViewProps) => <ConfigView ctx={ctx} t={t} view={props.view} />));
-  }, 'gtfa: row configuration page');
+  }, 'gtfa: bundle configuration page');
   ctx.effect(() => {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'google-trends', locale: NS },
       () => <Dashboard t={t} controller={dashboard} openSettings={() => {

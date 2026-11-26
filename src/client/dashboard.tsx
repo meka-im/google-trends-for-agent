@@ -461,7 +461,7 @@ export function Dashboard({ t, openSettings, controller: supplied }: { t: Transl
           </div>
         </div>
         {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} t={t} /> : <div className="gd-card gd-empty">
+        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} openSettings={openSettings} t={t} /> : <div className="gd-card gd-empty">
           <Icon name="chart" size={30} />
           <h3>{t('dashEmptyResult')}</h3>
           <p>{t('dashEmptyHint')}</p>
@@ -625,6 +625,14 @@ type EstimateAction = (term: string, action?: 'restore' | 'batch') => void;
 
 function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean }) {
   const { record, result } = saved;
+  if (!result.ok) {
+    const calibration = object(result.calibration);
+    const batch = result.batchVolume as BatchResult | undefined;
+    const hasCalibration = Array.isArray(calibration.series) && calibration.series.length > 0;
+    const hasBatch = Boolean(batch?.series?.some(item => item.traffic?.average != null));
+    const hasFollowUps = Array.isArray(saved.volumeChecks) && saved.volumeChecks.some(c => c.estimate?.traffic?.average != null || c.estimate?.range);
+    if (!hasCalibration && !hasBatch && !hasFollowUps) return null;
+  }
   if (result.onDemand && result.ok && supportsVolumeWindow(record.time)) {
     const batch = result.batchVolume as BatchResult | undefined;
     const current = batch?.rounds.at(-1);
@@ -700,9 +708,41 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
   </div>;
 }
 
-function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy, currentTerms, onRunRelated, onAddCompare }: {
+function LocalFailureBanner({ errorCode, errorMessage, t, openSettings }: {
+  errorCode: string | null; errorMessage: string | null; t: Translate; openSettings?: () => void;
+}) {
+  const titleKey = errorCode === 'RATE_LIMITED'
+    ? 'dashLocalFailRateLimited'
+    : errorCode === 'BLOCKED'
+      ? 'dashLocalFailBlocked'
+      : 'dashLocalFailGeneric';
+  return <section className="gd-local-alert" role="alert">
+    <div className="gd-local-alert-main">
+      <span className="gd-local-alert-icon"><Icon name="alert" size={18} /></span>
+      <div className="gd-local-alert-copy">
+        <div className="gd-local-alert-head">
+          <h3>{t(titleKey)}</h3>
+          {errorCode ? <span className="gd-local-alert-code">{errorCode}</span> : null}
+        </div>
+        <p>{t('dashLocalFailBody')}</p>
+        <div className="gd-local-alert-chips">
+          <span className="gd-local-alert-chip"><Icon name="cloud" size={13} />{t('dashLocalFailOptionPublic')}</span>
+          <span className="gd-local-alert-chip"><Icon name="server" size={13} />{t('dashLocalFailOptionOwn')}</span>
+        </div>
+        {errorMessage ? <p className="gd-local-alert-detail">
+          <span>{t('dashRawErrorLabel')}: </span><code>{errorMessage}</code>
+        </p> : null}
+      </div>
+    </div>
+    <button type="button" className="gd-button primary gd-local-alert-cta" disabled={!openSettings} onClick={openSettings}>
+      <Icon name="sliders" size={14} />{t('dashLocalFailCta')}
+    </button>
+  </section>;
+}
+
+function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy, currentTerms, onRunRelated, onAddCompare, openSettings }: {
   saved: SavedQuery; actorRuns: ActorRunRecord[]; metric: string; setMetric: (v: string) => void; t: Translate; egress?: EgressMode; estimate: EstimateAction; busy: boolean;
-  currentTerms: string[]; onRunRelated?: (term: string) => void; onAddCompare?: (term: string) => void;
+  currentTerms: string[]; onRunRelated?: (term: string) => void; onAddCompare?: (term: string) => void; openSettings?: () => void;
 }) {
   const { record, result } = saved, meta = object(result.meta);
   const costInfo = summarizeQueryCost(actorRuns);
@@ -729,6 +769,10 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
   const comparison = record.tool === 'trends_compare';
   const warnings = [...new Set([...arrayOfStrings(meta.warnings), ...arrayOfStrings(result.warnings)])];
   const error = object(result.error), tables = object(result.tables);
+  const errorCode = typeof error.code === 'string' ? error.code : null;
+  const errorMessage = typeof error.message === 'string' ? error.message : null;
+  const isLocalFailure = !result.ok && record.egress === 'local' && errorCode !== 'INVALID_INPUT';
+  const failedEmpty = !result.ok && chartSeries.length === 0;
   const hasRelated = !comparison && (array(tables.popular).length > 0 || array(tables.rising).length > 0);
   const isZh = t('dashGeo') === '地区';
 
@@ -763,9 +807,10 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  if (record.tool === 'trends_now') return <div className="gd-results"><div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{typeof error.message === 'string' ? <p className="gd-error" role="alert">{error.message}</p> : null}</div>;
-  const showLegend = legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length);
+  if (record.tool === 'trends_now') return <div className="gd-results">{isLocalFailure ? <LocalFailureBanner errorCode={errorCode} errorMessage={errorMessage} t={t} openSettings={openSettings} /> : null}<div className="gd-toolbar"><div><h2>{t('dashNow')} <Badge record={record} t={t} /></h2><p>{record.geo} · {record.time} · {t('dashReadSaved')}</p></div></div><div className="gd-related">{array(result.byGeo).map((region, index) => <article className="gd-card" key={index}><h3>{regionLabel(String(region.geo), isZh ? 'zh' : 'en')}</h3>{array(region.items).map((item, i) => <p key={i}><span>{i + 1}. {String(item.title ?? item.query ?? '')}</span><strong>{String(item.trafficLabel ?? item.traffic ?? '—')}</strong></p>)}{!array(region.items).length ? <p className="gd-muted">{t('dashUnavailable')}</p> : null}</article>)}</div>{errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}</div>;
+  const showLegend = !failedEmpty && (legend.length > 1 || legend.some(row => !hasChartPoints(row) || row.range?.points.length));
   return <div className="gd-results">
+    {isLocalFailure ? <LocalFailureBanner errorCode={errorCode} errorMessage={errorMessage} t={t} openSettings={openSettings} /> : null}
     <div className="gd-result-grid">
       <article className="gd-card gd-chart-card">
         <div className="gd-result-head">
@@ -786,14 +831,14 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
                     : null}
             </div>
           </div>
-          <div className="gd-result-tools">
+          {!failedEmpty ? <div className="gd-result-tools">
             {(!result.onDemand || hasTraffic) && <div className="gd-metric-switch">{(['interest', 'traffic'] as const).map(value =>
               <button type="button" key={value} aria-pressed={currentMetric === value} disabled={value === 'traffic' && !hasTraffic}
                 onClick={() => { focusTerm(null); setMetric(value); }}>{t(value === 'interest' ? 'dashInterest' : 'dashTraffic')}</button>
             )}</div>}
             <Button compact ghost onClick={copySummary} title={t('dashCopySummary')}>{copied ? t('dashCopiedSummary') : t('dashCopySummary')}</Button>
             {chartSeries.length > 0 ? <Button compact ghost onClick={downloadCsv} title={t('dashExportCsv')}>{t('dashExportCsv')}</Button> : null}
-          </div>
+          </div> : null}
         </div>
         {showLegend ? <div className="gd-legend gd-chart-legend">
           {legend.map(row => {
@@ -808,29 +853,41 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
             </button>;
           })}
         </div> : null}
-        <TrendChart perDay={t('dashPerDay')} series={visible} traffic={currentMetric === 'traffic'}
-          label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
-        {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?
-          <p className="gd-chart-note">{t('dashWeakComparison')}</p> : null}
-        <table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th>
-          <th>{t('dashAverage')}</th><th>{t(currentMetric === 'traffic' ? 'dashLatestUsable' : 'dashLatest')}</th><th>{t('dashPeak')}</th>
-          {hasTraffic && currentMetric === 'interest' ? <th>{t('dashVolumeEstimate')}</th> : null}
-        </tr></thead><tbody>{series.map((row, index) => {
-          const vol = trafficSeries[index];
-          return <tr key={row.term}>
-            <td><span className="gd-stat-term"><i style={{ background: colors[index] }} />{row.term}</span></td>
-            <td>{row.range ? compactVolume.format(row.range.low) + '–' + compactVolume.format(row.range.high) : format(row.average)}</td>
-            <td>{format(row.latest)}</td>
-            <td>{format(row.peak)}</td>
-            {hasTraffic && currentMetric === 'interest' ? <td className={vol?.average != null ? 'gd-stat-vol' : 'gd-muted'}>{vol?.range ? compactVolume.format(vol.range.low) + '–' + compactVolume.format(vol.range.high) : formatVolume(vol?.average)}</td> : null}
-          </tr>;
-        })}</tbody></table>
+        {failedEmpty ? <div className="gd-failed-empty">
+          <span className="gd-failed-empty-icon"><Icon name="chart" size={20} /></span>
+          <h4>{t('dashFailedEmptyTitle')}</h4>
+          <p>{t(isLocalFailure ? 'dashFailedEmptyHintLocal' : 'dashFailedEmptyHintActor')}</p>
+          <div className="gd-failed-terms">
+            {record.terms.map((term, index) => <span key={term}><i style={{ background: colors[index] }} />{term}</span>)}
+          </div>
+        </div> : <>
+          <TrendChart perDay={t('dashPerDay')} series={visible} traffic={currentMetric === 'traffic'}
+            label={t(currentMetric === 'traffic' ? 'dashTraffic' : 'dashTrend')} empty={t('dashUnavailable')} logLabel={t('dashLogScale')} />
+          {currentMetric === 'interest' && object(result.calibration).weakComparison === true ?
+            <p className="gd-chart-note">{t('dashWeakComparison')}</p> : null}
+          <table className="gd-result-stats"><thead><tr><th>{t('dashKeyword')}</th>
+            <th>{t('dashAverage')}</th><th>{t(currentMetric === 'traffic' ? 'dashLatestUsable' : 'dashLatest')}</th><th>{t('dashPeak')}</th>
+            {hasTraffic && currentMetric === 'interest' ? <th>{t('dashVolumeEstimate')}</th> : null}
+          </tr></thead><tbody>{series.map((row, index) => {
+            const vol = trafficSeries[index];
+            return <tr key={row.term}>
+              <td><span className="gd-stat-term"><i style={{ background: colors[index] }} />{row.term}</span></td>
+              <td>{row.range ? compactVolume.format(row.range.low) + '–' + compactVolume.format(row.range.high) : format(row.average)}</td>
+              <td>{format(row.latest)}</td>
+              <td>{format(row.peak)}</td>
+              {hasTraffic && currentMetric === 'interest' ? <td className={vol?.average != null ? 'gd-stat-vol' : 'gd-muted'}>{vol?.range ? compactVolume.format(vol.range.low) + '–' + compactVolume.format(vol.range.high) : formatVolume(vol?.average)}</td> : null}
+            </tr>;
+          })}</tbody></table>
+        </>}
       </article>
       <aside className="gd-side-stack">
         <div className="gd-card gd-result-info">
           <VolumeCards saved={saved} t={t} busy={busy} egress={egress} estimate={estimate} />
-          {typeof error.code === 'string' ? <p className="gd-error-code">{error.code}</p> : null}
-          <details className="gd-query-details"><summary><span>{t('dashQueryDetails')}</span><svg className="gd-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></summary><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')], [t('dashDetailActorCost'), costSummaryValue]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{costInfo.runs.length > 0 ? <div className="gd-detail-runs"><span className="gd-detail-runs-head">{t('dashDetailRunsList')} ({costInfo.runs.length})</span>{costInfo.runs.map(item => <div className="gd-detail-run-row" key={item.runId}><span className="gd-detail-run-meta"><span>{runPurposeText(item, t)}{item.anchor ? ` · ${t('dashAnchorTag')} ${item.anchor}` : ''}</span><code>{shortRunId(item.runId)}</code></span><span className="gd-detail-run-cost" title={exactCostTitle(item.costUsd)}>{item.costUsd !== null ? formatCostUsd(item.costUsd) : t('dashCostPending')}</span></div>)}</div> : null}</details>
+          {!result.ok && errorCode ? <div className="gd-status-box">
+            <span>{t('dashQueryStatus')}</span>
+            <span className="gd-badge blocked">{errorCode}</span>
+          </div> : null}
+          <details className="gd-query-details" open={!result.ok}><summary><span>{t('dashQueryDetails')}</span><svg className="gd-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></summary><dl>{[[t('dashFetchedAt'), dateText(record.fetchedAt, true)], [t('dashCalledAt'), dateText(record.createdAt, true)], [t('dashRunDuration'), duration(record.durationMs)], [t('dashEgress'), egressLabel(record.egress, t)], [t('dashSources'), t(record.source === 'manual' ? 'dashManual' : 'dashAgent')], [t('dashDetailActorCost'), costSummaryValue]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>{costInfo.runs.length > 0 ? <div className="gd-detail-runs"><span className="gd-detail-runs-head">{t('dashDetailRunsList')} ({costInfo.runs.length})</span>{costInfo.runs.map(item => <div className="gd-detail-run-row" key={item.runId}><span className="gd-detail-run-meta"><span>{runPurposeText(item, t)}{item.anchor ? ` · ${t('dashAnchorTag')} ${item.anchor}` : ''}</span><code>{shortRunId(item.runId)}</code></span><span className="gd-detail-run-cost" title={exactCostTitle(item.costUsd)}>{item.costUsd !== null ? formatCostUsd(item.costUsd) : t('dashCostPending')}</span></div>)}</div> : null}</details>
         </div>
         {hasRelated ? <div className="gd-card gd-related-card">
           <div className="gd-related-head">
@@ -860,7 +917,7 @@ function Result({ saved, actorRuns, metric, setMetric, t, egress, estimate, busy
         </div> : null}
       </aside>
     </div>
-    {typeof error.message === 'string' ? <p className="gd-error" style={{ marginTop: 14 }} role="alert">{error.message}</p> : null}
+    {errorMessage && !isLocalFailure ? <p className="gd-error" role="alert">{errorMessage}</p> : null}
     {warnings.length ? <details className="gd-warnings"><summary>{t('dashResultInfo')} · {warnings.length}</summary>{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}
   </div>;
 }

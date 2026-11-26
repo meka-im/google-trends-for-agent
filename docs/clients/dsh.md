@@ -42,7 +42,7 @@ allowBuilds:
 
 ## Configure egress & Apify OAuth
 
-1. Open **dsh → Plugins → Google Trends → Components → Google Trends / gtfa**.
+1. Open **dsh → Plugins → Google Trends** (or click **Plugin settings** directly in the **Google Trends** sidebar panel).
 2. Choose an **Egress** mode and click **Save**:
    - **Local (this machine)**: direct from your machine (honors `HTTPS_PROXY` / `HTTP_PROXY`).
    - **Public Actor** *(recommended if local IP is rate-limited)*: runs `meka.im/google-trends-for-agent` on demand with Apify residential proxy.

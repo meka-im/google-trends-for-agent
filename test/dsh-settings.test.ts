@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  APIFY_OAUTH_VERIFICATION_URL, EN, ZH, deployApifyActor, fromSnapshot, loadApifyActors,
+  APIFY_OAUTH_VERIFICATION_URL, EN, ZH, apply, deployApifyActor, fromSnapshot, loadApifyActors,
   loadApifyOAuth, loadApifyUsage, normalizeApifyOAuthStatus, opsFor, resolveDeployBuild,
   setBaselineOverride, startApifyOAuth, validateDraft, withPendingAnchor,
   type ApifyActorsView, type Draft,
@@ -153,5 +153,41 @@ describe('Apify client helpers and OAuth URL validation', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth', expect.objectContaining({ method: 'GET', cache: 'no-store' }));
     expect(await startApifyOAuth()).toMatchObject({ status: 'ready', data: { pending: true } });
     expect(fetchMock).toHaveBeenLastCalledWith('api/gtfa.apify-oauth-start', expect.objectContaining({ method: 'POST', cache: 'no-store' }));
+  });
+
+  it('registers plugins.bundle.config for 1-click settings navigation via openBundle', () => {
+    const registrations: Array<{ slot: string; options: Record<string, unknown>; component: (props: Record<string, unknown>) => unknown }> = [];
+    const openBundle = vi.fn();
+    const ctx = {
+      get: (name: string) => (name === 'pluginNavigation' ? { openBundle } : undefined),
+      effect: (cb: () => unknown) => { cb(); },
+      locale: {
+        register: vi.fn(),
+        bind: () => (key: string) => EN[key] ?? key,
+      },
+      slots: {
+        inject: (_name: string, reg: () => unknown) => reg(),
+        register: (options: Record<string, unknown>, component: (props: Record<string, unknown>) => unknown) => {
+          registrations.push({ slot: String(options.name), options, component });
+          return () => {};
+        },
+      },
+      configForms: {
+        get: vi.fn(),
+        describe: vi.fn(),
+      },
+    };
+
+    apply(ctx as never);
+
+    expect(registrations.find(entry => entry.slot === 'plugins.row.config')).toBeUndefined();
+    const bundleConfig = registrations.find(entry => entry.slot === 'plugins.bundle.config');
+    expect(bundleConfig?.options).toMatchObject({ name: 'plugins.bundle.config', key: 'google-trends-for-agent' });
+
+    const mainSlot = registrations.find(entry => entry.slot === 'main');
+    expect(mainSlot).toBeDefined();
+    const element = mainSlot!.component({}) as { props: { openSettings: () => void } };
+    element.props.openSettings();
+    expect(openBundle).toHaveBeenCalledWith('google-trends-for-agent');
   });
 });
