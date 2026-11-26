@@ -211,7 +211,23 @@ export const DASHBOARD_CSS = `
 .gd-progress-track>i{display:block;height:100%;width:30%;border-radius:inherit;background:var(--gtfa-accent);animation:gd-progress 1.6s ease-in-out infinite}
 .gd-spinner{display:flex;color:var(--gtfa-accent);animation:gtfa-spin 1.2s linear infinite}
 @keyframes gd-progress{from{transform:translateX(-110%)}to{transform:translateX(440%)}}
-@media(prefers-reduced-motion:reduce){.gd-progress-track>i,.gd-spinner{animation:none}}
+@keyframes gd-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.gd-progress-track>i,.gd-spinner,.gd-skel{animation:none}}
+
+/* Loading Skeleton while new query runs */
+.gd-loading-grid{display:grid;grid-template-columns:minmax(0,1.88fr) minmax(300px,1fr);gap:16px;align-items:start}
+.gd-skeleton-card{padding:20px;display:grid;gap:12px}
+.gd-skel{
+  border-radius:8px;
+  background:linear-gradient(90deg,var(--gtfa-soft) 25%,color-mix(in srgb,var(--gtfa-ink) 6%,var(--gtfa-surface)) 50%,var(--gtfa-soft) 75%);
+  background-size:200% 100%;animation:gd-shimmer 1.5s ease-in-out infinite;
+}
+.gd-skel.title{height:22px;width:36%;border-radius:7px}
+.gd-skel.sub{height:14px;width:54%;border-radius:6px}
+.gd-skel.chart{height:240px;border-radius:11px;margin-top:4px}
+.gd-skel.row{height:38px;border-radius:9px}
+.gd-skel.side-title{height:18px;width:44%;border-radius:6px}
+.gd-skel.side-btn{height:38px;border-radius:9px}
 
 /* Result 2-Column Workspace */
 .gd-results{display:flex;flex-direction:column;gap:16px;margin-top:0}
@@ -516,7 +532,7 @@ export const DASHBOARD_CSS = `
 
 @container gd (max-width:1060px){
   .gd-workspace{padding:18px 20px 24px}
-  .gd-result-grid{grid-template-columns:1fr}
+  .gd-result-grid,.gd-loading-grid{grid-template-columns:1fr}
 }
 @container gd (max-width:780px){
   .gd-topbar{padding:0 14px;grid-template-columns:auto 1fr auto;gap:10px}

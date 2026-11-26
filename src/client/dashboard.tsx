@@ -479,15 +479,29 @@ export function Dashboard({ t, openSettings, renderSettings, controller: supplie
           </div>
         </div>
         {operation && tab === 'query' ? <QueryProgressCard operation={operation} t={t} cancel={controller.cancel} /> : null}
-        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} openSettings={handleOpenSettings} t={t} /> : <div className="gd-card gd-empty">
-          <Icon name="chart" size={30} />
-          <h3>{t('dashEmptyResult')}</h3>
-          <p>{t('dashEmptyHint')}</p>
-          <div className="gd-empty-chips">
-            <span>{t('dashTryExamples')}</span>
-            {EMPTY_EXAMPLES.map(sample => <button key={sample} type="button" className="gd-chip" disabled={busy} onClick={() => { setText(sample); keywordInput.current?.focus(); }}>{sample}</button>)}
+        {result ? <Result key={result.record.id} saved={operation?.batch && operation.recordId === result.record.id ? { ...result, result: { ...result.result, batchVolume: operation.batch } } : result} actorRuns={resultRuns} metric={metric} setMetric={setMetric} busy={busy} currentTerms={terms} egress={state?.settings.egress} estimate={(term, action) => void controller.estimate(term, action)} onRunRelated={term => { void runTerm(term); }} onAddCompare={appendCompare} openSettings={handleOpenSettings} t={t} />
+          : operation ? <div className="gd-loading-grid" aria-hidden="true">
+            <div className="gd-card gd-skeleton-card">
+              <div className="gd-skel title" />
+              <div className="gd-skel sub" />
+              <div className="gd-skel chart" />
+              <div className="gd-skel row" />
+            </div>
+            <div className="gd-card gd-skeleton-card">
+              <div className="gd-skel side-title" />
+              <div className="gd-skel side-btn" />
+              <div className="gd-skel row" />
+            </div>
           </div>
-        </div>}
+          : <div className="gd-card gd-empty">
+            <Icon name="chart" size={30} />
+            <h3>{t('dashEmptyResult')}</h3>
+            <p>{t('dashEmptyHint')}</p>
+            <div className="gd-empty-chips">
+              <span>{t('dashTryExamples')}</span>
+              {EMPTY_EXAMPLES.map(sample => <button key={sample} type="button" className="gd-chip" disabled={busy} onClick={() => { setText(sample); keywordInput.current?.focus(); }}>{sample}</button>)}
+            </div>
+          </div>}
       </section>
       <section id="gd-panel-records" role="tabpanel" aria-labelledby="gd-tab-records" hidden={tab !== 'records'}>
         <div className="gd-records-bar">

@@ -115,13 +115,13 @@ export class DashboardController {
       if (!this.disposed && !signal.aborted && this.value.operation?.requestId === requestId) this.pollProgress(requestId, signal);
     }, 1000);
   }
-  private async operate(terms: string[], send: (signal: AbortSignal, requestId: string, startedAt: number) => Promise<void>) {
+  private async operate(terms: string[], send: (signal: AbortSignal, requestId: string, startedAt: number) => Promise<void>, initialPatch?: Partial<DashboardView>) {
     if (this.queryController || this.disposed) return false;
     this.viewController?.abort();
     const operation = new AbortController(), requestId = crypto.randomUUID(), startedAt = Date.now();
     this.queryController = operation;
     const signal = AbortSignal.any([operation.signal, AbortSignal.timeout(130_000)]);
-    this.commit({ fieldError: '', error: '', operation: { requestId, startedAt, phase: 'requesting', terms } }, true);
+    this.commit({ ...initialPatch, fieldError: '', error: '', operation: { requestId, startedAt, phase: 'requesting', terms } }, true);
     this.pollProgress(requestId, signal);
     try { await send(signal, requestId, startedAt); }
     catch (error) {
@@ -152,7 +152,7 @@ export class DashboardController {
       const record = next?.records.find(record => record.id === id);
       this.commit({ result: { record: record ?? { id: typeof id === 'string' && ID.test(id) ? id : '', tool: name, terms, geo, time, source: 'manual', egress: state?.settings.egress ?? 'local', status: String(output.result.status ?? 'error'), cached: row(output.result.meta).cached === true,
         createdAt: new Date(startedAt).toISOString(), fetchedAt: String(row(output.result.meta).fetchedAt ?? ''), durationMs: Date.now() - startedAt, actorRunId: null, costUsd: null, errorCode: null }, result: output.result }, metric: 'interest' }, true);
-    });
+    }, { result: null, metric: 'interest' });
   }
   async estimate(term: string, action: 'estimate' | 'restore' | 'batch' = 'estimate') {
     const id = this.value.result?.record.id;

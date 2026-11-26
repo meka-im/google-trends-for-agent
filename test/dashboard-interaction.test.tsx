@@ -364,4 +364,50 @@ describe('dashboard interactions', () => {
     expect(Object.keys(DASHBOARD_ZH).sort()).toEqual(Object.keys(DASHBOARD_EN).sort());
     expect(DASHBOARD_CSS).not.toContain('margin:0 0 16px!important');
   });
+
+  it('clears the previous query result immediately while a new query is in flight', async () => {
+    let finishSecond!: () => void;
+    const secondDelay = new Promise<void>(resolve => { finishSecond = resolve; });
+    let queryCount = 0;
+    const rows: QueryRecord[] = [];
+    const results = new Map<string, SavedQuery>();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      if (url.includes('?progress=')) return Response.json({ ok: true, progress: { requestId: url.split('?progress=')[1], phase: 'starting', startedAt: Date.now() } });
+      if (body?.action === 'query') {
+        queryCount += 1;
+        if (queryCount === 2) await secondDelay;
+        const term = body.input.term as string;
+        const id = `00000000-0000-4000-8000-${String(queryCount).padStart(12, '0')}`;
+        const record: QueryRecord = { id, tool: body.name, terms: [term], geo: body.input.geo, time: body.input.time, source: 'manual', egress: 'actor-public', status: 'ok', cached: false,
+          createdAt: new Date().toISOString(), fetchedAt: new Date().toISOString(), durationMs: 1000, actorRunId: `run-${id}`, costUsd: 0.0002, errorCode: null };
+        const result = { ok: true, status: 'ok', onDemand: true, series: [{ keyword: term, average: 50, latest: 50, peak: 50, points: [{ t: '2026-11-25', value: 50 }, { t: '2026-11-26', value: 50 }] }], filter: { geo: record.geo, time: record.time }, meta: { queryRecordId: id } };
+        rows.unshift(record); results.set(id, { record, result, actorRuns: [] });
+        return Response.json({ ok: true, result });
+      }
+      if (url.includes('?id=')) return Response.json({ ok: true, ...results.get(decodeURIComponent(url.split('?id=')[1]!)) });
+      return Response.json({ ok: true, version: '0.2.44', records: rows, actorRuns: [], settings: { egress: 'actor-public', geo: 'US', cache: true } });
+    }));
+
+    const user = userEvent.setup();
+    render(<Dashboard t={t} />);
+    await screen.findByText('v0.2.44');
+
+    const input = screen.getByRole('textbox', { name: /Keywords/ });
+    await user.type(input, 'duo');
+    await user.click(screen.getByRole('button', { name: 'Query trends' }));
+    await screen.findByRole('heading', { name: 'duo' });
+
+    await user.clear(input);
+    await user.type(input, 'poke');
+    await user.click(screen.getByRole('button', { name: 'Query trends' }));
+
+    // Previous result ("duo") clears immediately instead of staying on screen during loading.
+    expect(screen.queryByRole('heading', { name: 'duo' })).toBeNull();
+    expect(screen.queryByText(DASHBOARD_EN.dashEmptyResult)).toBeNull();
+    expect(screen.getByRole('progressbar')).toBeDefined();
+
+    finishSecond();
+    await screen.findByRole('heading', { name: 'poke' });
+  });
 });
