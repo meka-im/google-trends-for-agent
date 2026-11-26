@@ -3,9 +3,11 @@
 ## 0.2.44 — 2026-11-26
 
 ### dsh UI polish, local-failure Actor CTA & 1-click settings
-- Register the dsh settings form directly on `plugins.bundle.config` so clicking **Plugin settings** (or opening **Plugins → Google Trends**) lands on the configuration form in **1 click** instead of requiring a second click into **Components → Google Trends / gtfa** (`src/client/index.tsx`, docs aligned).
-- Add a prominent, localized **Local direct request** failure alert banner (`RATE_LIMITED`, `BLOCKED`, and generic local failures) guiding users to switch to **Public Actor** or **My own Actor** with a 1-click **Switch to Public / Own Actor** CTA button (`src/client/dashboard.tsx`, `src/client/dashboard-locale.ts`, `src/client/dashboard-theme.ts`).
-- Polish failed-query dashboard details: remove the `!important` margin override on `.gd-error` that left 0px gap under the chart card, replace empty blank chart/stats/volume placeholders with a focused failed-state card, and auto-expand **Query details** with a structured status row.
+- Keep the plugin details README separated from the settings form (`plugins.row.config`) while adding a 1-click in-panel Settings view (`renderSettings` with a back button) accessible from **Plugin settings**, the topbar route pill, and failure CTAs (`src/client/index.tsx`, `src/client/dashboard.tsx`, docs aligned).
+- Restore the blue gradient `$5` monthly free-credit card with trend-curve artwork in Apify Actor settings (`src/client/theme.ts`, `src/client/index.tsx`).
+- Add a compact **Local direct request** failure alert banner (`RATE_LIMITED`, `BLOCKED`, and generic local failures) with a 1-click **Switch Actor** CTA that automatically hides once current egress is switched away from `local`, plus a dedicated Actor auth/config setup banner (`INVALID_INPUT`) with a **Go to settings** CTA (`src/client/dashboard.tsx`, `src/client/dashboard-locale.ts`, `src/client/dashboard-theme.ts`).
+- Add the MEKA baseline dataset source link (`https://meka.im/datasets/google-trends-anchors`) to calibration anchor cards, and immediately clear prior query results and reset `metric` to `interest` with a 2-column loading skeleton on new query submission (`src/client/dashboard-state.ts`, `src/client/dashboard.tsx`).
+- Polish failed-query and dark-mode details: remove the `.gd-error` `!important` margin override, keep **Query details** labels single-line with raw error tucked inside expanded details, scope ChoicePicker overrides to dashboard toolbars, and update `GTFA_UPGRADE_COMMAND` to `dsh plugin --profile web add google-trends-for-agent@latest` (`src/client/dashboard-theme.ts`, `src/version-check.ts`).
 
 ## 0.2.43 — 2026-11-26
 
