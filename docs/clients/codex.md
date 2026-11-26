@@ -23,12 +23,12 @@ Requires **Node.js >= 20**. Add a local stdio server with optional Apify cloud e
 
 ```sh
 # Direct from this machine:
-codex mcp add google-trends -- npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp
+codex mcp add google-trends -- npx -y -p google-trends-for-agent gtfa-mcp
 
 # Or route through Apify's public Actor residential proxy (set APIFY_TOKEN in env):
-codex mcp add google-trends --env APIFY_TOKEN -- npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --egress actor-public
+codex mcp add google-trends --env APIFY_TOKEN -- npx -y -p google-trends-for-agent gtfa-mcp --egress actor-public
 ```
 
 Local stdio exposes `trends_ask`, `trends_snapshot`, `trends_compare` (with `calibrate: true`), and `trends_now` directly, defaulting to `US` / `now 7-d` with MEKA v1 baselines.
 
-> If `npx` hits an npm 10 `GitFetcher` error, follow the persistent install in the [OpenClaw & CLI guide](openclaw.md#persistent-install-recommended-for-frequent-use-or-npm-10) and register `gtfa-mcp` directly.
+> For instant startup without `npx`, install globally (`npm install -g google-trends-for-agent`) as shown in the [OpenClaw & CLI guide](openclaw.md#persistent-install-recommended-for-frequent-use) and register `gtfa-mcp` directly.

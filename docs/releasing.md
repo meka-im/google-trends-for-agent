@@ -1,8 +1,14 @@
 # Release and acceptance
 
-GTFA is in pre-release testing. npm publication is a separate release decision.
-Use one source commit and one tarball for the checks below; record their SHA-256,
-package version, Node version, client version and actual execution path.
+`google-trends-for-agent` is published on [npm](https://www.npmjs.com/package/google-trends-for-agent) and [Apify Store](https://apify.com/meka.im/google-trends-for-agent). Use one source commit and one tarball for the checks below; record their SHA-256, package version, Node version, client version and actual execution path.
+
+## Standard release flow (GitHub → npm → Apify)
+
+1. **Sync versions and documentation.** Update `package.json`, `package-lock.json` (root and `packages[""]`), `.actor/actor.json`, and `CHANGELOG.md` to the target `x.y.z` version. Verify `README.md`, `README.zh-CN.md`, `AGENTS.md`, and `docs/clients/*.md` reflect the current install/usage instructions—remember that the npm package page displays the `README.md` packed at release time.
+2. **PR and CI gate.** Push a branch and open a pull request into `main`. Confirm all checks in `CI required` (Node 20 & 24, `check:docs`, `npm audit`, `check:package`, and `test:compat`) pass before merging.
+3. **Publish GitHub Release `v<x.y.z>`.** Creating and publishing the GitHub Release from `main` automatically triggers `.github/workflows/publish-npm.yml`, which re-runs all verification checks and publishes `--provenance --access public` to npm (via `NPM_TOKEN` or Trusted Publishing).
+4. **Rebuild Apify Public Actor and probe health.** Rebuild `meka.im/google-trends-for-agent` (assigning `latest` tag), then run `.github/workflows/apify-health.yml` (`force_probe=true`) to verify live execution and `notice: NONE`.
+5. **Post-release verification.** Confirm `https://registry.npmjs.org/google-trends-for-agent` serves `latest: x.y.z` with provenance attestations and updated README, Apify `GTFA_RUNTIME` reports `x.y.z`, and GitHub repo homepage/topics match.
 
 ## Local gate
 

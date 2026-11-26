@@ -10,7 +10,7 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-zh-dark.png"><img src="docs/assets/store-button-zh.png" alt="在 Apify Store 打开" width="224" height="44"></picture></a></p>
 
@@ -72,17 +72,19 @@ Apify OAuth 的 `full_api_access` 是完整账号 API 权限。没有 MCP OAuth 
 
 ## 安装与快速开始
 
-CLI/MCP 需要 Node.js 20+。项目不发布到 npm；首次运行时 `npx` 会从 GitHub 检出并构建。下方命令跟随仓库的 `main` 分支。
+CLI 与 MCP 服务器已发布至 npm（包名 [`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent)），需要 Node.js 20+。可直接通过 `npx` 运行：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
+npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 ```
 
-GitHub 依赖的构建已用 npm 11.19.1 验证。npm 10.9.4 可能先成功构建该依赖，随后在 npm 打包阶段因 `GitFetcher` 缺少 Arborist 依赖而报错。遇到该报错时，请使用下方的 clone → `npm ci` → pack 持久安装流程，或升级 npm。CLI 和安装后的包仍要求 Node.js 20+。
+频繁使用建议直接从 npm 全局安装：
 
-零安装的 `npx` 路径会在首次使用时从 git 构建，耗时取决于网络和机器。频繁使用建议持久安装或运行 MCP 服务器。
+```sh
+npm install -g google-trends-for-agent
+```
 
-持久安装（先克隆，因为 npm 全局安装 git 依赖时，`prepare` 阶段可能缺少构建所需的 devDependencies）。用打包后的 tarball 安装，之后可以删除 clone 目录：
+也可以从源码仓库自行构建安装：
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
@@ -91,9 +93,9 @@ npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
 
-clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源码版本，请自行加上 commit pin，不要依赖移动的分支。
+源码 clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源码版本，请固定 npm 版本号或 git commit，不要依赖移动的分支。
 
-打包后的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
+发布的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
 
 CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认走 `local` 本机网络，也支持 Apify 按需云端出口（`--egress actor-public` 或 `--egress actor-own --actor <id>`，或通过环境变量 `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` 配合 `APIFY_TOKEN`），可在直接暴露四个 `trends_*` 工具的同时走 Apify 住宅代理。若客户端支持免本地进程的远程托管 MCP，Muse、GrokBot、Dots 优先按[Apify 接入指南](docs/clients.md)配置：
 
@@ -102,7 +104,7 @@ CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认�
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp"]
     }
   }
 }
@@ -115,14 +117,14 @@ CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认�
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
       "env": { "APIFY_TOKEN": "<your-apify-token>" }
     }
   }
 }
 ```
 
-持久安装后可直接使用下面的配置（或 `gtfa-mcp` 的绝对路径），避免每次启动都由 npx 解析 GitHub 包：
+全局安装（`npm install -g google-trends-for-agent`）后可直接使用下面的配置（或 `gtfa-mcp` 的绝对路径），无需每次启动都由 `npx` 解析：
 
 ```json
 {
@@ -133,17 +135,17 @@ CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认�
 本地 **Streamable HTTP** 端点（仅绑定 `127.0.0.1`）：
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 检查包下载和数据抓取两段连通性：
 
 ```sh
-curl -I https://github.com
+curl -I https://registry.npmjs.org
 curl -I https://trends.google.com
 ```
 
-若 `npx …` 退出 128 且 stdout/stderr 为空，说明 gtfa 启动前 GitHub 包获取失败；查看 npm debug 日志（通常在 `~/.npm/_logs/`）。**MCP 无法启动**表现为 npx/git 错误、握手前 EOF；**MCP 已启动但工具取数失败**则握手和 `tools/list` 成功，工具返回 `NETWORK_ERROR`、`RATE_LIMITED` 等上游错误。后者可用 `gtfa doctor --json` 排查。
+若 `npx …` 非零退出且 stdout/stderr 为空，说明 gtfa 启动前 npm 包获取失败；查看 npm debug 日志（通常在 `~/.npm/_logs/`）。**MCP 无法启动**表现为 npx/npm 错误、握手前 EOF；**MCP 已启动但工具取数失败**则握手和 `tools/list` 成功，工具返回 `NETWORK_ERROR`、`RATE_LIMITED` 等上游错误。后者可用 `gtfa doctor --json` 排查。
 
 ## dsh 插件
 

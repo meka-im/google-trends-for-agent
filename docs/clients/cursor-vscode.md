@@ -51,7 +51,7 @@ Requires **Node.js >= 20**. Gives direct access to `trends_ask`, `trends_snapsho
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
       "env": {
         "APIFY_TOKEN": "<your-apify-token>"
       }

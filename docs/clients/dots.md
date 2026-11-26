@@ -24,7 +24,7 @@ If your Dots environment exposes local MCP configuration or Codex CLI, follow th
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
       "env": { "APIFY_TOKEN": "<your-apify-token>" }
     }
   }
@@ -39,7 +39,7 @@ If the host has **no** remote MCP UI and **no** OAuth capability, do not loop on
 
 - **If `APIFY_TOKEN` is available in the sandbox's secret environment:** run the CLI with cloud egress:
   ```sh
-  npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --egress actor-public --json --pretty
-  npx -y -p github:meka-im/google-trends-for-agent gtfa compare ChatGPT Claude Gemini --geo US --calibrate --egress actor-public --json --pretty
+  npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --egress actor-public --json --pretty
+  npx -y -p google-trends-for-agent gtfa compare ChatGPT Claude Gemini --geo US --calibrate --egress actor-public --json --pretty
   ```
 - **If no `APIFY_TOKEN` is configured:** inform the user that remote OAuth cannot be initiated inside this chat turn and ask them to either connect `https://mcp.apify.com?tools=meka.im/google-trends-for-agent` in host settings or explicitly authorize a direct local test (`--egress local`, noting cloud VM IPs may hit Google Trends `RATE_LIMITED` / `BLOCKED`).
