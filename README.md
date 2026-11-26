@@ -10,7 +10,7 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
 <p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-en-dark.png"><img src="docs/assets/store-button-en.png" alt="Open in Apify Store" width="231" height="44"></picture></a></p>
 
@@ -74,17 +74,19 @@ Apify's `full_api_access` OAuth scope grants account-wide API access. Clients wi
 
 ## Install & quick start
 
-The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the GitHub checkout on first run. The commands below follow the repository's `main` branch.
+The CLI and MCP server are published on npm as [`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent) and require Node.js 20+. Run immediately with `npx`:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
+npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 ```
 
-Building the GitHub dependency was verified with npm 11.19.1. npm 10.9.4 can build it and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
+For frequent use, install globally from npm:
 
-The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
+```sh
+npm install -g google-trends-for-agent
+```
 
-Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
+Or build from source if you prefer a local git checkout:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
@@ -93,9 +95,9 @@ npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
 
-The clone tracks the repository's default `main` branch. If your review process requires an immutable source revision, add your own commit pin rather than relying on a moving branch.
+The source checkout tracks the repository's default `main` branch. If your review process requires an immutable source revision, pin a published npm version or git commit rather than relying on a moving branch.
 
-The packed tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
+The published tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
 
 The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local` egress (this machine's network) and also support Apify on-demand cloud egress (`--egress actor-public` or `--egress actor-own --actor <id>`, or `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` with `APIFY_TOKEN`), giving direct access to the four `trends_*` tools through Apify's residential proxy. For managed remote MCP without a local Node process, Muse, GrokBot and Dots should start with the [Apify setup](docs/clients.md):
 
@@ -104,7 +106,7 @@ The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local`
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp"]
     }
   }
 }
@@ -117,14 +119,14 @@ To route local stdio MCP or CLI calls through Apify's public Actor with `APIFY_T
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp", "--egress", "actor-public"],
       "env": { "APIFY_TOKEN": "<your-apify-token>" }
     }
   }
 }
 ```
 
-After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
+After a global install (`npm install -g google-trends-for-agent`), use this config (or an absolute path to `gtfa-mcp`) directly without invoking `npx` on every start:
 
 ```json
 {
@@ -135,17 +137,17 @@ After the persistent install, use this config (or an absolute path to `gtfa-mcp`
 For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
+npx -y -p google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
 Check both package-download and data-fetch connectivity:
 
 ```sh
-curl -I https://github.com
+curl -I https://registry.npmjs.org
 curl -I https://trends.google.com
 ```
 
-If `npx …` exits 128 with empty stdout/stderr, the GitHub package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/git errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
+If `npx …` exits non-zero with empty stdout/stderr, the npm package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/npm errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
 
 ## dsh plugin
 

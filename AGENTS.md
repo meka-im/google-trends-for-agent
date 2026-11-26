@@ -19,19 +19,21 @@ Prefer **Apify on-demand execution** for cloud/hosted clients (`meka.im/google-t
 
 Local CLI/stdio is an explicit direct-access or development option. An Apify route can still be blocked or rate-limited; stop that path and report the result rather than switching deployments to get around it.
 
-## Install from GitHub
+## Install from npm
 
-The CLI/MCP require Node.js 20+. Nothing is published to npm; `npx` builds the package from the git checkout on first run.
+The CLI and MCP server are published on npm as `google-trends-for-agent` and require Node.js 20+.
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa --help
+npx -y -p google-trends-for-agent gtfa --help
 ```
 
-The GitHub dependency build was verified with npm 11.19.1. npm 10.9.4 can build it and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the clone → `npm ci` → pack flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
+The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). For frequent use, install globally from npm:
 
-The package installs two commands: `gtfa` (CLI) and `gtfa-mcp` (MCP server; stdio by default, or local Streamable HTTP with `--http --port 4321`). The zero-install `npx` path builds from git on first use; build time depends on the network and machine. For frequent use, prefer a persistent install or the MCP server.
+```sh
+npm install -g google-trends-for-agent
+```
 
-Persistent install (clone first because npm global git installs can omit build devDependencies during `prepare`). Pack and install the tarball so the clone can be deleted afterwards:
+Or build from source if installing from a local git checkout:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
@@ -40,14 +42,13 @@ npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
 
-The clone tracks the repository's default `main` branch. Add your own immutable commit pin only when a review process requires one.
+Pin a published npm version or git commit when a review process requires an immutable revision.
 
-The packed tarball bundles the audited `apify` dependency subtree from the root lock. Scoped npm `overrides` are not inherited when this package is installed as a dependency, so the bundle—not the root override alone—protects consumer installs from re-resolving older Apify transitives. The root pins `@crawlee/core` → `minimatch` to `11.0.8`, outside Crawlee's declared `^9` range; the exact override keeps clean installs aligned with the audited lock when newer releases appear. Consumer `npm ls` may show a range warning even though the override is intentional. Audits cover both the root tree and a clean consumer install of the packed artifact. The bundled tree materially increases package size.
+The published tarball bundles the audited `apify` dependency subtree from the root lock. Scoped npm `overrides` are not inherited when this package is installed as a dependency, so the bundle—not the root override alone—protects consumer installs from re-resolving older Apify transitives. The root pins `@crawlee/core` → `minimatch` to `11.0.8`, outside Crawlee's declared `^9` range; the exact override keeps clean installs aligned with the audited lock when newer releases appear. Consumer `npm ls` may show a range warning even though the override is intentional. Audits cover both the root tree and a clean consumer install of the packed artifact. The bundled tree materially increases package size.
 
 ## MCP client config
 
-For explicitly selected local access, use this generic stdio configuration,
-which follows the repository's `main` branch. Muse, GrokBot and Dots should start
+For explicitly selected local access, use this generic stdio configuration. Muse, GrokBot and Dots should start
 with the [Apify setup](docs/clients.md).
 
 ```json
@@ -55,13 +56,13 @@ with the [Apify setup](docs/clients.md).
   "mcpServers": {
     "google-trends": {
       "command": "npx",
-      "args": ["-y", "-p", "github:meka-im/google-trends-for-agent", "gtfa-mcp"]
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp"]
     }
   }
 }
 ```
 
-After the persistent install, use this config (or an absolute path to `gtfa-mcp`) to avoid resolving the GitHub package through npx on every start:
+After a global install (`npm install -g google-trends-for-agent`), use this config (or an absolute path to `gtfa-mcp`) directly without invoking `npx` on every start:
 
 ```json
 {
@@ -114,8 +115,8 @@ For explicitly selected local CLI/MCP access, run doctor after install or when
 a call fails unexpectedly. It checks that machine's route, not the Apify Actor:
 
 ```sh
-npx -y -p github:meka-im/google-trends-for-agent gtfa doctor
-npx -y -p github:meka-im/google-trends-for-agent gtfa doctor --json
+npx -y -p google-trends-for-agent gtfa doctor
+npx -y -p google-trends-for-agent gtfa doctor --json
 ```
 
 It prints PASS/FAIL for Node >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. Exit code 0 means all checks passed.
@@ -129,7 +130,7 @@ Local CLI/MCP networking is direct by default. If this machine needs a proxy, se
 Choose the execution route before querying:
 
 1. **Apify Actor (recommended for Muse, GrokBot and Dots).** Choose the public Actor or the user's own deployment, with on-demand execution. Remote MCP connects to Apify's managed gateway; a connector/API, dsh, or `gtfa` / `gtfa-mcp --egress actor-public|actor-own` (with `APIFY_TOKEN`) starts the Actor through the platform API. Runs use the on-platform residential proxy and exit after completing the result. Successful local dsh snapshot-cache hits start no cloud run. Keep Server / Standby disabled. Compute, proxy and storage usage apply; there is no fixed per-call price. A call is capped at 300 seconds of Actor runtime. Caller cancellation should abort its owned run, with the platform timeout as a final bound.
-2. **Your own machine IP (explicit direct access or development).** Run the stdio server locally, or run `npx -y -p github:meka-im/google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`.
+2. **Your own machine IP (explicit direct access or development).** Run the stdio server locally, or run `npx -y -p google-trends-for-agent gtfa-mcp --http --port 4321` and keep it bound to `127.0.0.1`.
 3. **The platform cloud VM (explicit direct access).** Run the client and server on that VM only when deliberately selected and outbound HTTPS is available. Installing `gtfa-mcp` with default `--egress local` does not route traffic through Apify; pass `--egress actor-public` (or `GTFA_EGRESS=actor-public`) with `APIFY_TOKEN` when routing through Apify from a local stdio/CLI process.
 
 | Client capability | Connection |

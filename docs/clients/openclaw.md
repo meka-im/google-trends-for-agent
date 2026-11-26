@@ -8,18 +8,24 @@ Use this guide for **OpenClaw**, custom agent frameworks, shell-driven bots, and
 
 ```sh
 # Direct from this machine (default: US, now 7-d, MEKA v1 baselines):
-npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
+npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 
 # Compare 1–5 keywords with multi-tier MEKA search-volume estimation:
-npx -y -p github:meka-im/google-trends-for-agent gtfa compare ChatGPT Claude Gemini --geo US --calibrate --json --pretty
+npx -y -p google-trends-for-agent gtfa compare ChatGPT Claude Gemini --geo US --calibrate --json --pretty
 
 # Route through Apify's public Actor residential proxy (recommended for cloud VMs):
-APIFY_TOKEN=<your-token> npx -y -p github:meka-im/google-trends-for-agent gtfa snapshot Sora --geo US --egress actor-public --json --pretty
+APIFY_TOKEN=<your-token> npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --egress actor-public --json --pretty
 ```
 
-## Persistent install (recommended for frequent use or npm 10)
+## Persistent install (recommended for frequent use)
 
-Building a GitHub dependency via `npx` was verified on npm 11.19.1; npm 10.9.4 can fail during packaging with a `GitFetcher` error. If you hit that error—or want instant startup without rebuilding—clone, pack, and install globally:
+Install globally from npm for instant startup:
+
+```sh
+npm install -g google-trends-for-agent
+```
+
+Or build from a local source checkout:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git

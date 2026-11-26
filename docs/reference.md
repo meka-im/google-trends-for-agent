@@ -4,9 +4,13 @@ Operational detail for the CLI, the MCP server, the dsh plugin, and the numbers 
 
 ## CLI surface
 
-The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server. Keep `npx` for zero-install use. Building the GitHub dependency was verified with npm 11.19.1. npm 10.9.4 can build it and then fail while packaging it with a `GitFetcher` error about a missing Arborist dependency. If you hit that error, use the persistent flow below or upgrade npm. The CLI and installed package still require Node.js 20+.
+The package installs `gtfa` for the CLI and `gtfa-mcp` for the MCP server (Node.js 20+). Use `npx -y -p google-trends-for-agent` for zero-install execution, or install globally from npm:
 
-For a persistent install, clone first because npm global git installs can omit build devDependencies during `prepare`. Pack and install the tarball so the clone can be deleted afterwards:
+```sh
+npm install -g google-trends-for-agent
+```
+
+Or build from a local source checkout:
 
 ```sh
 git clone https://github.com/meka-im/google-trends-for-agent.git
@@ -15,7 +19,7 @@ npm ci
 npm install -g "$(npm pack | tail -1)"
 ```
 
-The clone follows the repository's default `main` branch. If a review process needs an immutable source revision, add an explicit commit pin rather than relying on a moving branch.
+Pin a published npm version or git commit if a review process requires an immutable source revision.
 
 | Command | Flags | Purpose |
 | --- | --- | --- |
@@ -26,7 +30,7 @@ The clone follows the repository's default `main` branch. If a review process ne
 | `gtfa baselines` | `--sync`, `--store DIR`, `--json`, `--pretty`, `--help` | Inspect active MEKA v1 calibration baselines status or manually sync from `meka.im`. |
 | `gtfa doctor` | `--timeout MS`, `--json`, `--pretty`, `--help` | Checks Node.js >= 20, Google Trends reachability, proxy mode, and one live `gpts` US 24h fetch. `--timeout` accepts 1000–60000 and defaults to 8000 ms for each network check; a challenge or HTTP 429 skips the live fetch. Exit 0 only when all checks pass. |
 
-Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p github:meka-im/google-trends-for-agent gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 7-d`, web, category 0, except where a command says otherwise. `compare` and the default `--query` mode honor omitted `geo`, `time`, `category`, `property`, and `locale` (`hl`) from `gtfa.config.json`; `GTFA_GEO` and `GTFA_TIME` supply their respective environment defaults. Explore URL plans keep the URL's filters, and explicit dates keep their dates. Chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
+Examples below assume a global `gtfa`; without one, replace `gtfa` with `npx -y -p google-trends-for-agent gtfa`. `--types` accepts `interestOverTime`, `interestByCity`, `interestByMetro`, `interestBySubregion`, `relatedQueries`, or `relatedTopics`. `--start` and `--end` must be used together; do not combine Explore URLs with `--query`. Defaults are US, `now 7-d`, web, category 0, except where a command says otherwise. `compare` and the default `--query` mode honor omitted `geo`, `time`, `category`, `property`, and `locale` (`hl`) from `gtfa.config.json`; `GTFA_GEO` and `GTFA_TIME` supply their respective environment defaults. Explore URL plans keep the URL's filters, and explicit dates keep their dates. Chart time zones resolve as explicit `--tz` / `tz`, then `GTFA_TZ`, then `UTC`.
 
 ```sh
 gtfa ask "nano banana" --validate --diff --json

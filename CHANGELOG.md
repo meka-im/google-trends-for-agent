@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.42 — 2026-11-26
+
+### npm release & documentation alignment
+- Publish [`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent) on npm with GitHub Actions provenance (`--provenance --access public` via `.github/workflows/publish-npm.yml`) and add the npm version badge to `README.md` / `README.zh-CN.md`.
+- Update `README.md`, `README.zh-CN.md`, `AGENTS.md`, `docs/reference.md`, and client setup guides (`openclaw.md`, `codex.md`, `claude.md`, `cursor-vscode.md`, `dots.md`) to use `npm install -g google-trends-for-agent` and `npx -y -p google-trends-for-agent`, replacing stale pre-npm instructions.
+- Document the standard `GitHub Release → npm publish → Apify Actor rebuild & health probe` release workflow in `docs/releasing.md`.
+
+### Apify Actor resilience (included since 0.2.41)
+- Add automatic Apify proxy session fallback (`RESIDENTIAL` → default Apify Proxy → direct) and bounded transient retries on rotating proxy runs (`src/actor-proxy.ts`, `src/actor.ts`, `src/client.ts`).
+- Add twice-daily and on-demand Apify Actor health check & `UNDER_MAINTENANCE` auto-recovery workflow (`scripts/apify-health.mjs`, `.github/workflows/apify-health.yml`).
+
 ## 0.2.41 — 2026-11-22
 
 ### Per-Actor-run billing ledger & dual-view history (dsh)
