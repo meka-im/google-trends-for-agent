@@ -5,6 +5,7 @@ import { ChoicePicker } from './choice-picker.js';
 import { Icon } from './icons.js';
 import { SETTINGS_CSS } from './theme.js';
 import { DASHBOARD_CSS } from './dashboard-theme.js';
+import { BASELINE_REFERENCE_URL } from '../baseline-catalog.js';
 import { GEO_CODES, regionLabel, type EgressMode } from '../options.js';
 import type { ActorRunRecord, QueryRecord, SavedQuery } from '../query-history-types.js';
 import { DashboardController, dashboardRequest, queryKeywords, type RecordsViewMode } from './dashboard-state.js';
@@ -682,6 +683,13 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
           <div><b>{step.anchor}</b>{record.terms.length > 1 && <small>{step.targets.join('、')}</small>}{step.error && <small>{step.error}</small>}</div>
           <span>{formatNumber(step.daily)} {t('dashPerDay')}</span>
         </div>)}
+        <div className="gd-anchor-source">
+          <span>{t('dashAnchorSource')}</span>
+          <a href={BASELINE_REFERENCE_URL} target="_blank" rel="noopener noreferrer" title={BASELINE_REFERENCE_URL}>
+            {t('dashAnchorSourceLink')}
+            <Icon name="external" size={11} />
+          </a>
+        </div>
       </div>}
       {batch?.error && <p role="alert" className="gd-error-code">{t(batch.error === 'NETWORK_ERROR' ? 'dashBatchNetwork' : 'dashEstimateFailed')} · {batch.error}</p>}
       {(!batch?.complete || batch.error) && !running && <button type="button" className="gd-button primary gd-estimate-action" disabled={busy || !record.id} onClick={() => estimate('', 'batch')}>{t(batch?.error ? 'dashRetryEstimate' : 'dashBatchEstimate')}</button>}
@@ -723,6 +731,13 @@ function VolumeCards({ saved, t, egress, estimate, busy }: { saved: SavedQuery; 
       </div>;
     })}
     <small>{t('dashEstimateNote')}</small>
+    <div className="gd-anchor-source">
+      <span>{t('dashAnchorSource')}</span>
+      <a href={BASELINE_REFERENCE_URL} target="_blank" rel="noopener noreferrer" title={BASELINE_REFERENCE_URL}>
+        {t('dashAnchorSourceLink')}
+        <Icon name="external" size={11} />
+      </a>
+    </div>
   </div>;
 }
 

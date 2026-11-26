@@ -93,6 +93,8 @@ export const DASHBOARD_EN: Record<string, string> = {
   dashFailedEmptyHintLocal: 'Local requests hit limits easily. Switch to an Actor for stable fetches.',
   dashFailedEmptyHintSwitched: 'Switched to Actor. Click "Query trends" above to run again.',
   dashFailedEmptyHintActor: 'The request did not return usable series. Check Query details or retry.',
+  dashAnchorSource: 'Baseline source',
+  dashAnchorSourceLink: 'MEKA Anchors',
   dashRawErrorLabel: 'Error detail',
 };
 export const DASHBOARD_ZH: Record<string, string> = {
@@ -187,5 +189,7 @@ export const DASHBOARD_ZH: Record<string, string> = {
   dashFailedEmptyHintLocal: '本机直连易触发限流，切换至 Actor 后可稳定取数。',
   dashFailedEmptyHintSwitched: '当前已切换至 Actor，点击上方「查询趋势」即可重试。',
   dashFailedEmptyHintActor: '本次请求未返回可用趋势数据，可查看调用详情或重试。',
+  dashAnchorSource: '基准来源',
+  dashAnchorSourceLink: 'MEKA 基准数据集',
   dashRawErrorLabel: '错误详情',
 };

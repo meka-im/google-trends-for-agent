@@ -112,6 +112,10 @@ describe('dashboard interactions', () => {
     await waitFor(() => expect(h.rows()).toHaveLength(1));
     await user.click(screen.getByRole('button', { name: 'Estimate daily searches' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Estimated searches' }).getAttribute('aria-pressed')).toBe('true'));
+    const sourceLink = screen.getByRole('link', { name: DASHBOARD_EN.dashAnchorSourceLink });
+    expect(sourceLink.getAttribute('href')).toBe('https://meka.im/datasets/google-trends-anchors');
+    expect(sourceLink.getAttribute('target')).toBe('_blank');
+    expect(sourceLink.getAttribute('rel')).toBe('noopener noreferrer');
   });
   it('cancels deletion, then clears a selected result and updates totals without a query', async () => {
     const h = api(), user = userEvent.setup(), { container } = render(<Dashboard t={t} />);

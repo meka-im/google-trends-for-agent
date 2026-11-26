@@ -303,6 +303,9 @@ export const DASHBOARD_CSS = `
 .gd-anchor-round{font-size:10.5px;font-weight:600;color:var(--gtfa-muted);background:var(--gtfa-surface);padding:1px 6px;border-radius:4px}
 .gd-anchor-line b{overflow-wrap:anywhere;font-weight:600}
 .gd-anchor-line>span:last-child{font-variant-numeric:tabular-nums;color:var(--gtfa-muted)}
+.gd-anchor-source{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--gtfa-line);font-size:11px;color:var(--gtfa-muted)}
+.gd-anchor-source a{display:inline-flex;align-items:center;gap:4px;color:var(--gtfa-accent);font-weight:550;text-decoration:none}
+.gd-anchor-source a:hover{text-decoration:underline}
 
 /* Legacy / Individual Volume Cards */
 .gd-volume-note{font-size:12px;color:var(--gtfa-muted);line-height:1.65;padding:12px;border-radius:10px;background:var(--gtfa-soft)}
