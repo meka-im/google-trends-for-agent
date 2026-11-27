@@ -6,9 +6,9 @@
   </picture>
 </p>
 
-<p align="center"><b>Search-interest signals for AI agents. One call in, stable JSON out.</b></p>
+<p align="center"><b>Free, open-source (MIT) <code>pytrends</code> alternative for AI agents, CLI &amp; MCP — real daily search volume calibrated via 59 Google Ads anchors.</b></p>
 
-<p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
+<p align="center">English | <a href="README.zh-CN.md">简体中文</a> | <a href="https://meka.im/google-trends-for-agent">Interactive Demo &amp; 59 Anchors</a></p>
 
 <p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
@@ -17,7 +17,17 @@
 > [!WARNING]
 > **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
 
-`google-trends-for-agent` gives agents and humans a predictable way to ask how search interest is changing: a stable JSON envelope, calibrated searches/day estimates, charts, and explicit error codes instead of invented numbers.
+`google-trends-for-agent` is a modern open-source (MIT) alternative to the archived [`pytrends`](https://github.com/GeneralMills/pytrends) library, built for AI agents, CLI workflows, and MCP clients. Instead of raw 0–100 relative curves or frequent HTTP 429 failures, it returns a stable JSON envelope, **calibrated daily search volume estimates** (using 59 public Google Ads anchors), charts, and explicit error codes.
+
+### Why `google-trends-for-agent`?
+
+| Capability | `google-trends-for-agent` (MIT) | `pytrends` (Archived Apr 2025) | Legacy SEO Tools (Ahrefs / Semrush) |
+| --- | --- | --- | --- |
+| **Status & License** | Actively maintained · 100% Free MIT | Archived read-only (last push 2024) | Paid subscription ($99–$139+/mo) |
+| **Breakout Keywords** | Real-time capture (e.g. `gemini 4 carbon` at `18,000/day`) | Relative `0–100` only | Shows `0` for 30+ days |
+| **Daily Search Volume** | Calibrated via [59 open Google Ads anchors](https://meka.im/google-trends-for-agent#anchors) | No absolute volume | Lagging monthly averages |
+| **HTTP 429 Recovery** | Start `$0` on **Local IP** → 1-click switch to **Public Open-Source Actor** (`$5/mo` Apify free tier ≈ 3,000–7,000 queries) or **Self-Hosted Actor** (same MIT repo) | Frequent `TooManyRequestsError (429)` | Closed database |
+| **Surfaces** | CLI (`gtfa`), MCP (`gtfa-mcp`), DeepSeek Harness (`dsh`) plugin, Apify Actor | Python script only | Web UI / paid API |
 
 <p align="center">
   <img src="docs/assets/demo-terminal.svg" alt="Animated gtfa snapshot command revealing the trimmed JSON envelope for Sora" width="800">
