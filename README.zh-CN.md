@@ -6,9 +6,9 @@
   </picture>
 </p>
 
-<p align="center"><b>面向 AI Agent 的搜索兴趣信号。一次调用，输出稳定 JSON。</b></p>
+<p align="center"><b>免费开源 (MIT) 的现代 <code>pytrends</code> 替代方案（CLI / MCP / 桌面插件）— 基于 59 个 Google Ads 锚点校准真实日搜索量。</b></p>
 
-<p align="center"><a href="README.md">English</a> | 简体中文</p>
+<p align="center"><a href="README.md">English</a> | 简体中文 | <a href="https://meka.im/google-trends-for-agent">在线演示与 59 个开源锚点</a></p>
 
 <p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
@@ -17,7 +17,17 @@
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
 
-`google-trends-for-agent` 让 Agent 和人类以可预测的方式查询搜索兴趣变化：稳定的 JSON 信封、校准后的每日搜索量估算、图表，以及明确的错误码，而不是编造数字。
+`google-trends-for-agent` 是已归档项目 [`pytrends`](https://github.com/GeneralMills/pytrends) 的现代免费开源（MIT）替代方案，专为 AI Agent、命令行和 MCP 客户端设计。它不只是抓取 0–100 相对指数，而是输出稳定的 JSON 信封、**基于 59 个公开 Google Ads 锚点校准的真实日搜索量估算**、趋势图与明确错误码。
+
+### 为什么选择 `google-trends-for-agent`？
+
+| 能力对比 | `google-trends-for-agent` (MIT) | `pytrends`（2025 年 4 月已归档） | 传统 SEO 工具（Ahrefs / Semrush） |
+| --- | --- | --- | --- |
+| **维护与协议** | 持续维护 · 100% 免费 MIT 开源 | 已只读归档停更 | 付费订阅（$99–$139+/月） |
+| **刚爆发新词** | 实时捕获（如 `gemini 4 carbon` 峰值 `18,000 次/天`） | 仅 0–100 相对曲线 | 延迟 30+ 天显示 `0` |
+| **真实日搜索量** | 基于 [59 个开源 Google Ads 锚点](https://meka.im/google-trends-for-agent#anchors) 实时校准 | 无绝对搜索量 | 月均滞后词库 |
+| **HTTP 429 应对** | 默认 **本机 IP 免费直连 ($0)** → 限流 1 键切 **开源公共 Actor**（Apify 每月 `$5` 免费额度约跑 3,000–7,000 次）或 **自部署私有 Actor**（同源 MIT 代码） | 频繁报 `TooManyRequestsError (429)` | 闭源数据库 |
+| **使用形态** | CLI（`gtfa`）、MCP（`gtfa-mcp`）、DeepSeek Harness（`dsh`）插件、Apify Actor | 仅 Python 脚本 | 网页端 / 付费 API |
 
 <p align="center">
   <img src="docs/assets/demo-terminal.svg" alt="动画演示 gtfa snapshot 命令逐字显示，并逐行返回 Sora 的裁剪 JSON 信封" width="800">
