@@ -24,7 +24,7 @@
 
 ## 快速开始（Node.js 20+）
 
-直接用本机 IP 一行命令免费运行（`$0`，无需注册账号）：
+直接用本机 IP 一行命令免费运行（**`$0` 不限次数**，无需注册账号，同时原生支持自接 `HTTPS_PROXY` / `HTTP_PROXY` 代理）：
 
 ```sh
 npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
@@ -63,7 +63,7 @@ npm install -g google-trends-for-agent
 | **维护与协议** | 持续维护 · 100% 免费 MIT 开源 | 已只读归档停更 | 付费订阅（$99–$139+/月） |
 | **刚爆发新词** | 实时捕获（如 `gemini 4 carbon` 峰值 `18,000 次/天`） | 仅 0–100 相对曲线 | 延迟 30+ 天显示 `0` |
 | **真实日搜索量** | 基于 [59 个开源 Google Ads 锚点](https://meka.im/google-trends-for-agent#anchors) 实时校准 | 无绝对搜索量 | 月均滞后词库 |
-| **HTTP 429 应对** | 默认 **本机 IP 免费直连 ($0)** → 限流 1 键切 **开源公共 Actor**（Apify 每月 `$5` 免费额度约跑 3,000–7,000 次）或 **自部署私有 Actor**（同源 MIT 代码） | 频繁报 `TooManyRequestsError (429)` | 闭源数据库 |
+| **HTTP 429 应对** | **本机 IP / 自接代理（`HTTPS_PROXY`）`$0` 无限次** · 也可 1 键切 **开源公共 Actor**（Apify 每月 `$5` 免费额度约跑 3,000–7,000 次）或 **自部署私有 Actor**（同源 MIT 代码） | 频繁报 `TooManyRequestsError (429)` | 闭源数据库 |
 | **使用形态** | CLI（`gtfa`）、MCP（`gtfa-mcp`）、DeepSeek Harness（`dsh`）插件、Apify Actor | 仅 Python 脚本 | 网页端 / 付费 API |
 
 ## 按客户端选择安装教程与抓取路线
@@ -75,7 +75,7 @@ npm install -g google-trends-for-agent
 
 | 路线 | 执行位置 | 运行方式 |
 | --- | --- | --- |
-| 本机直连 | 本机 | 默认 `$0` 免费直连，支持 CLI、stdio MCP 或 dsh 原生工具 |
+| 本机直连 | 本机 | 默认 **`$0` 无限次**免费直连（原生支持自接 `HTTPS_PROXY` / `HTTP_PROXY` 代理），支持 CLI、stdio MCP 或 dsh 原生工具 |
 | 公共 Actor | 你的 Apify 账号 | 有查询才启动，完成即退出，无需部署（可用每月 `$5` 免费额度） |
 | 自己的 Actor | 你的 Apify 账号 | 部署一次本 MIT 开源仓库，随后按次运行 |
 

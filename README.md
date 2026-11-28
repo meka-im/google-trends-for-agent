@@ -24,7 +24,7 @@
 
 ## Quick start (Node.js 20+)
 
-Run immediately with `npx` on your own local IP (`$0`, no account required):
+Run immediately with `npx` on your own local IP (**`$0` unlimited** — also honors your own `HTTPS_PROXY` / `HTTP_PROXY` with zero quota cap):
 
 ```sh
 npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
@@ -63,7 +63,7 @@ Add the local MCP server (`gtfa-mcp`) to Claude Code, Cursor, Codex, or Windsurf
 | **Status & License** | Actively maintained · 100% Free MIT | Archived read-only (last push 2024) | Paid subscription ($99–$139+/mo) |
 | **Breakout Keywords** | Real-time capture (e.g. `gemini 4 carbon` at `18,000/day`) | Relative `0–100` only | Shows `0` for 30+ days |
 | **Daily Search Volume** | Calibrated via [59 open Google Ads anchors](https://meka.im/google-trends-for-agent#anchors) | No absolute volume | Lagging monthly averages |
-| **HTTP 429 Recovery** | Start `$0` on **Local IP** → 1-click switch to **Public Open-Source Actor** (`$5/mo` Apify free tier ≈ 3,000–7,000 queries) or **Self-Hosted Actor** (same MIT repo) | Frequent `TooManyRequestsError (429)` | Closed database |
+| **HTTP 429 Recovery** | **`$0` unlimited** on Local IP or your own `HTTPS_PROXY` / `HTTP_PROXY` · or 1-click switch to **Public Open-Source Actor** (`$5/mo` Apify free tier ≈ 3,000–7,000 queries) or **Self-Hosted Actor** (same MIT repo) | Frequent `TooManyRequestsError (429)` | Closed database |
 | **Surfaces** | CLI (`gtfa`), MCP (`gtfa-mcp`), DeepSeek Harness (`dsh`) plugin, Apify Actor | Python script only | Web UI / paid API |
 
 ## Choose your client guide & egress route
@@ -75,7 +75,7 @@ Add the local MCP server (`gtfa-mcp`) to Claude Code, Cursor, Codex, or Windsurf
 
 | Route | Where it runs | Execution |
 | --- | --- | --- |
-| Local | This machine | Default `$0` direct access via CLI, stdio MCP, or native dsh tools |
+| Local | This machine | Default **`$0` unlimited** direct access (also honors custom `HTTPS_PROXY` / `HTTP_PROXY`) via CLI, stdio MCP, or native dsh tools |
 | Public Actor | Your Apify account | One run per query; exits when done, no deployment (`$5/mo` free tier) |
 | My own Actor | Your Apify account | Deploy this MIT repo once, then run on demand |
 
