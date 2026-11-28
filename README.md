@@ -10,106 +10,33 @@
 
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a> | <a href="https://meka.im/google-trends-for-agent">Interactive Demo &amp; 59 Anchors</a></p>
 
-<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-en-dark.png"><img src="docs/assets/store-button-en.png" alt="Open in Apify Store" width="231" height="44"></picture></a></p>
-
-> [!WARNING]
-> **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
-
-`google-trends-for-agent` is a modern open-source (MIT) alternative to the archived [`pytrends`](https://github.com/GeneralMills/pytrends) library, built for AI agents, CLI workflows, and MCP clients. Instead of raw 0–100 relative curves or frequent HTTP 429 failures, it returns a stable JSON envelope, **calibrated daily search volume estimates** (using 59 public Google Ads anchors), charts, and explicit error codes.
-
-### Why `google-trends-for-agent`?
-
-| Capability | `google-trends-for-agent` (MIT) | `pytrends` (Archived Apr 2025) | Legacy SEO Tools (Ahrefs / Semrush) |
-| --- | --- | --- | --- |
-| **Status & License** | Actively maintained · 100% Free MIT | Archived read-only (last push 2024) | Paid subscription ($99–$139+/mo) |
-| **Breakout Keywords** | Real-time capture (e.g. `gemini 4 carbon` at `18,000/day`) | Relative `0–100` only | Shows `0` for 30+ days |
-| **Daily Search Volume** | Calibrated via [59 open Google Ads anchors](https://meka.im/google-trends-for-agent#anchors) | No absolute volume | Lagging monthly averages |
-| **HTTP 429 Recovery** | Start `$0` on **Local IP** → 1-click switch to **Public Open-Source Actor** (`$5/mo` Apify free tier ≈ 3,000–7,000 queries) or **Self-Hosted Actor** (same MIT repo) | Frequent `TooManyRequestsError (429)` | Closed database |
-| **Surfaces** | CLI (`gtfa`), MCP (`gtfa-mcp`), DeepSeek Harness (`dsh`) plugin, Apify Actor | Python script only | Web UI / paid API |
+`google-trends-for-agent` (`gtfa`) is a modern open-source (MIT) alternative to the archived [`pytrends`](https://github.com/GeneralMills/pytrends) library, built for AI agents, CLI workflows, and MCP clients. Instead of raw 0–100 relative curves or frequent HTTP 429 failures, it returns a stable JSON envelope, **calibrated daily search volume estimates** (using 59 public Google Ads anchors), charts, and explicit error codes.
 
 <p align="center">
   <img src="docs/assets/demo-terminal.svg" alt="Animated gtfa snapshot command revealing the trimmed JSON envelope for Sora" width="800">
 </p>
 <p align="center"><sub>Real snapshot output, trimmed. The full envelope also includes the series, primary and 7-day traffic blocks, related-query context, warnings, and metadata.</sub></p>
 
-## Choose your client guide
+> [!WARNING]
+> **Unofficial. Not affiliated with or endorsed by Google.** This project calls undocumented public Google Trends web endpoints that can change or fail without notice, and use may conflict with Google's Terms of Service. Use it for light, interactive analysis, not bulk scraping or an SLA.
 
-**AI agents: start at the [Client Setup Router](docs/clients.md) and open the guide for your exact host before installing or calling tools.**
+## Quick start (Node.js 20+)
 
-- [DeepSeek Harness (dsh)](docs/clients/dsh.md) · [GrokBot](docs/clients/grokbot.md) · [Muse](docs/clients/muse.md) · [Dots & Web Agents](docs/clients/dots.md)
-- [Claude Code & Desktop](docs/clients/claude.md) · [OpenAI Codex](docs/clients/codex.md) · [Cursor / VS Code / Windsurf / Cline](docs/clients/cursor-vscode.md) · [OpenClaw & CLI](docs/clients/openclaw.md)
-
-**Muse, GrokBot and Dots: use Apify on demand by default**, with either the public
-Actor or your own deployment. Use the managed remote MCP gateway where supported,
-or the client's authenticated Apify connector/API. Local access remains available
-for development and explicit direct-use setups.
-
-| Route | Where it runs | Execution |
-| --- | --- | --- |
-| Public Actor | Your Apify account | One run per query; exits when done, no deployment |
-| My own Actor | Your Apify account | Deploy once, then run on demand |
-| Local | This machine | CLI, stdio MCP, or native dsh tools |
-
-<a id="deploy-it-yourself"></a>
-
-### Deploy it yourself
-
-Fork the repository and build it with Link Git repository in Apify Console, or run `apify push`. Keep Server / Standby disabled. In dsh, select My own Actor, sign in with Apify, and select the built Actor.
-
-For an existing deployment from official main, use **Update selected Actor** in dsh. After the build finishes, **Test connection** shows keyword access and the actual Actor/plugin versions separately. Custom or pinned source is updated in Apify Console. See the [release and acceptance checklist](docs/releasing.md).
-
-### Remote MCP
-
-For Muse, GrokBot and Dots with remote MCP support, use Apify's hosted gateway
-and complete OAuth in the client:
-
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
-    }
-  }
-}
-```
-
-For your own deployment, replace `meka.im/google-trends-for-agent` in `tools=`
-with your account's `<username>/<actor-name>`. The account must have access to it.
-
-The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin provide the four `trends_*` tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
-
-Apify's `full_api_access` OAuth scope grants account-wide API access. Clients without MCP OAuth can configure a Bearer header through their credential storage. See the [Actor reference](.actor/README.md) and [Actor costs](docs/reference.md#actor-costs).
-
-## Install & quick start
-
-The CLI and MCP server are published on npm as [`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent) and require Node.js 20+. Run immediately with `npx`:
+Run immediately with `npx` on your own local IP (`$0`, no account required):
 
 ```sh
 npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
 ```
 
-For frequent use, install globally from npm:
+Or install globally from npm ([`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent)):
 
 ```sh
 npm install -g google-trends-for-agent
 ```
 
-Or build from source if you prefer a local git checkout:
-
-```sh
-git clone https://github.com/meka-im/google-trends-for-agent.git
-cd google-trends-for-agent
-npm ci
-npm install -g "$(npm pack | tail -1)"
-```
-
-The source checkout tracks the repository's default `main` branch. If your review process requires an immutable source revision, pin a published npm version or git commit rather than relying on a moving branch.
-
-The published tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
-
-The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local` egress (this machine's network) and also support Apify on-demand cloud egress (`--egress actor-public` or `--egress actor-own --actor <id>`, or `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` with `APIFY_TOKEN`), giving direct access to the four `trends_*` tools through Apify's residential proxy. For managed remote MCP without a local Node process, Muse, GrokBot and Dots should start with the [Apify setup](docs/clients.md):
+Add the local MCP server (`gtfa-mcp`) to Claude Code, Cursor, Codex, or Windsurf:
 
 ```json
 {
@@ -122,7 +49,69 @@ The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local`
 }
 ```
 
-To route local stdio MCP or CLI calls through Apify's public Actor with `APIFY_TOKEN` in the client's secure environment:
+### Commands & MCP tools at a glance
+
+- **`gtfa snapshot <term>`** (`trends_snapshot`) — trend curve, **calibrated daily search volume**, and related queries in one call.
+- **`gtfa ask <term>`** (`trends_ask`) — quick single-term momentum check with optional anchor validation (`--validate`).
+- **`gtfa compare <a,b,...>`** (`trends_compare`) — compare up to 5 keywords side by side (`--calibrate` for daily searches).
+- **`gtfa now`** (`trends_now`) — real-time trending searches across up to 30 countries.
+
+## Why `google-trends-for-agent`?
+
+| Capability | `google-trends-for-agent` (MIT) | `pytrends` (Archived Apr 2025) | Legacy SEO Tools (Ahrefs / Semrush) |
+| --- | --- | --- | --- |
+| **Status & License** | Actively maintained · 100% Free MIT | Archived read-only (last push 2024) | Paid subscription ($99–$139+/mo) |
+| **Breakout Keywords** | Real-time capture (e.g. `gemini 4 carbon` at `18,000/day`) | Relative `0–100` only | Shows `0` for 30+ days |
+| **Daily Search Volume** | Calibrated via [59 open Google Ads anchors](https://meka.im/google-trends-for-agent#anchors) | No absolute volume | Lagging monthly averages |
+| **HTTP 429 Recovery** | Start `$0` on **Local IP** → 1-click switch to **Public Open-Source Actor** (`$5/mo` Apify free tier ≈ 3,000–7,000 queries) or **Self-Hosted Actor** (same MIT repo) | Frequent `TooManyRequestsError (429)` | Closed database |
+| **Surfaces** | CLI (`gtfa`), MCP (`gtfa-mcp`), DeepSeek Harness (`dsh`) plugin, Apify Actor | Python script only | Web UI / paid API |
+
+## Choose your client guide & egress route
+
+**AI agents: start at the [Client Setup Router](docs/clients.md) and open the guide for your exact host before installing or calling tools.**
+
+- [DeepSeek Harness (dsh)](docs/clients/dsh.md) · [GrokBot](docs/clients/grokbot.md) · [Muse](docs/clients/muse.md) · [Dots & Web Agents](docs/clients/dots.md)
+- [Claude Code & Desktop](docs/clients/claude.md) · [OpenAI Codex](docs/clients/codex.md) · [Cursor / VS Code / Windsurf / Cline](docs/clients/cursor-vscode.md) · [OpenClaw & CLI](docs/clients/openclaw.md)
+
+| Route | Where it runs | Execution |
+| --- | --- | --- |
+| Local | This machine | Default `$0` direct access via CLI, stdio MCP, or native dsh tools |
+| Public Actor | Your Apify account | One run per query; exits when done, no deployment (`$5/mo` free tier) |
+| My own Actor | Your Apify account | Deploy this MIT repo once, then run on demand |
+
+**Muse, GrokBot and Dots: use Apify on demand by default**, with either the public Actor or your own deployment. Use the managed remote MCP gateway where supported, or the client's authenticated Apify connector/API. Local access remains available for development and explicit direct-use setups.
+
+<p align="left"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-en-dark.png"><img src="docs/assets/store-button-en.png" alt="Open in Apify Store" width="231" height="44"></picture></a></p>
+
+<a id="deploy-it-yourself"></a>
+
+### Deploy it yourself
+
+Fork the repository and build it with Link Git repository in Apify Console, or run `apify push`. Keep Server / Standby disabled. In dsh, select My own Actor, sign in with Apify, and select the built Actor.
+
+For an existing deployment from official main, use **Update selected Actor** in dsh. After the build finishes, **Test connection** shows keyword access and the actual Actor/plugin versions separately. Custom or pinned source is updated in Apify Console. See the [release and acceptance checklist](docs/releasing.md).
+
+### Remote MCP & cloud egress options
+
+For Muse, GrokBot and Dots with remote MCP support, use Apify's hosted gateway and complete OAuth in the client:
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "url": "https://mcp.apify.com?tools=meka.im/google-trends-for-agent"
+    }
+  }
+}
+```
+
+For your own deployment, replace `meka.im/google-trends-for-agent` in `tools=` with your account's `<username>/<actor-name>`. The account must have access to it.
+
+The gateway exposes this project as an Actor tool and supplies Dataset, key-value-store, and abort tools. It starts a one-off run; it does not promise the four direct `trends_*` names. Local MCP and the native dsh plugin provide the four `trends_*` tools. For ordinary `tool` / `terms` Actor input, read the results using the returned Dataset id.
+
+Apify's `full_api_access` OAuth scope grants account-wide API access. Clients without MCP OAuth can configure a Bearer header through their credential storage. See the [Actor reference](.actor/README.md) and [Actor costs](docs/reference.md#actor-costs).
+
+The CLI is `gtfa`; `gtfa-mcp` runs the local MCP server. Both default to `local` egress (this machine's network) and also support Apify on-demand cloud egress (`--egress actor-public` or `--egress actor-own --actor <id>`, or `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` with `APIFY_TOKEN`), giving direct access to the four `trends_*` tools through Apify's residential proxy:
 
 ```json
 {
@@ -150,6 +139,22 @@ For a local **Streamable HTTP** endpoint (bound to `127.0.0.1`):
 npx -y -p google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
+<details>
+<summary>Build from source, packaging audit notes &amp; connectivity diagnostics</summary>
+
+Build from a local git checkout:
+
+```sh
+git clone https://github.com/meka-im/google-trends-for-agent.git
+cd google-trends-for-agent
+npm ci
+npm install -g "$(npm pack | tail -1)"
+```
+
+The source checkout tracks the repository's default `main` branch. If your review process requires an immutable source revision, pin a published npm version or git commit rather than relying on a moving branch.
+
+The published tarball bundles the audited `apify` dependency tree so a consumer install does not re-resolve older vulnerable Apify transitives. Root npm `overrides` do not propagate into consumers, so this bundle is part of the consumer protection. The root also applies an explicit `@crawlee/core` → `minimatch` `^11.0.1` security override (lock: `11.0.8`); Crawlee declares `^9`, so consumer `npm ls` may show a range warning even though the explicit override is intentional. Audits cover both the root tree and a clean install of the packed artifact. Bundling materially increases package size.
+
 Check both package-download and data-fetch connectivity:
 
 ```sh
@@ -158,6 +163,8 @@ curl -I https://trends.google.com
 ```
 
 If `npx …` exits non-zero with empty stdout/stderr, the npm package fetch failed before gtfa started; inspect the npm debug log (typically `~/.npm/_logs/`). **MCP fails to start** means npx/npm errors or EOF before the handshake. **MCP started but a tool fetch failed** means the handshake and `tools/list` succeed, but the tool returns `NETWORK_ERROR`, `RATE_LIMITED`, or another upstream error. Use `gtfa doctor --json` for the latter.
+
+</details>
 
 ## dsh plugin
 
