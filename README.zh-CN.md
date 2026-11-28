@@ -10,16 +10,53 @@
 
 <p align="center"><a href="README.md">English</a> | 简体中文 | <a href="https://meka.im/google-trends-for-agent">在线演示与 59 个开源锚点</a></p>
 
-<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
+<p align="center"><a href="https://www.npmjs.com/package/google-trends-for-agent"><img src="https://img.shields.io/npm/v/google-trends-for-agent?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm version"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="MIT license"></a> <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 20"></a> <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript strict"> <a href="https://apify.com/meka.im/google-trends-for-agent"><img src="https://img.shields.io/badge/Apify%20Store-google--trends--for--agent-97D700?style=flat-square" alt="Apify Store"></a> <img src="https://img.shields.io/badge/status-unofficial-orange?style=flat-square" alt="Unofficial"></p>
 
-<p align="center"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-zh-dark.png"><img src="docs/assets/store-button-zh.png" alt="在 Apify Store 打开" width="224" height="44"></picture></a></p>
+`google-trends-for-agent`（`gtfa`）是已归档项目 [`pytrends`](https://github.com/GeneralMills/pytrends) 的现代免费开源（MIT）替代方案，专为 AI Agent、命令行和 MCP 客户端设计。它不只是抓取 0–100 相对指数，而是输出稳定的 JSON 信封、**基于 59 个公开 Google Ads 锚点校准的真实日搜索量估算**、趋势图与明确错误码。
+
+<p align="center">
+  <img src="docs/assets/demo-terminal.svg" alt="动画演示 gtfa snapshot 命令逐字显示，并逐行返回 Sora 的裁剪 JSON 信封" width="800">
+</p>
+<p align="center"><sub>真实快照输出，已裁剪。完整信封还包含序列、主窗口与近 7 天流量块、相关查询上下文、警告和元数据。</sub></p>
 
 > [!WARNING]
 > **非官方项目，与 Google 无隶属关系，也未获其背书。** 本项目调用未公开的 Google Trends Web 接口，这些接口可能随时变更或失效，使用方式也可能与 Google 服务条款冲突。请仅用于轻量、交互式分析，不要用于批量抓取，也不要将其视为 SLA。
 
-`google-trends-for-agent` 是已归档项目 [`pytrends`](https://github.com/GeneralMills/pytrends) 的现代免费开源（MIT）替代方案，专为 AI Agent、命令行和 MCP 客户端设计。它不只是抓取 0–100 相对指数，而是输出稳定的 JSON 信封、**基于 59 个公开 Google Ads 锚点校准的真实日搜索量估算**、趋势图与明确错误码。
+## 快速开始（Node.js 20+）
 
-### 为什么选择 `google-trends-for-agent`？
+直接用本机 IP 一行命令免费运行（`$0`，无需注册账号）：
+
+```sh
+npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
+```
+
+或从 npm 全局安装（[`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent)）：
+
+```sh
+npm install -g google-trends-for-agent
+```
+
+接入 Claude Code、Cursor、Codex 或 Windsurf 的本地 MCP（`gtfa-mcp`）：
+
+```json
+{
+  "mcpServers": {
+    "google-trends": {
+      "command": "npx",
+      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp"]
+    }
+  }
+}
+```
+
+### 核心命令与 MCP 工具一览
+
+- **`gtfa snapshot <term>`**（`trends_snapshot`）— 一次调用获取趋势曲线、**校准后日搜索量估算**与相关飙升词。
+- **`gtfa ask <term>`**（`trends_ask`）— 快速查询单关键词势头，支持 `--validate` 锚点校验。
+- **`gtfa compare <a,b,...>`**（`trends_compare`）— 最多 5 个关键词同屏对比（加 `--calibrate` 输出日搜索量）。
+- **`gtfa now`**（`trends_now`）— 实时热搜榜单，最多覆盖 30 个国家/地区。
+
+## 为什么选择 `google-trends-for-agent`？
 
 | 能力对比 | `google-trends-for-agent` (MIT) | `pytrends`（2025 年 4 月已归档） | 传统 SEO 工具（Ahrefs / Semrush） |
 | --- | --- | --- | --- |
@@ -29,27 +66,22 @@
 | **HTTP 429 应对** | 默认 **本机 IP 免费直连 ($0)** → 限流 1 键切 **开源公共 Actor**（Apify 每月 `$5` 免费额度约跑 3,000–7,000 次）或 **自部署私有 Actor**（同源 MIT 代码） | 频繁报 `TooManyRequestsError (429)` | 闭源数据库 |
 | **使用形态** | CLI（`gtfa`）、MCP（`gtfa-mcp`）、DeepSeek Harness（`dsh`）插件、Apify Actor | 仅 Python 脚本 | 网页端 / 付费 API |
 
-<p align="center">
-  <img src="docs/assets/demo-terminal.svg" alt="动画演示 gtfa snapshot 命令逐字显示，并逐行返回 Sora 的裁剪 JSON 信封" width="800">
-</p>
-<p align="center"><sub>真实快照输出，已裁剪。完整信封还包含序列、主窗口与近 7 天流量块、相关查询上下文、警告和元数据。</sub></p>
-
-## 按客户端选择安装教程
+## 按客户端选择安装教程与抓取路线
 
 **AI Agent 请先打开[客户端接入总入口](docs/clients.md)，按自身所在宿主直接跳转到对应教程后再配置或调用。**
 
 - [DeepSeek Harness (dsh)](docs/clients/dsh.md) · [GrokBot](docs/clients/grokbot.md) · [Muse](docs/clients/muse.md) · [Dots 与网页 Agent](docs/clients/dots.md)
 - [Claude Code 与 Desktop](docs/clients/claude.md) · [OpenAI Codex](docs/clients/codex.md) · [Cursor / VS Code / Windsurf / Cline](docs/clients/cursor-vscode.md) · [OpenClaw 与本地 CLI](docs/clients/openclaw.md)
 
-**Muse、GrokBot、Dots 统一优先使用 Apify 按需运行**，可选公共 Actor 或自己部署的
-Actor。支持远程 MCP 时接入官方托管入口；否则使用客户端已有的 Apify 连接器/API。
-本机直连继续用于开发或用户明确选择的场景。
-
 | 路线 | 执行位置 | 运行方式 |
 | --- | --- | --- |
-| 公共 Actor | 你的 Apify 账号 | 有查询才启动，完成即退出，无需部署 |
-| 自己的 Actor | 你的 Apify 账号 | 部署一次，随后按次运行 |
-| 本机直连 | 本机 | CLI、stdio MCP 或 dsh 原生工具 |
+| 本机直连 | 本机 | 默认 `$0` 免费直连，支持 CLI、stdio MCP 或 dsh 原生工具 |
+| 公共 Actor | 你的 Apify 账号 | 有查询才启动，完成即退出，无需部署（可用每月 `$5` 免费额度） |
+| 自己的 Actor | 你的 Apify 账号 | 部署一次本 MIT 开源仓库，随后按次运行 |
+
+**Muse、GrokBot、Dots 统一优先使用 Apify 按需运行**，可选公共 Actor 或自己部署的 Actor。支持远程 MCP 时接入官方托管入口；否则使用客户端已有的 Apify 连接器/API。本机直连继续用于开发或用户明确选择的场景。
+
+<p align="left"><a href="https://apify.com/meka.im/google-trends-for-agent"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/store-button-zh-dark.png"><img src="docs/assets/store-button-zh.png" alt="在 Apify Store 打开" width="224" height="44"></picture></a></p>
 
 <a id="deploy-it-yourself"></a>
 
@@ -59,7 +91,7 @@ Fork 仓库，在 Apify Console 用 Link Git repository 构建，或运行 `apif
 
 已从官方 main 部署的 Actor，可在 dsh 点击**更新选中的 Actor**。构建完成后，**测试连接**分别显示关键词取数与 Actor/插件的实际版本。自定义或固定版本源码请在 Apify Console 更新。详见[发布与验收清单](docs/releasing.md)。
 
-### 远程 MCP
+### 远程 MCP 与云端出口配置
 
 Muse、GrokBot、Dots 支持远程 MCP 时，使用 Apify 官方托管入口，在客户端内完成 OAuth 登录：
 
@@ -73,54 +105,13 @@ Muse、GrokBot、Dots 支持远程 MCP 时，使用 Apify 官方托管入口，�
 }
 ```
 
-使用自建 Actor 时，把 `tools=` 后的 `meka.im/google-trends-for-agent` 替换为自己账号的
-`<username>/<actor-name>`；登录账号需要有该 Actor 的访问权限。
+使用自建 Actor 时，把 `tools=` 后的 `meka.im/google-trends-for-agent` 替换为自己账号的 `<username>/<actor-name>`；登录账号需要有该 Actor 的访问权限。
 
 该入口将本项目暴露为 Actor 工具，按次启动运行，并提供读取 Dataset、读取 key-value store 和停止运行的工具。它不承诺四个 `trends_*` 同名工具；本机 MCP 和 dsh 原生插件提供四个 `trends_*` 工具。通过官方入口调用普通 `tool` / `terms` 输入后，用返回的 Dataset id 读取结果。
 
 Apify OAuth 的 `full_api_access` 是完整账号 API 权限。没有 MCP OAuth 的客户端可通过安全凭据配置 Bearer header。费用与边界见 [Actor 参考](.actor/README.md) 和 [Actor costs](docs/reference.md#actor-costs)。
 
-## 安装与快速开始
-
-CLI 与 MCP 服务器已发布至 npm（包名 [`google-trends-for-agent`](https://www.npmjs.com/package/google-trends-for-agent)），需要 Node.js 20+。可直接通过 `npx` 运行：
-
-```sh
-npx -y -p google-trends-for-agent gtfa snapshot Sora --geo US --json --pretty
-```
-
-频繁使用建议直接从 npm 全局安装：
-
-```sh
-npm install -g google-trends-for-agent
-```
-
-也可以从源码仓库自行构建安装：
-
-```sh
-git clone https://github.com/meka-im/google-trends-for-agent.git
-cd google-trends-for-agent
-npm ci
-npm install -g "$(npm pack | tail -1)"
-```
-
-源码 clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源码版本，请固定 npm 版本号或 git commit，不要依赖移动的分支。
-
-发布的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
-
-CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认走 `local` 本机网络，也支持 Apify 按需云端出口（`--egress actor-public` 或 `--egress actor-own --actor <id>`，或通过环境变量 `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` 配合 `APIFY_TOKEN`），可在直接暴露四个 `trends_*` 工具的同时走 Apify 住宅代理。若客户端支持免本地进程的远程托管 MCP，Muse、GrokBot、Dots 优先按[Apify 接入指南](docs/clients.md)配置：
-
-```json
-{
-  "mcpServers": {
-    "google-trends": {
-      "command": "npx",
-      "args": ["-y", "-p", "google-trends-for-agent", "gtfa-mcp"]
-    }
-  }
-}
-```
-
-需要本地 stdio MCP 直接走 Apify 公共 Actor 时（将 `APIFY_TOKEN` 放在客户端安全环境变量中）：
+CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认走 `local` 本机网络，也支持 Apify 按需云端出口（`--egress actor-public` 或 `--egress actor-own --actor <id>`，或通过环境变量 `GTFA_EGRESS` / `GTFA_APIFY_ACTOR` 配合 `APIFY_TOKEN`），可在直接暴露四个 `trends_*` 工具的同时走 Apify 住宅代理：
 
 ```json
 {
@@ -148,6 +139,22 @@ CLI 命令是 `gtfa`，本地 MCP 服务器由 `gtfa-mcp` 启动。两者默认�
 npx -y -p google-trends-for-agent gtfa-mcp --http --port 4321   # http://127.0.0.1:4321/mcp
 ```
 
+<details>
+<summary>从源码构建、依赖审计说明与连通性排查</summary>
+
+从源码仓库自行构建安装：
+
+```sh
+git clone https://github.com/meka-im/google-trends-for-agent.git
+cd google-trends-for-agent
+npm ci
+npm install -g "$(npm pack | tail -1)"
+```
+
+源码 clone 默认跟随仓库的 `main` 分支。如果审查流程需要不可变源码版本，请固定 npm 版本号或 git commit，不要依赖移动的分支。
+
+发布的 tarball 会内置经审计的 `apify` 依赖树，避免 consumer 重新解析较旧的 Apify 漏洞传递依赖。根 npm `overrides` 不会传播给 consumer，因此内置依赖树是 consumer 防护的一部分。根包还显式将 `@crawlee/core` 的 `minimatch` 覆盖为 `^11.0.1`（lock 为 `11.0.8`）；Crawlee 声明的是 `^9`，因此 consumer 的 `npm ls` 可能显示范围警告，但这是有意设置的安全 override。审计同时覆盖根依赖树和打包产物在干净 consumer 中的安装；内置依赖会使包体积明显增大。
+
 检查包下载和数据抓取两段连通性：
 
 ```sh
@@ -156,6 +163,8 @@ curl -I https://trends.google.com
 ```
 
 若 `npx …` 非零退出且 stdout/stderr 为空，说明 gtfa 启动前 npm 包获取失败；查看 npm debug 日志（通常在 `~/.npm/_logs/`）。**MCP 无法启动**表现为 npx/npm 错误、握手前 EOF；**MCP 已启动但工具取数失败**则握手和 `tools/list` 成功，工具返回 `NETWORK_ERROR`、`RATE_LIMITED` 等上游错误。后者可用 `gtfa doctor --json` 排查。
+
+</details>
 
 ## dsh 插件
 
